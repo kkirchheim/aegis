@@ -18,19 +18,22 @@ from functools import wraps
 from pathlib import Path
 
 from flask import Flask, request, jsonify, Response, render_template
-from anthropic import Anthropic
 import pdfplumber
 from dotenv import load_dotenv
+
+from llm import get_provider
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
-# Initialize Anthropic client with explicit API key
-api_key = os.getenv("ANTHROPIC_API_KEY")
-if not api_key:
-    raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
-client = Anthropic(api_key=api_key)
+# Initialize LLM provider (supports Anthropic, Ollama, etc.)
+try:
+    llm_provider = get_provider()
+    print(f"✓ LLM Provider initialized: {llm_provider.get_name()} ({llm_provider.get_model()})")
+except Exception as e:
+    print(f"✗ Failed to initialize LLM provider: {e}")
+    raise
 
 # Initialize Docker client
 try:
@@ -46,7 +49,6 @@ UPLOAD_FOLDER = Path("uploads")
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 DATABASE = "reproducibility.db"
 MAX_PDF_SIZE = 100 * 1024 * 1024  # 100MB
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-1")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000")
 AGENT_CONTEXT_LIMIT = int(os.getenv("AGENT_CONTEXT_LIMIT", "10000"))
 
@@ -660,7 +662,7 @@ def parse_paper_with_claude(pdf_text):
         }
     """
     
-    app.logger.info(f"Parsing paper with Claude (model: {CLAUDE_MODEL}, input: {len(pdf_text)} chars)")
+    app.logger.info(f"Parsing paper with {llm_provider.get_name()} (model: {llm_provider.get_model()}, input: {len(pdf_text)} chars)")
     
     prompt = f"""Analyze this scientific paper and extract:
 
@@ -704,18 +706,14 @@ Paper text:
 """
 
     try:
-        app.logger.info(f"Calling Claude API with max_tokens=2000")
-        response = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=2000,
+        app.logger.info(f"Calling {llm_provider.get_name()} API with max_tokens=2000")
+        response_text = llm_provider.complete(
             messages=[{
                 "role": "user",
                 "content": prompt
-            }]
+            }],
+            max_tokens=2000
         )
-        
-        # Extract JSON from response
-        response_text = response.content[0].text
         app.logger.info(f"Claude response received: {len(response_text)} chars")
         
         # Try to parse JSON
@@ -1261,17 +1259,14 @@ Current iteration: {iteration}/15
 What should the agent do next?
 """
         
-        # Use Claude model for agent reasoning (configurable via CLAUDE_MODEL env var)
-        response = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=500,
+        # Use LLM provider for agent reasoning
+        response_text = llm_provider.complete(
             messages=[{
                 "role": "user",
                 "content": prompt
-            }]
+            }],
+            max_tokens=500
         )
-        
-        response_text = response.content[0].text
         
         # Log full response for debugging (not truncated!)
         app.logger.info(f"[{job_id}] === Claude Response (Full, {len(response_text)} chars) ===")
@@ -1738,18 +1733,15 @@ Return ONLY valid JSON (no markdown, no explanation, just JSON):
             })
             evaluation_results = cached_evaluation
         else:
-            app.logger.info(f"[{job_id}] Calling Claude for aspect evaluation...")
+            app.logger.info(f"[{job_id}] Calling {llm_provider.get_name()} for aspect evaluation...")
             
-            response = client.messages.create(
-                model=CLAUDE_MODEL,
-                max_tokens=3000,
+            response_text = llm_provider.complete(
                 messages=[{
                     "role": "user",
                     "content": prompt
-                }]
+                }],
+                max_tokens=3000
             )
-            
-            response_text = response.content[0].text
             app.logger.info(f"[{job_id}] Claude evaluation response: {len(response_text)} chars")
             
             # Parse response
@@ -1927,7 +1919,7 @@ def analyze_paper_background(job_id, pdf_path):
             paper_info = cached_paper_info
         else:
             # Cache miss: parse paper with Claude
-            app.logger.info(f"[{job_id}] Step 2: Parsing paper with Claude (model: {CLAUDE_MODEL})")
+            app.logger.info(f"[{job_id}] Step 2: Parsing paper with {llm_provider.get_name()} (model: {llm_provider.get_model()})")
             emit_event(job_id, {
                 "step": "parsing_paper",
                 "message": "Analyzing paper with Claude...",
