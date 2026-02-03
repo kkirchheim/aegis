@@ -18,7 +18,7 @@ from typing import Optional, Dict, Any
 REPO_URL = os.getenv("REPO_URL", "")
 JOB_ID = os.getenv("JOB_ID", "")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://host.docker.internal:5000")
-MAX_ITERATIONS = 15
+MAX_ITERATIONS = 8
 COMMAND_TIMEOUT = 300  # 5 minutes per command
 REPO_PATH = "/workspace/repo"
 

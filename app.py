@@ -12,6 +12,7 @@ import sqlite3
 import threading
 import time
 import docker
+import hashlib
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -226,7 +227,43 @@ def spawn_agent_container(job_id, repo_url):
     Spawn Docker container to run agent on repository.
     
     Agent will clone repo, analyze it, and call backend API.
+    Caches results by repo URL to skip redundant executions.
     """
+    # Check cache: if we've analyzed this repo before, reuse results
+    cache_key = hashlib.md5(repo_url.encode()).hexdigest()
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "SELECT * FROM execution_details WHERE job_id IN (SELECT id FROM jobs WHERE report LIKE ?)",
+        (f'%"url": "{repo_url}"%',)
+    )
+    cached = c.fetchone()
+    conn.close()
+    
+    if cached:
+        app.logger.info(f"[{job_id}] Cache hit for {repo_url} - reusing execution results")
+        emit_event(job_id, {
+            "step": "cache_hit",
+            "message": f"Using cached results for {repo_url}"
+        })
+        # Copy cached results to new job
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO execution_details 
+            (job_id, commands_run, stdout_combined, actual_results, dependencies_used, errors_summary, discovered_files, test_info, randomness_info)
+            SELECT ?, commands_run, stdout_combined, actual_results, dependencies_used, errors_summary, discovered_files, test_info, randomness_info
+            FROM execution_details WHERE id = ?
+        """, (job_id, cached['id']))
+        conn.commit()
+        conn.close()
+        
+        emit_event(job_id, {
+            "step": "agent_completed",
+            "message": "Cached agent results applied"
+        })
+        return True
+    
     if not DOCKER_AVAILABLE:
         app.logger.error("Docker not available")
         emit_event(job_id, {
@@ -888,8 +925,9 @@ Last output: {last_output_summary if last_output_summary != "(none)" else "No ou
 What should the agent do next?
 """
         
+        # Use Haiku for agent reasoning (simple decisions, save tokens)
         response = client.messages.create(
-            model=CLAUDE_MODEL,
+            model="claude-3-5-haiku",
             max_tokens=500,
             messages=[{
                 "role": "user",
@@ -1355,7 +1393,35 @@ Return ONLY valid JSON (no markdown, no explanation, just JSON):
             messages=[{
                 "role": "user",
                 "content": prompt
-            }]
+            }],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "reproducibility_evaluation",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "evaluations": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "aspect_id": {"type": "string"},
+                                        "name": {"type": "string"},
+                                        "status": {"type": "string", "enum": ["pass", "partial", "fail"]},
+                                        "paper_supports": {"type": "boolean"},
+                                        "code_supports": {"type": "boolean"},
+                                        "evidence": {"type": "string"},
+                                        "conclusion": {"type": "string"}
+                                    },
+                                    "required": ["aspect_id", "name", "status", "paper_supports", "code_supports", "evidence", "conclusion"]
+                                }
+                            }
+                        },
+                        "required": ["evaluations"]
+                    }
+                }
+            }
         )
         
         response_text = response.content[0].text
