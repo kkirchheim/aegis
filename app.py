@@ -791,6 +791,8 @@ Answer questions about:
 - Code artifacts and where to find them
 - Suggestions for improving reproducibility
 
+IMPORTANT: Respond with PLAIN TEXT ONLY. Do not use any markdown formatting (no **, #, -, >, etc.).
+
 Be concise and reference specific findings from the analysis.
 
 """
