@@ -1387,19 +1387,34 @@ def generate_chat_response(job_id: str, session_id: int, system_prompt: str, mes
         
         # Stream response from LLM
         full_response = ""
-        for chunk in llm_provider.stream(
-            messages=messages,
-            system=system_prompt,
-            max_tokens=2048,
-            temperature=0.7
-        ):
-            full_response += chunk
-            
-            # Emit to SSE clients
+        try:
+            for chunk in llm_provider.stream(
+                messages=messages,
+                system=system_prompt,
+                max_tokens=2048,
+                temperature=0.7
+            ):
+                if not chunk:
+                    continue
+                    
+                full_response += chunk
+                
+                # Emit to SSE clients
+                emit_event(job_id, {
+                    "step": "chat_response",
+                    "content": chunk
+                })
+        except Exception as stream_error:
+            app.logger.error(f"[{job_id}] Stream error: {stream_error}", exc_info=True)
+            raise
+        
+        if not full_response:
+            app.logger.warning(f"[{job_id}] Empty response from LLM")
             emit_event(job_id, {
-                "step": "chat_response",
-                "content": chunk
+                "step": "chat_error",
+                "message": "Error: Empty response from LLM"
             })
+            return
         
         # Store complete response
         store_chat_message(session_id, "assistant", full_response)
@@ -1413,7 +1428,7 @@ def generate_chat_response(job_id: str, session_id: int, system_prompt: str, mes
         app.logger.info(f"[{job_id}] Chat response complete ({len(full_response)} chars)")
     
     except Exception as e:
-        app.logger.error(f"[{job_id}] Failed to generate chat response: {e}")
+        app.logger.error(f"[{job_id}] Failed to generate chat response: {e}", exc_info=True)
         emit_event(job_id, {
             "step": "chat_error",
             "message": f"Error: {str(e)}"
@@ -1444,6 +1459,33 @@ def get_chat_history_endpoint(job_id):
     
     except Exception as e:
         app.logger.error(f"[{job_id}] Failed to get chat history: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/job/<job_id>/chat/history", methods=["DELETE"])
+def delete_chat_history(job_id):
+    """Delete all chat messages for a job."""
+    
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Get session
+        c.execute("SELECT id FROM chat_sessions WHERE job_id = ?", (job_id,))
+        row = c.fetchone()
+        
+        if row:
+            session_id = row["id"]
+            # Delete all messages in session
+            c.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
+            conn.commit()
+            app.logger.info(f"[{job_id}] Chat history cleared")
+        
+        conn.close()
+        return jsonify({"ok": True, "message": "Chat history cleared"})
+    
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Failed to delete chat history: {e}")
         return jsonify({"error": str(e)}), 500
 
 

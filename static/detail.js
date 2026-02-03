@@ -29,6 +29,7 @@ const eventLog = document.getElementById("eventLog");
 const chatHistory = document.getElementById("chatHistory");
 const chatInput = document.getElementById("chatInput");
 const chatSendBtn = document.getElementById("chatSendBtn");
+const chatClearBtn = document.getElementById("chatClearBtn");
 
 const docTitle = document.getElementById("docTitle");
 const docMeta = document.getElementById("docMeta");
@@ -65,6 +66,7 @@ function setupEventListeners() {
     
     // Chat listeners
     chatSendBtn.addEventListener("click", sendChatMessage);
+    chatClearBtn.addEventListener("click", clearChatHistory);
     chatInput.addEventListener("keypress", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -759,6 +761,32 @@ async function loadChatHistory() {
         });
     } catch (error) {
         console.error("Failed to load chat history:", error);
+    }
+}
+
+async function clearChatHistory() {
+    if (!confirm("Clear all chat messages? This cannot be undone.")) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/job/${JOB_ID}/chat/history`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+        }
+        
+        // Clear UI
+        chatHistory.innerHTML = `
+            <div class="text-center text-base-content/60 text-sm">
+                Chat history cleared. Ask a new question...
+            </div>
+        `;
+    } catch (error) {
+        console.error("Failed to clear chat history:", error);
+        alert(`Error: ${error.message}`);
     }
 }
 
