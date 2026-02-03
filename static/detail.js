@@ -843,11 +843,11 @@ function streamChatResponse() {
                     chatHistory.appendChild(messageDiv);
                 }
                 
-                // Update message with latest content (trim all whitespace)
+                // Update message with latest content (trim all whitespace, preserve newlines in display)
                 messageDiv.innerHTML = `
                     <div class="flex gap-2">
                         <div class="font-semibold text-sm text-primary">Assistant:</div>
-                        <div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important;">
+                        <div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important; white-space: pre-wrap;">
                             ${escapeHtml(assistantMessage.trim())}
                         </div>
                     </div>
@@ -882,7 +882,7 @@ function addChatMessageToUI(role, content) {
     if (role === 'user') {
         messageDiv.innerHTML = `
             <div class="flex gap-2 justify-end">
-                <div class="text-sm flex-1 max-w-md bg-primary text-primary-content rounded" style="padding: 4px 8px !important;">
+                <div class="text-sm flex-1 max-w-md bg-primary text-primary-content rounded" style="padding: 4px 8px !important; white-space: pre-wrap;">
                     ${escapeHtml(content.trim())}
                 </div>
                 <div class="font-semibold text-sm">You:</div>
@@ -898,7 +898,7 @@ function addChatMessageToUI(role, content) {
         messageDiv.innerHTML = `
             <div class="flex gap-2">
                 <div class="font-semibold text-sm text-primary">Assistant:</div>
-                <div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important;">
+                <div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important; white-space: pre-wrap;">
                     ${escapeHtml(content.trim())}
                 </div>
             </div>
