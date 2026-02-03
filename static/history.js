@@ -84,10 +84,11 @@ function filterJobs() {
     const status = statusFilter.value;
     
     filteredJobs = allJobs.filter(job => {
-        // Search filter - search by title or filename
+        // Search filter - search by title, filename, or abstract
         const title = (job.title || '').toLowerCase();
         const filename = (job.pdf_filename || '').toLowerCase();
-        if (search && !title.includes(search) && !filename.includes(search)) {
+        const abstract = (job.abstract || '').toLowerCase();
+        if (search && !title.includes(search) && !filename.includes(search) && !abstract.includes(search)) {
             return false;
         }
         
