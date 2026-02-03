@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: paper-reproducibility
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    volumes:
+      # Docker-in-Docker: allow container to spawn other containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persist uploads and logs
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      # Live code reload for development
+      - .:/app
+    networks:
+      - paper-net
+
+networks:
+  paper-net:
+    driver: bridge
