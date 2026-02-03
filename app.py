@@ -1058,25 +1058,30 @@ def agent_complete():
         if aspects is not None:
             report["reproducibility_aspects"] = aspects
         
-        # Update database
+        # Update database - Store execution report but don't mark completed yet
+        # (Completion happens after stage 3 evaluation)
         conn = get_db()
         c = conn.cursor()
-        c.execute(
-            """UPDATE jobs SET status = ?, report = ?, completed_at = CURRENT_TIMESTAMP 
-               WHERE id = ?""",
-            ("completed" if success else "failed", json.dumps(report), job_id)
-        )
+        
+        # Only mark as failed if agent failed
+        if not success:
+            c.execute(
+                """UPDATE jobs SET status = ?, error_message = ? WHERE id = ?""",
+                ("failed", message, job_id)
+            )
+        # If success, keep status as "processing" - stage 3 will mark it "completed"
+        
         conn.commit()
         conn.close()
         
         app.logger.info(f"[{job_id}] Agent reported {'SUCCESS' if success else 'FAILURE'}: {message}")
         
-        # Emit completion event to frontend
+        # Don't emit "complete" here - that happens after stage 3 evaluation
+        # Just emit agent completion status
         emit_event(job_id, {
-            "step": "complete",
-            "message": message,
-            "status": "success" if success else "failed",
-            "report": report
+            "step": "agent_finished",
+            "message": f"Agent finished: {message}",
+            "status": "success" if success else "failed"
         })
         
         # Log final summary
@@ -1086,19 +1091,8 @@ def agent_complete():
         if accuracy is not None:
             app.logger.info(f"[{job_id}] Reproducibility Score: {accuracy:.2%}")
         
-        # Trigger aspect evaluation if agent succeeded
-        if success:
-            app.logger.info(f"[{job_id}] Triggering aspect evaluation...")
-            emit_event(job_id, {
-                "step": "evaluating_aspects",
-                "message": "Evaluating reproducibility aspects..."
-            })
-            # Run evaluation in background thread
-            threading.Thread(
-                target=evaluate_reproducibility_aspects,
-                args=(job_id,),
-                daemon=True
-            ).start()
+        # Note: Aspect evaluation is triggered from analyze_paper_background, not here
+        # This endpoint is just for the agent to report completion
         
         return jsonify({
             "ok": True,
@@ -1427,10 +1421,33 @@ Return ONLY valid JSON (no markdown, no explanation, just JSON):
         })
         app.logger.info(f"[{job_id}] STAGE 3 COMPLETE in {stage3_duration}ms")
         
+        # Update job status to completed now that evaluation is done
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            """UPDATE jobs SET status = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?""",
+            ("completed", job_id)
+        )
+        conn.commit()
+        conn.close()
+        
+        # Fetch full report for final event
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT report FROM jobs WHERE id = ?", (job_id,))
+        job_row = c.fetchone()
+        conn.close()
+        full_report = json.loads(job_row["report"]) if job_row and job_row["report"] else {}
+        
+        # Emit final completion event
         emit_event(job_id, {
-            "step": "evaluation_complete",
-            "message": f"Evaluated {len(evaluation_results.get('evaluations', []))} reproducibility aspects"
+            "step": "complete",
+            "message": f"Analysis complete - Evaluated {len(evaluation_results.get('evaluations', []))} reproducibility aspects",
+            "progress": 100,
+            "report": full_report
         })
+        
+        app.logger.info(f"[{job_id}] === ALL STAGES COMPLETE - ANALYSIS FULLY DONE ===")
         
     except Exception as e:
         app.logger.error(f"[{job_id}] Error in aspect evaluation: {e}", exc_info=True)
@@ -1624,36 +1641,11 @@ def analyze_paper_background(job_id, pdf_path):
             daemon=True
         ).start()
         
-        # Step 4: Prepare report
-        app.logger.info(f"[{job_id}] Step 4: Background evaluation triggered")
-        report = {
-            "code_found": len(artifacts) > 0,
-            "artifacts": artifacts,
-            "reproducibility_aspects": paper_info.get("reproducibility_aspects", {}),
-            "summary": paper_info.get("summary", ""),
-            "agent_results": agent_results
-        }
-        
-        # Save report to DB
-        app.logger.info(f"[{job_id}] Saving report to database (artifacts: {len(artifacts)}, agents run: {len(agent_results)})")
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(
-            """UPDATE jobs SET status = ?, report = ?, completed_at = CURRENT_TIMESTAMP
-               WHERE id = ?""",
-            ("completed", json.dumps(report), job_id)
-        )
-        conn.commit()
-        conn.close()
-        
-        emit_event(job_id, {
-            "step": "complete",
-            "message": "Analysis complete",
-            "progress": 100,
-            "report": report
-        })
-        
-        app.logger.info(f"[{job_id}] === ANALYSIS COMPLETE === (artifacts: {len(artifacts)}, agents: {len(agent_results)})")
+        # Step 4: Evaluation triggered in background thread
+        # Don't emit "complete" here - wait for evaluation thread to finish
+        # (Evaluation thread will emit "complete" when done)
+        app.logger.info(f"[{job_id}] Step 4: Background evaluation triggered (main thread returns)")
+        app.logger.info(f"[{job_id}] === STAGE 2 DONE, STAGE 3 RUNNING IN BACKGROUND ===")
     
     except Exception as e:
         app.logger.error(f"[{job_id}] === ANALYSIS FAILED ===", exc_info=True)
