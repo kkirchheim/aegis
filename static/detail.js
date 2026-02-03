@@ -791,7 +791,7 @@ async function clearChatHistory() {
 }
 
 async function sendChatMessage() {
-    const message = chatInput.value.trim();
+    const message = chatInput.value.replace(/^[ \t]+/, '').replace(/[ \t]+$/, '');
     if (!message) return;
     
     // Add user message to display immediately
@@ -843,12 +843,13 @@ function streamChatResponse() {
                     chatHistory.appendChild(messageDiv);
                 }
                 
-                // Update message with latest content (trim whitespace)
+                // Update message with latest content (trim leading/trailing spaces/tabs only, preserve newlines)
+                const trimmedMessage = assistantMessage.replace(/^[ \t]+/, '').replace(/[ \t]+$/, '');
                 messageDiv.innerHTML = `
                     <div class="flex gap-2">
                         <div class="font-semibold text-sm text-primary">Assistant:</div>
-                        <div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important; white-space: normal;">
-                            ${escapeHtml(assistantMessage.trim())}
+                        <div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important; white-space: pre-wrap;">
+                            ${escapeHtml(trimmedMessage)}
                         </div>
                     </div>
                 `;
@@ -880,10 +881,11 @@ function addChatMessageToUI(role, content) {
     messageDiv.className = 'mb-3';
     
     if (role === 'user') {
+        const trimmedContent = content.replace(/^[ \t]+/, '').replace(/[ \t]+$/, '');
         messageDiv.innerHTML = `
             <div class="flex gap-2 justify-end">
-                <div class="text-sm flex-1 max-w-md bg-primary text-primary-content rounded" style="padding: 4px 8px !important; white-space: normal;">
-                    ${escapeHtml(content)}
+                <div class="text-sm flex-1 max-w-md bg-primary text-primary-content rounded" style="padding: 4px 8px !important; white-space: pre-wrap;">
+                    ${escapeHtml(trimmedContent)}
                 </div>
                 <div class="font-semibold text-sm">You:</div>
             </div>
@@ -895,11 +897,13 @@ function addChatMessageToUI(role, content) {
             </div>
         `;
     } else {
+        // Trim only leading/trailing spaces/tabs, preserve newlines
+        const trimmedContent = content.replace(/^[ \t]+/, '').replace(/[ \t]+$/, '');
         messageDiv.innerHTML = `
             <div class="flex gap-2">
                 <div class="font-semibold text-sm text-primary">Assistant:</div>
-                <div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important; white-space: normal;">
-                    ${escapeHtml(content.trim())}
+                <div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important; white-space: pre-wrap;">
+                    ${escapeHtml(trimmedContent)}
                 </div>
             </div>
         `;
