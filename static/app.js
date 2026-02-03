@@ -39,7 +39,7 @@ function updateUploadUI() {
     const file = pdfInput.files[0];
     if (file) {
         analyzeBtn.disabled = false;
-        uploadArea.querySelector("span:last-child").textContent = `Selected: ${file.name}`;
+        uploadArea.querySelector(".text-lg").textContent = `✓ Selected: ${file.name}`;
     }
 }
 
@@ -140,7 +140,7 @@ function handleProgressEvent(event) {
     
     // Update progress bar
     if (progress !== undefined) {
-        progressFill.style.width = progress + "%";
+        progressFill.value = Math.min(progress, 100);
         progressText.textContent = `${Math.round(progress)}%`;
     }
     
@@ -363,23 +363,40 @@ async function loadJobsHistory() {
         const jobs = await response.json();
         
         if (jobs.length === 0) {
-            jobsList.innerHTML = '<p class="empty-state">No previous analyses yet</p>';
+            jobsList.innerHTML = '<div class="text-center py-8 text-base-content/60"><p>No previous analyses yet</p></div>';
             return;
         }
         
         let html = "";
         for (const job of jobs) {
             const createdDate = new Date(job.created_at).toLocaleString();
+            const statusColor = job.status === 'completed' ? 'badge-success' : job.status === 'failed' ? 'badge-error' : 'badge-warning';
+            
             html += `
-                <div class="job-item">
-                    <div class="job-content" onclick="viewJob('${job.id}')">
-                        <div class="job-filename">📄 ${escapeHtml(job.pdf_filename)}</div>
-                        <div class="job-meta">Job ID: ${job.id.substring(0, 8)}...</div>
-                        <div class="job-meta">Created: ${createdDate}</div>
-                    </div>
-                    <div class="job-actions">
-                        <span class="job-status ${job.status}">${job.status.toUpperCase()}</span>
-                        <button class="btn-delete" onclick="deleteJobFromList('${job.id}', event)" title="Delete">🗑️</button>
+                <div class="card bg-base-200 cursor-pointer hover:shadow-md transition-shadow" onclick="viewJob('${job.id}')">
+                    <div class="card-body p-4">
+                        <div class="flex justify-between items-start gap-4">
+                            <div class="flex-1">
+                                <h3 class="card-title text-base gap-2">
+                                    <span>📄</span>
+                                    ${escapeHtml(job.pdf_filename || 'Unknown')}
+                                </h3>
+                                <p class="text-sm text-base-content/60">
+                                    Job ID: ${job.id.substring(0, 8)}...
+                                </p>
+                                <p class="text-sm text-base-content/60">
+                                    Created: ${createdDate}
+                                </p>
+                            </div>
+                            <div class="flex gap-2 items-center">
+                                <div class="badge ${statusColor}">
+                                    ${job.status.toUpperCase()}
+                                </div>
+                                <button class="btn btn-ghost btn-sm" onclick="deleteJobFromList('${job.id}', event)" title="Delete">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;

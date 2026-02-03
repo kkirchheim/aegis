@@ -1,66 +1,140 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reproducibility Report</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='detail.css') }}">
+    
+    <!-- Tailwind CSS + DaisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+    
+    <style>
+        :root {
+            --primary: #ffa500;
+            --secondary: #4ade80;
+            --accent: #f87171;
+        }
+    </style>
 </head>
-<body>
-    <div class="container">
-        <header class="detail-header">
-            <a href="/" class="back-link">← Back</a>
-            <div class="header-title">
-                <h1 id="docTitle">Loading...</h1>
-                <p id="docMeta" class="meta"></p>
-            </div>
-            <button id="deleteBtn" class="btn btn-danger">Delete</button>
-        </header>
+<body class="bg-base-100">
+    <!-- Header -->
+    <div class="navbar bg-base-200 shadow-md sticky top-0 z-50">
+        <div class="flex-1 px-4">
+            <a href="/" class="btn btn-ghost gap-2">
+                <span>←</span>
+                <span>Back</span>
+            </a>
+        </div>
+        <div class="flex-auto px-4">
+            <h1 id="docTitle" class="text-xl font-bold">Loading...</h1>
+            <p id="docMeta" class="text-xs text-base-content/60"></p>
+        </div>
+        <div class="flex-none px-4 gap-2">
+            <button class="btn btn-sm btn-ghost" onclick="toggleTheme()">
+                <span id="themeIcon">🌙</span>
+            </button>
+            <button id="deleteBtn" class="btn btn-sm btn-error gap-2">
+                <span>🗑️</span>
+                <span>Delete</span>
+            </button>
+        </div>
+    </div>
 
-        <main class="detail-main">
-            <!-- Checklist Section (inserted dynamically) -->
-            <!-- Will be inserted here by detail.js if evaluations exist -->
-            
-            <!-- Status Section -->
-            <section id="statusSection" class="section">
-                <h2>📊 Reproducibility Status</h2>
-                <div id="statusContent"></div>
-            </section>
-
-            <!-- Artifacts Section -->
-            <section id="artifactsSection" class="section" style="display: none;">
-                <h2>🎯 Artifacts Found</h2>
-                <div id="artifactsContent"></div>
-            </section>
-
-            <!-- Reproducibility Aspects (Extensible) -->
-            <section id="aspectsSection" class="section" style="display: none;">
-                <h2>🔬 Reproducibility Aspects</h2>
-                <div id="aspectsContent" class="aspects-grid"></div>
-            </section>
-
-            <!-- Agent Execution Log -->
-            <section id="logSection" class="section" style="display: none;">
-                <h2>📋 Execution Log</h2>
-                <div id="logContent" class="log-container">
-                    <div id="eventLog" class="log"></div>
+    <!-- Main Container -->
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        
+        <!-- Checklist Section (inserted dynamically) -->
+        <div id="checklistContainer"></div>
+        
+        <!-- Status Section -->
+        <section id="statusSection" class="mb-8">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>📊</span>
+                        <span>Status</span>
+                    </h2>
+                    <div id="statusContent"></div>
                 </div>
-            </section>
-        </main>
+            </div>
+        </section>
+
+        <!-- Artifacts Section -->
+        <section id="artifactsSection" class="mb-8" style="display: none;">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>🎯</span>
+                        <span>Artifacts Found</span>
+                    </h2>
+                    <div id="artifactsContent"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Reproducibility Aspects -->
+        <section id="aspectsSection" class="mb-8" style="display: none;">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>🔬</span>
+                        <span>Reproducibility Aspects</span>
+                    </h2>
+                    <div id="aspectsContent" class="space-y-2"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Execution Log -->
+        <section id="logSection" class="mb-8" style="display: none;">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>📋</span>
+                        <span>Execution Log</span>
+                    </h2>
+                    <div id="logContent" class="bg-base-200 rounded-lg p-4 font-mono text-xs max-h-96 overflow-y-auto">
+                        <div id="eventLog" class="space-y-1"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </div>
 
     <!-- Delete Confirmation Modal -->
-    <div id="deleteModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <h3>Delete Report?</h3>
-            <p>This action cannot be undone. All data for this analysis will be permanently deleted.</p>
-            <div class="modal-actions">
-                <button id="cancelDeleteBtn" class="btn btn-secondary">Cancel</button>
-                <button id="confirmDeleteBtn" class="btn btn-danger">Delete Permanently</button>
+    <dialog id="deleteModal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">Delete Report?</h3>
+            <p class="py-4">This action cannot be undone. All data for this analysis will be permanently deleted.</p>
+            <div class="modal-action">
+                <form method="dialog">
+                    <button id="cancelDeleteBtn" class="btn btn-secondary">Cancel</button>
+                </form>
+                <button id="confirmDeleteBtn" class="btn btn-error">Delete Permanently</button>
             </div>
         </div>
-    </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>Close</button>
+        </form>
+    </dialog>
+
+    <!-- Theme Toggle Script -->
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+        
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+    </script>
 
     <script src="{{ url_for('static', filename='detail.js') }}"></script>
     <script>

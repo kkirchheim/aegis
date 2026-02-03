@@ -1,10 +1,6 @@
 /**
- * Detail Page - Shows full job report with events, artifacts, and aspects
- * 
- * Extensible architecture:
- * - Reproducibility aspects are rendered dynamically from report data
- * - New aspects can be added to report without UI code changes
- * - Event log supports any step type
+ * Detail Page - Shows full job report with checklist, artifacts, and execution log
+ * Uses DaisyUI + Tailwind for professional styling
  */
 
 // State
@@ -35,7 +31,7 @@ const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
 
 document.addEventListener("DOMContentLoaded", () => {
     if (!JOB_ID) {
-        statusContent.innerHTML = "<p class='error'>No job ID provided</p>";
+        statusContent.innerHTML = "<div class='alert alert-error'>No job ID provided</div>";
         return;
     }
     
@@ -45,21 +41,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function setupEventListeners() {
     deleteBtn.addEventListener("click", () => {
-        deleteModal.style.display = "flex";
+        deleteModal.showModal();
     });
     
     cancelDeleteBtn.addEventListener("click", () => {
-        deleteModal.style.display = "none";
+        deleteModal.close();
     });
     
     confirmDeleteBtn.addEventListener("click", deleteJob);
-    
-    // Close modal on outside click
-    deleteModal.addEventListener("click", (e) => {
-        if (e.target === deleteModal) {
-            deleteModal.style.display = "none";
-        }
-    });
 }
 
 // ============================================================================
@@ -72,7 +61,7 @@ async function loadJobData() {
         
         if (!response.ok) {
             const error = await response.json();
-            statusContent.innerHTML = `<p class="error">Error: ${error.error}</p>`;
+            statusContent.innerHTML = `<div class='alert alert-error'>Error: ${error.error}</div>`;
             return;
         }
         
@@ -81,7 +70,7 @@ async function loadJobData() {
         
     } catch (error) {
         console.error("Failed to load job:", error);
-        statusContent.innerHTML = `<p class="error">Failed to load job: ${error.message}</p>`;
+        statusContent.innerHTML = `<div class='alert alert-error'>Failed to load job: ${error.message}</div>`;
     }
 }
 
@@ -101,10 +90,19 @@ function renderPage() {
         const seconds = Math.floor(ms / 1000);
         duration = ` • Completed in ${seconds}s`;
     }
-    docMeta.textContent = `Created: ${createdDate}${duration}`;
+    docMeta.textContent = `${createdDate}${duration}`;
     
     // Status section
     renderStatus();
+    
+    // Checklist section
+    if (currentJob.report && currentJob.report.aspect_evaluations && currentJob.report.aspect_evaluations.length > 0) {
+        const checklistHtml = renderChecklist();
+        const container = document.getElementById("checklistContainer");
+        if (container) {
+            container.innerHTML = checklistHtml;
+        }
+    }
     
     // Artifacts section
     if (currentJob.artifacts && currentJob.artifacts.length > 0) {
@@ -112,18 +110,7 @@ function renderPage() {
         renderArtifacts();
     }
     
-    // Reproducibility evaluations (with evidence from all sources)
-    if (currentJob.report && currentJob.report.aspect_evaluations && currentJob.report.aspect_evaluations.length > 0) {
-        let checklistHtml = "<div id='checklistSection' class='section' style='order: -1;'>";
-        checklistHtml += "<h2>✓ Reproducibility Checklist</h2>";
-        checklistHtml += renderChecklist();
-        checklistHtml += "</div>";
-        
-        // Insert before status section
-        statusSection.insertAdjacentHTML("beforebegin", checklistHtml);
-    }
-    
-    // Reproducibility aspects (extensible)
+    // Reproducibility aspects
     if (currentJob.report && currentJob.report.reproducibility_aspects) {
         aspectsSection.style.display = "block";
         renderAspects();
@@ -148,189 +135,64 @@ function renderStatus() {
     
     // Status badge
     if (status === "success") {
-        html += `<div class="status-badge success">✓ Reproducibility Check Passed</div>`;
+        html += `<div class="alert alert-success"><span>✓ Reproducibility Check Passed</span></div>`;
     } else if (status === "completed") {
-        html += `<div class="status-badge success">✓ Analysis Completed</div>`;
+        html += `<div class="alert alert-info"><span>✓ Analysis Completed</span></div>`;
     } else if (status === "failed") {
-        html += `<div class="status-badge error">✗ Reproducibility Check Failed</div>`;
+        html += `<div class="alert alert-error"><span>✗ Reproducibility Check Failed</span></div>`;
     } else if (status === "processing") {
-        html += `<div class="status-badge warning">⏳ Processing...</div>`;
+        html += `<div class="alert alert-warning"><span>⏳ Processing...</span></div>`;
     } else {
-        html += `<div class="status-badge">${status || "Unknown"}</div>`;
+        html += `<div class="alert"><span>${status || "Unknown"}</span></div>`;
     }
     
     // Score
     if (report.reproducibility_score !== undefined) {
         const percentage = Math.round(report.reproducibility_score * 100);
-        const scoreClass = percentage >= 80 ? "success" : percentage >= 50 ? "warning" : "error";
         html += `
-            <div class="score-card">
-                <div class="score-label">Reproducibility Score</div>
-                <div class="score-value ${scoreClass}">${percentage}%</div>
+            <div class="mt-4">
+                <div class="flex justify-between mb-2">
+                    <span class="text-sm font-semibold">Reproducibility Score</span>
+                    <span class="text-sm font-bold">${percentage}%</span>
+                </div>
+                <progress class="progress progress-primary w-full" value="${percentage}" max="100"></progress>
             </div>
         `;
     }
     
     // Message
     if (report.message) {
-        html += `
-            <div class="message-box">
-                <p>${escapeHtml(report.message)}</p>
-            </div>
-        `;
+        html += `<div class="mt-4 p-4 bg-base-200 rounded-lg text-sm">${escapeHtml(report.message)}</div>`;
     }
     
-    // Error (if failed)
+    // Error
     if (currentJob.error_message) {
-        html += `
-            <div class="error-box">
-                <p><strong>Error:</strong> ${escapeHtml(currentJob.error_message)}</p>
-            </div>
-        `;
+        html += `<div class="alert alert-error mt-4"><span><strong>Error:</strong> ${escapeHtml(currentJob.error_message)}</span></div>`;
     }
     
     statusContent.innerHTML = html;
 }
 
 // ============================================================================
-// Render Artifacts
-// ============================================================================
-
-function renderArtifacts() {
-    let html = `<div class="artifact-list">`;
-    
-    if (currentJob.artifacts.length === 0) {
-        html += "<p>No artifacts found</p>";
-    } else {
-        html += `<p>${currentJob.artifacts.length} artifact(s) identified:</p>`;
-        
-        for (const artifact of currentJob.artifacts) {
-            const emoji = getArtifactEmoji(artifact.artifact_type);
-            html += `
-                <div class="artifact-item">
-                    <span class="artifact-icon">${emoji}</span>
-                    <div class="artifact-details">
-                        <div class="artifact-url"><a href="${escapeHtml(artifact.url)}" target="_blank">${escapeHtml(artifact.url)}</a></div>
-                        <div class="artifact-type">${escapeHtml(artifact.artifact_type || "unknown")}</div>
-                        ${artifact.description ? `<div class="artifact-description">${escapeHtml(artifact.description)}</div>` : ""}
-                    </div>
-                </div>
-            `;
-        }
-    }
-    
-    html += `</div>`;
-    artifactsContent.innerHTML = html;
-}
-
-function getArtifactEmoji(type) {
-    const map = {
-        "repository": "📦",
-        "github": "🐙",
-        "dataset": "📊",
-        "paper": "📄",
-        "code": "💻",
-        "docker": "🐳"
-    };
-    return map[type?.toLowerCase()] || "🔗";
-}
-
-// ============================================================================
-// Render Reproducibility Aspects (EXTENSIBLE)
-// ============================================================================
-
-function renderAspects() {
-    const aspects = currentJob.report.reproducibility_aspects;
-    
-    if (!aspects || !Array.isArray(aspects.aspects)) {
-        aspectsContent.innerHTML = "<p>No aspects data available</p>";
-        return;
-    }
-    
-    // Group by category
-    const grouped = {};
-    for (const aspect of aspects.aspects) {
-        const category = aspect.category || "other";
-        if (!grouped[category]) grouped[category] = [];
-        grouped[category].push(aspect);
-    }
-    
-    // Render by category
-    let html = "";
-    
-    for (const [category, items] of Object.entries(grouped)) {
-        html += `<div class="aspect-category">`;
-        html += `<h4 class="category-name">${categoryLabel(category)}</h4>`;
-        html += `<div class="aspect-items">`;
-        
-        for (const aspect of items) {
-            const statusClass = getStatusClass(aspect.status);
-            const icon = getStatusIcon(aspect.status);
-            
-            html += `
-                <div class="aspect-item ${statusClass}">
-                    <div class="aspect-header">
-                        <span class="aspect-icon">${aspect.emoji || icon}</span>
-                        <div class="aspect-title">
-                            <div class="aspect-name">${escapeHtml(aspect.name)}</div>
-                            <div class="aspect-status">${escapeHtml(aspect.status)}</div>
-                        </div>
-                        <span class="severity-badge severity-${aspect.severity || 'medium'}">
-                            ${aspect.severity || 'medium'}
-                        </span>
-                    </div>
-                    ${aspect.value ? `<div class="aspect-value">${escapeHtml(aspect.value)}</div>` : ""}
-                </div>
-            `;
-        }
-        
-        html += `</div></div>`;
-    }
-    
-    aspectsContent.innerHTML = html;
-}
-
-function categoryLabel(cat) {
-    const labels = {
-        "documentation": "📝 Documentation",
-        "data": "📊 Data",
-        "environment": "🔧 Environment",
-        "code": "💻 Code",
-        "testing": "✓ Testing",
-        "other": "📌 Other"
-    };
-    return labels[cat] || cat;
-}
-
-function getStatusClass(status) {
-    if (!status) return "unknown";
-    const lower = status.toLowerCase();
-    if (["documented", "available", "sufficient", "present", "found", "yes"].includes(lower)) return "success";
-    if (["partial", "limited", "partial-available"].includes(lower)) return "warning";
-    return "error";
-}
-
-function getStatusIcon(status) {
-    if (!status) return "❓";
-    const lower = status.toLowerCase();
-    if (["documented", "available", "sufficient", "present", "found", "yes"].includes(lower)) return "✓";
-    if (["partial", "limited"].includes(lower)) return "⚠";
-    return "✗";
-}
-
-// ============================================================================
-// Render Reproducibility Checklist (with multi-source evidence)
+// Render Reproducibility Checklist
 // ============================================================================
 
 function renderChecklist() {
-    let html = `<div class="checklist">`;
+    let html = `
+        <div class="card bg-base-100 shadow-lg mb-8">
+            <div class="card-body">
+                <h2 class="card-title flex items-center gap-2">
+                    <span>✓</span>
+                    <span>Reproducibility Checklist</span>
+                </h2>
+    `;
     
     const evaluations = currentJob.report.aspect_evaluations || [];
     
     if (evaluations.length === 0) {
         html += "<p>No evaluations available</p>";
     } else {
-        // Group by tier (infer from aspect_id)
+        // Group by tier
         const tierMap = {
             "dependencies_pinned": 1,
             "results_reproducible": 1,
@@ -358,61 +220,73 @@ function renderChecklist() {
         
         // Render by tier
         const tierLabels = {
-            1: "🔴 CRITICAL - Must Have",
-            2: "🟠 HIGH VALUE - Recommended",
-            3: "🟡 NICE-TO-HAVE - Optional"
+            1: { emoji: "🔴", label: "CRITICAL - Must Have", color: "error" },
+            2: { emoji: "🟠", label: "HIGH VALUE - Recommended", color: "warning" },
+            3: { emoji: "🟡", label: "NICE-TO-HAVE - Optional", color: "info" }
         };
         
         for (const [tier, items] of Object.entries(tiers)) {
             if (items.length === 0) continue;
             
-            html += `<div class="tier-group">`;
-            html += `<h3 class="tier-label">${tierLabels[tier]}</h3>`;
+            const tierInfo = tierLabels[tier];
+            html += `
+                <div class="mt-6">
+                    <h3 class="text-lg font-semibold flex items-center gap-2 mb-4">
+                        <span>${tierInfo.emoji}</span>
+                        <span>${tierInfo.label}</span>
+                    </h3>
+                    <div class="space-y-3">
+            `;
             
             for (const eval_item of items) {
                 const status = eval_item.status || "unknown";
-                const statusClass = getChecklistStatusClass(status);
                 const icon = getChecklistIcon(status);
+                const badgeColor = status === "pass" ? "badge-success" : status === "partial" ? "badge-warning" : "badge-error";
                 
                 html += `
-                    <div class="checklist-item ${statusClass}">
-                        <div class="checklist-header">
-                            <span class="check-icon">${icon}</span>
-                            <div class="check-info">
-                                <div class="check-label">${escapeHtml(eval_item.name)}</div>
-                                <div class="check-status">${escapeHtml(status)}</div>
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <div class="flex justify-between items-start gap-4">
+                                <div class="flex gap-3 flex-1">
+                                    <span class="text-xl">${icon}</span>
+                                    <div>
+                                        <h4 class="font-semibold">${escapeHtml(eval_item.name)}</h4>
+                                        <p class="text-xs text-base-content/60 mt-1">${escapeHtml(eval_item.evidence)}</p>
+                                    </div>
+                                </div>
+                                <div class="badge ${badgeColor} gap-1">
+                                    ${escapeHtml(status)}
+                                </div>
                             </div>
-                        </div>
-                        
-                        <div class="check-evidence">
-                            <details>
-                                <summary>View Evidence</summary>
-                                <div class="evidence-detail">
-                                    <p><strong>Finding:</strong> ${escapeHtml(eval_item.evidence)}</p>
+                            
+                            <div class="collapse mt-3">
+                                <input type="checkbox" class="peer" />
+                                <div class="collapse-title text-sm font-semibold cursor-pointer text-primary peer-checked:bg-base-300 rounded">
+                                    View Evidence
+                                </div>
+                                <div class="collapse-content text-sm space-y-2 peer-checked:bg-base-300 rounded">
                                     <p><strong>Paper supports:</strong> ${eval_item.paper_supports ? "✓ Yes" : "✗ No"}</p>
                                     <p><strong>Code supports:</strong> ${eval_item.code_supports ? "✓ Yes" : "✗ No"}</p>
                                     <p><strong>Conclusion:</strong> ${escapeHtml(eval_item.conclusion)}</p>
                                 </div>
-                            </details>
+                            </div>
                         </div>
                     </div>
                 `;
             }
             
-            html += `</div>`;
+            html += `
+                    </div>
+                </div>
+            `;
         }
     }
     
-    html += `</div>`;
+    html += `
+            </div>
+        </div>
+    `;
     return html;
-}
-
-function getChecklistStatusClass(status) {
-    if (!status) return "unknown";
-    const lower = status.toLowerCase();
-    if (lower === "pass") return "pass";
-    if (lower === "partial") return "partial";
-    return "fail";
 }
 
 function getChecklistIcon(status) {
@@ -424,31 +298,162 @@ function getChecklistIcon(status) {
 }
 
 // ============================================================================
+// Render Artifacts
+// ============================================================================
+
+function renderArtifacts() {
+    let html = "";
+    
+    if (currentJob.artifacts.length === 0) {
+        html += "<p>No artifacts found</p>";
+    } else {
+        html += "<div class='space-y-2'>";
+        
+        for (const artifact of currentJob.artifacts) {
+            const emoji = getArtifactEmoji(artifact.artifact_type);
+            html += `
+                <div class="card bg-base-200">
+                    <div class="card-body p-4">
+                        <div class="flex gap-3">
+                            <span class="text-2xl">${emoji}</span>
+                            <div class="flex-1">
+                                <a href="${escapeHtml(artifact.url)}" target="_blank" class="link link-primary font-semibold">
+                                    ${escapeHtml(artifact.url)}
+                                </a>
+                                <p class="text-xs text-base-content/60 mt-1">${escapeHtml(artifact.artifact_type || "unknown")}</p>
+                                ${artifact.description ? `<p class="text-sm mt-2 italic">${escapeHtml(artifact.description)}</p>` : ""}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        html += "</div>";
+    }
+    
+    artifactsContent.innerHTML = html;
+}
+
+function getArtifactEmoji(type) {
+    const map = {
+        "repository": "📦",
+        "github": "🐙",
+        "dataset": "📊",
+        "paper": "📄",
+        "code": "💻",
+        "docker": "🐳"
+    };
+    return map[type?.toLowerCase()] || "🔗";
+}
+
+// ============================================================================
+// Render Reproducibility Aspects
+// ============================================================================
+
+function renderAspects() {
+    const aspects = currentJob.report.reproducibility_aspects;
+    
+    if (!aspects || !Array.isArray(aspects.aspects)) {
+        aspectsContent.innerHTML = "<p>No aspects data available</p>";
+        return;
+    }
+    
+    // Group by category
+    const grouped = {};
+    for (const aspect of aspects.aspects) {
+        const category = aspect.category || "other";
+        if (!grouped[category]) grouped[category] = [];
+        grouped[category].push(aspect);
+    }
+    
+    // Render by category
+    let html = "";
+    
+    for (const [category, items] of Object.entries(grouped)) {
+        html += `
+            <div class="card bg-base-200 mb-3">
+                <div class="card-body p-4">
+                    <h4 class="font-semibold text-primary mb-3">${categoryLabel(category)}</h4>
+                    <div class="space-y-2">
+        `;
+        
+        for (const aspect of items) {
+            const statusClass = getStatusClass(aspect.status);
+            const icon = getStatusIcon(aspect.status);
+            
+            html += `
+                <div class="p-2 bg-base-100 rounded">
+                    <div class="flex gap-2 items-start">
+                        <span class="text-lg">${aspect.emoji || icon}</span>
+                        <div class="flex-1">
+                            <div class="font-semibold text-sm">${escapeHtml(aspect.name)}</div>
+                            <div class="badge badge-sm mt-1">${aspect.status}</div>
+                        </div>
+                    </div>
+                    ${aspect.value ? `<div class="text-xs text-base-content/60 mt-2">${escapeHtml(aspect.value)}</div>` : ""}
+                </div>
+            `;
+        }
+        
+        html += `
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    aspectsContent.innerHTML = html;
+}
+
+function categoryLabel(cat) {
+    const labels = {
+        "documentation": "📝 Documentation",
+        "data": "📊 Data",
+        "environment": "🔧 Environment",
+        "code": "💻 Code",
+        "testing": "✓ Testing",
+        "other": "📌 Other"
+    };
+    return labels[cat] || cat;
+}
+
+function getStatusClass(status) {
+    if (!status) return "unknown";
+    const lower = status.toLowerCase();
+    if (["documented", "available", "sufficient", "present", "found", "yes"].includes(lower)) return "success";
+    if (["partial", "limited"].includes(lower)) return "warning";
+    return "error";
+}
+
+function getStatusIcon(status) {
+    if (!status) return "❓";
+    const lower = status.toLowerCase();
+    if (["documented", "available", "sufficient", "present", "found", "yes"].includes(lower)) return "✓";
+    if (["partial", "limited"].includes(lower)) return "⚠";
+    return "✗";
+}
+
+// ============================================================================
 // Render Event Log
 // ============================================================================
 
 function renderEventLog() {
-    eventLog.innerHTML = "";
-    
     if (!currentJob.events || currentJob.events.length === 0) {
-        const entry = document.createElement("div");
-        entry.className = "log-entry";
-        entry.textContent = "No events recorded";
-        eventLog.appendChild(entry);
+        eventLog.innerHTML = '<div class="text-base-content/50">No events recorded</div>';
         return;
     }
     
+    let html = "";
     for (const event of currentJob.events) {
-        const entry = document.createElement("div");
-        entry.className = `log-entry ${event.severity || "info"}`;
-        
         const time = new Date(event.timestamp).toLocaleTimeString();
         const step = event.step ? `[${event.step}]` : "";
         const message = event.message || "";
+        const colorClass = event.severity === 'error' ? 'text-error' : event.severity === 'success' ? 'text-success' : event.severity === 'warning' ? 'text-warning' : 'text-base-content/70';
         
-        entry.textContent = `${time} ${step} ${message}`;
-        eventLog.appendChild(entry);
+        html += `<div class="${colorClass}">${time} ${step} ${escapeHtml(message)}</div>`;
     }
+    eventLog.innerHTML = html;
 }
 
 // ============================================================================
@@ -490,4 +495,12 @@ function escapeHtml(text) {
         "'": '&#039;'
     };
     return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// Theme toggle
+function toggleTheme() {
+    const html = document.documentElement;
+    const isDark = html.getAttribute('data-theme') === 'dark';
+    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    localStorage.setItem('theme', isDark ? 'light' : 'dark');
 }
