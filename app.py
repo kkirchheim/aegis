@@ -129,10 +129,27 @@ def init_db():
             actual_results JSON,
             dependencies_used TEXT,
             errors_summary TEXT,
+            discovered_files JSON,
+            test_info TEXT,
+            randomness_info TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(job_id) REFERENCES jobs(id)
         )
     """)
+    
+    # Add missing columns to existing databases (backward compatibility)
+    try:
+        c.execute("ALTER TABLE execution_details ADD COLUMN discovered_files JSON")
+    except:
+        pass  # Column already exists
+    try:
+        c.execute("ALTER TABLE execution_details ADD COLUMN test_info TEXT")
+    except:
+        pass
+    try:
+        c.execute("ALTER TABLE execution_details ADD COLUMN randomness_info TEXT")
+    except:
+        pass
     
     c.execute("""
         CREATE TABLE IF NOT EXISTS aspect_evaluations (
@@ -977,15 +994,18 @@ def agent_execution():
         c = conn.cursor()
         c.execute("""
             INSERT INTO execution_details 
-            (job_id, commands_run, stdout_combined, actual_results, dependencies_used, errors_summary)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (job_id, commands_run, stdout_combined, actual_results, dependencies_used, errors_summary, discovered_files, test_info, randomness_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             job_id,
             data.get("commands_run", ""),
             data.get("stdout_combined", ""),
             json.dumps(data.get("actual_results", {})),
             data.get("dependencies_used", ""),
-            data.get("errors_summary", "")
+            data.get("errors_summary", ""),
+            json.dumps(data.get("discovered_files", [])),
+            data.get("test_info", ""),
+            data.get("randomness_info", "")
         ))
         conn.commit()
         conn.close()
@@ -1119,17 +1139,6 @@ def evaluate_reproducibility_aspects(job_id: str):
         c.execute("SELECT url, artifact_type, description FROM artifacts WHERE job_id = ?", (job_id,))
         artifacts = [dict(row) for row in c.fetchall()]
         
-        # Get job to access discovered_files from job report if available
-        c.execute("SELECT report FROM jobs WHERE id = ?", (job_id,))
-        job_row = c.fetchone()
-        discovered_files = []
-        if job_row and job_row["report"]:
-            try:
-                report = json.loads(job_row["report"])
-                discovered_files = report.get("discovered_files", []) if report else []
-            except:
-                pass
-        
         conn.close()
         
         if not paper_analysis_row or not execution_details_row:
@@ -1147,7 +1156,12 @@ def evaluate_reproducibility_aspects(job_id: str):
         # Parse JSON fields
         paper_analysis["claimed_results"] = json.loads(paper_analysis.get("claimed_results", "{}"))
         execution_details["actual_results"] = json.loads(execution_details.get("actual_results", "{}"))
-        execution_details["discovered_files"] = discovered_files
+        # Parse discovered_files from JSON (or use empty list if missing)
+        try:
+            discovered_files_json = execution_details.get("discovered_files", "[]")
+            execution_details["discovered_files"] = json.loads(discovered_files_json) if isinstance(discovered_files_json, str) else (discovered_files_json or [])
+        except:
+            execution_details["discovered_files"] = []
         
         # Build evaluation prompt
         prompt = f"""You are evaluating the reproducibility of a scientific paper and its code implementation.
@@ -1315,6 +1329,12 @@ Return ONLY valid JSON (no markdown, no explanation, just JSON):
 }}
 """
 
+        # Log what discovered_files Claude will receive
+        discovered_files_list = execution_details.get("discovered_files", [])
+        app.logger.info(f"[{job_id}] === Evaluation Context ===")
+        app.logger.info(f"[{job_id}] Discovered files ({len(discovered_files_list)} total): {discovered_files_list[:20]}")
+        app.logger.info(f"[{job_id}] Test info: {execution_details.get('test_info', 'N/A')[:100]}")
+        app.logger.info(f"[{job_id}] Randomness info: {execution_details.get('randomness_info', 'N/A')[:100]}")
         app.logger.info(f"[{job_id}] Calling Claude for aspect evaluation...")
         
         response = client.messages.create(
