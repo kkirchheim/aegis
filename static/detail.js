@@ -244,19 +244,19 @@ function renderChecklist() {
                 const badgeColor = status === "pass" ? "badge-success" : status === "partial" ? "badge-warning" : "badge-error";
                 
                 html += `
-                    <div class="collapse collapse-arrow bg-base-200 border border-base-300">
+                    <div class="collapse bg-base-200 border border-base-300">
                         <input type="checkbox" class="peer" />
-                        <div class="collapse-title flex items-center gap-3 p-3 min-h-fit">
-                            <span class="text-lg">${icon}</span>
-                            <span class="font-medium text-sm flex-1">${escapeHtml(eval_item.name)}</span>
-                            <div class="badge ${badgeColor} badge-sm">
+                        <div class="collapse-title flex items-center gap-2 py-2 px-3 pr-12 cursor-pointer peer-checked:bg-base-300">
+                            <span class="text-lg flex-shrink-0">${icon}</span>
+                            <span class="font-medium text-sm flex-1 truncate">${escapeHtml(eval_item.name)}</span>
+                            <div class="badge ${badgeColor} badge-xs flex-shrink-0">
                                 ${escapeHtml(status)}
                             </div>
+                            <span class="text-lg flex-shrink-0 transition-transform peer-checked:rotate-180">▼</span>
                         </div>
-                        <div class="collapse-content p-3 space-y-2 text-sm bg-base-100">
+                        <div class="collapse-content px-3 py-2 space-y-1 text-xs bg-base-100 hidden peer-checked:block">
                             <p><strong>Evidence:</strong> ${escapeHtml(eval_item.evidence)}</p>
-                            <p><strong>Paper supports:</strong> ${eval_item.paper_supports ? "✓ Yes" : "✗ No"}</p>
-                            <p><strong>Code supports:</strong> ${eval_item.code_supports ? "✓ Yes" : "✗ No"}</p>
+                            <p><strong>Paper:</strong> ${eval_item.paper_supports ? "✓" : "✗"} | <strong>Code:</strong> ${eval_item.code_supports ? "✓" : "✗"}</p>
                             <p><strong>Conclusion:</strong> ${escapeHtml(eval_item.conclusion)}</p>
                         </div>
                     </div>
