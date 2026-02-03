@@ -8,7 +8,12 @@ Paper Reproducibility Checker now supports multiple LLM providers through a plug
 ```bash
 export LLM_PROVIDER=anthropic
 export ANTHROPIC_API_KEY=sk-ant-...
-export ANTHROPIC_MODEL=claude-opus-4-1  # Optional, default: claude-opus-4-1
+export ANTHROPIC_MODEL=claude-haiku-4-5  # Optional, default: claude-haiku-4-5
+```
+
+**Note:** Uses Haiku by default for cost efficiency (~80% cheaper than Opus). For better quality, set:
+```bash
+export ANTHROPIC_MODEL=claude-opus-4-1
 ```
 
 ### Ollama (Local)
@@ -150,7 +155,7 @@ result = json.loads(response)
 |----------|----------|----------|---------|-------------|
 | `LLM_PROVIDER` | All | No | `anthropic` | Provider name |
 | `ANTHROPIC_API_KEY` | Anthropic | ✅ Yes | - | API key (`sk-ant-...`) |
-| `ANTHROPIC_MODEL` | Anthropic | No | `claude-opus-4-1` | Model name |
+| `ANTHROPIC_MODEL` | Anthropic | No | `claude-haiku-4-5` | Model name (Haiku for cost, Opus for quality) |
 | `OLLAMA_BASE_URL` | Ollama | No | `http://localhost:11434` | Ollama server URL |
 | `OLLAMA_MODEL` | Ollama | No | `llama2` | Model name |
 

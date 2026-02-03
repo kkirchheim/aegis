@@ -47,7 +47,8 @@ Visit `http://localhost:5000`
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | ✅ Yes | - | Anthropic API key (`sk-ant-...`) |
-| `CLAUDE_MODEL` | No | `claude-opus-4-1` | Claude model to use (e.g., `claude-haiku-4-5` for cost savings) |
+| `ANTHROPIC_MODEL` | No | `claude-haiku-4-5` | Claude model (use `claude-opus-4-1` for better quality) |
+| `LLM_PROVIDER` | No | `anthropic` | LLM provider (e.g., `ollama` for local) |
 | `AGENT_CONTEXT_LIMIT` | No | `10000` | Max characters of agent output history in prompt |
 | `BACKEND_URL` | No | `http://localhost:5000` | Backend URL for agents |
 | `FLASK_ENV` | No | `production` | Flask environment |

@@ -18,14 +18,14 @@ class AnthropicProvider(LLMProvider):
         Initialize Anthropic provider.
         
         Args:
-            model: Model name (default: claude-opus-4-1)
+            model: Model name (default: claude-haiku-4-5)
             api_key: API key (default: from ANTHROPIC_API_KEY env var)
         """
         self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
         if not self.api_key:
             raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
         
-        self.model = model or os.getenv("ANTHROPIC_MODEL", "claude-opus-4-1")
+        self.model = model or os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
         self.client = Anthropic(api_key=self.api_key)
     
     def complete(

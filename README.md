@@ -41,7 +41,9 @@ Result: Comprehensive reproducibility report scoring 15 key aspects.
 - Citations extraction from papers
 - Live progress timeline with 3-stage pipeline visualization
 - Paper metadata (title, abstract) on detail page
-- Configurable agent context limit
+- **Multi-provider LLM support** (Anthropic, Ollama, more to come)
+- **Interactive chat** — Ask questions about papers after analysis
+- Haiku model by default for **80% cost reduction**
 - Full reproducibility checklist (15 aspects, tier-based)
 - Professional UI with dark mode support
 
