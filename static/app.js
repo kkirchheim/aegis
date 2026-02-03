@@ -535,20 +535,20 @@ async function loadJobsHistory() {
         for (const job of jobs) {
             const createdDate = new Date(job.created_at).toLocaleString();
             const statusColor = job.status === 'completed' ? 'badge-success' : job.status === 'failed' ? 'badge-error' : 'badge-warning';
+            const paperTitle = job.title || job.pdf_filename || 'Unknown';
+            const abstract = job.abstract ? `<p class="text-sm text-base-content/70 line-clamp-2 mb-2">${escapeHtml(job.abstract)}</p>` : '';
             
             html += `
                 <div class="card bg-base-200 cursor-pointer hover:shadow-md transition-shadow" onclick="viewJob('${job.id}')">
                     <div class="card-body p-4">
                         <div class="flex justify-between items-start gap-4">
                             <div class="flex-1">
-                                <h3 class="card-title text-base gap-2">
+                                <h3 class="card-title text-base gap-2 mb-2">
                                     <span>📄</span>
-                                    ${escapeHtml(job.pdf_filename || 'Unknown')}
+                                    ${escapeHtml(paperTitle)}
                                 </h3>
-                                <p class="text-sm text-base-content/60">
-                                    Job ID: ${job.id.substring(0, 8)}...
-                                </p>
-                                <p class="text-sm text-base-content/60">
+                                ${abstract}
+                                <p class="text-xs text-base-content/60">
                                     Created: ${createdDate}
                                 </p>
                             </div>

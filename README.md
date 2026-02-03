@@ -58,6 +58,14 @@ Visit `http://localhost:5000`
 
 ## Features
 
+### ✨ New in v0.4.0
+- **Citations Extraction** - Automatically extracts all citations from papers (structured JSON)
+- **Enhanced Caching** - Multi-layer caching for paper analysis, code execution, and evaluations
+- **Configurable Agent Context** - `AGENT_CONTEXT_LIMIT` env var to control agent's output window
+- **Live Progress Timeline** - Visual 3-stage pipeline (Paper → Execution → Evaluation) with timing
+- **Paper Metadata** - Displays extracted title and abstract on detail page
+- **Full History in Agent** - Agent now sees complete command history to avoid looping
+
 ### 🎯 15 Reproducibility Aspects
 
 #### Tier 1: CRITICAL (Must Have)
@@ -249,7 +257,8 @@ Auto-created on first run. See schema in `app.py:init_db()`.
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | ✅ Yes | - | Anthropic API key |
-| `CLAUDE_MODEL` | No | `claude-opus-4-1` | Claude model to use |
+| `CLAUDE_MODEL` | No | `claude-opus-4-1` | Claude model to use (e.g., `claude-haiku-4-5` for cost savings) |
+| `AGENT_CONTEXT_LIMIT` | No | `10000` | Max characters of agent output history in prompt (increase to prevent looping) |
 | `BACKEND_URL` | No | `http://localhost:5000` | Backend URL for agents |
 | `FLASK_ENV` | No | `production` | Flask environment |
 | `FLASK_DEBUG` | No | `0` | Enable debug mode |
@@ -442,6 +451,16 @@ If you use this tool in research, please cite:
 - **Troubleshooting:** See [DEBUGGING.md](./docs/DEBUGGING.md)
 
 ## Changelog
+
+### v0.4.0 (Feb 3, 2026 - Current)
+- **Citations Extraction** - Extracts all references from papers in structured JSON format
+- **Enhanced Caching** - Added 3-layer caching (paper analysis, code execution, evaluations)
+- **Live Progress Timeline** - Visual 3-stage pipeline with duration timing
+- **Paper Metadata** - Displays title and abstract on detail page
+- **Improved History View** - Shows paper titles instead of filenames, displays abstracts
+- **Agent Loop Prevention** - Full command/output history prevents duplicate file reads
+- **Configurable Context** - `AGENT_CONTEXT_LIMIT` environment variable for tuning
+- **UI Polish** - Status indicator in header, minimal status section, professional styling
 
 ### v0.3.0 (Feb 3, 2026)
 - Added 15 reproducibility aspects (tier-based)

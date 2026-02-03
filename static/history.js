@@ -84,9 +84,10 @@ function filterJobs() {
     const status = statusFilter.value;
     
     filteredJobs = allJobs.filter(job => {
-        // Search filter
+        // Search filter - search by title or filename
+        const title = (job.title || '').toLowerCase();
         const filename = (job.pdf_filename || '').toLowerCase();
-        if (search && !filename.includes(search)) {
+        if (search && !title.includes(search) && !filename.includes(search)) {
             return false;
         }
         
@@ -111,8 +112,8 @@ function sortAndRender() {
         filteredJobs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     } else if (currentSort === 'name') {
         filteredJobs.sort((a, b) => {
-            const nameA = (a.pdf_filename || '').toLowerCase();
-            const nameB = (b.pdf_filename || '').toLowerCase();
+            const nameA = (a.title || a.pdf_filename || '').toLowerCase();
+            const nameB = (b.title || b.pdf_filename || '').toLowerCase();
             return nameA.localeCompare(nameB);
         });
     }
@@ -145,7 +146,8 @@ function renderJobs() {
         const statusIcon = status === 'completed' ? '✓' : status === 'failed' ? '✗' : '⏳';
         const statusBadge = status === 'completed' ? 'badge-success' : status === 'failed' ? 'badge-error' : 'badge-warning';
         
-        const filename = job.pdf_filename || `Report ${job.id.substring(0, 8)}`;
+        const paperTitle = job.title || job.pdf_filename || `Report ${job.id.substring(0, 8)}`;
+        const abstract = job.abstract ? `<p class="text-sm text-base-content/70 line-clamp-2 mt-2 mb-2">${escapeHtml(job.abstract)}</p>` : '';
         const createdDate = new Date(job.created_at).toLocaleDateString();
         const createdTime = new Date(job.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         
@@ -154,12 +156,13 @@ function renderJobs() {
                 <div class="card-body p-4">
                     <div class="flex justify-between items-start gap-4">
                         <div class="flex-1">
-                            <div class="font-semibold text-base flex items-center gap-2">
+                            <div class="font-semibold text-base flex items-center gap-2 mb-1">
                                 <span class="text-lg">${statusIcon}</span>
-                                <span class="truncate">${escapeHtml(filename)}</span>
+                                <span class="truncate">${escapeHtml(paperTitle)}</span>
                                 <span class="badge ${statusBadge} badge-sm flex-shrink-0">${status}</span>
                             </div>
-                            <div class="text-xs text-base-content/60 mt-1">
+                            ${abstract}
+                            <div class="text-xs text-base-content/60">
                                 ${createdDate} at ${createdTime}
                             </div>
                         </div>

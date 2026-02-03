@@ -241,7 +241,7 @@ Currently no rate limits. Will be added in production deployment.
 
 **GET /api/job/{job_id}/full**
 
-Returns complete job data including events, artifacts, evaluations.
+Returns complete job data including events, artifacts, evaluations, citations.
 
 Used by detail page to fetch all information.
 
@@ -249,7 +249,49 @@ Used by detail page to fetch all information.
 - `events` - All SSE events (timestamps, steps)
 - `artifacts` - Code artifacts found
 - `report` - Analysis report
+- `paper_analysis` - Extracted metadata:
+  - `title` - Paper title
+  - `abstract` - Paper abstract
+  - `citations` - Array of citations: `{authors, year, title, url}`
 - `aspect_evaluations` - Reproducibility scores
+
+---
+
+### Cache Management
+
+#### Get Cache Statistics
+
+**GET /api/cache/stats**
+
+Returns current cache usage.
+
+**Response:**
+```json
+{
+  "paper_analysis": 5,
+  "code_execution": 12,
+  "evaluation": 8,
+  "total": 25
+}
+```
+
+#### Clear All Cache
+
+**DELETE /api/cache/clear**
+
+Clears all cached data (paper analysis, code execution, evaluations) and deletes uploaded PDFs.
+
+```bash
+curl -X DELETE http://localhost:5000/api/cache/clear
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "message": "Cache cleared - deleted 5 PDF files and all analysis data"
+}
+```
 
 ---
 

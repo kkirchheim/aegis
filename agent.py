@@ -520,6 +520,10 @@ def main():
             if content:
                 state["last_output"] = content
                 state["last_command"] = f"read_file({target})"
+                # Add to combined output history
+                state["executed_commands"].append(f"read_file({target})")
+                state["combined_output"] += f"\n--- Reading file: {target} ---\n"
+                state["combined_output"] += content + "\n"
             
         elif action == "run_command":
             state["last_command"] = target

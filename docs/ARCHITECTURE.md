@@ -89,6 +89,10 @@ High-level design and data flow of the Paper Reproducibility Checker.
 **paper_analysis**
 - id (auto-inc)
 - job_id (unique FK)
+- pdf_hash (MD5 of full PDF for caching)
+- title (extracted paper title)
+- abstract (extracted paper abstract)
+- citations (JSON array of citations: {authors, year, title, url})
 - extracted_text (first 50k chars of PDF)
 - claimed_results (JSON)
 - methodology, dependencies, dataset_description
@@ -248,14 +252,59 @@ All containers on `workspace_traefik` network:
 - ✅ Command timeout (300s)
 - ✅ Output truncation (prevent context explosion)
 
+## Caching System
+
+Three-layer caching reduces redundant API calls and agent execution:
+
+### Layer 1: Paper Analysis Cache
+- **Key:** MD5 hash of PDF text
+- **Stores:** Title, abstract, citations, methodology, dependencies
+- **Benefit:** Skip Claude parsing for duplicate PDFs
+- **Table:** `cache_paper_analysis`
+
+### Layer 2: Code Execution Cache
+- **Key:** Repository URL + code hash
+- **Stores:** Commands run, output, execution results, dependencies
+- **Benefit:** Skip Docker agent execution for known repos
+- **Table:** `cache_code_execution`
+
+### Layer 3: Evaluation Cache
+- **Key:** Paper hash + code hash
+- **Stores:** All 15 aspect evaluations with evidence
+- **Benefit:** Skip evaluation Claude call for known combinations
+- **Table:** `cache_evaluation`
+
+**Cache Miss Scenario:** New PDF + unknown repo = full 3-5 minute pipeline
+**Cache Hit Scenario:** Seen PDF + seen repo = ~1-2 seconds (cached results)
+
+## Agent Context Management
+
+The agent sees full command + output history to avoid loops:
+
+```
+Iteration 1: read_file(README.md) → [output]
+Iteration 2: read_file(requirements.txt) → [output]
+Iteration 3: [Claude sees full history] → moves to pip install
+```
+
+**Configuration:**
+- `AGENT_CONTEXT_LIMIT` environment variable (default: 10000 chars)
+- Controls max output shown to agent per iteration
+- Increase if agent loops, decrease if context too large
+
 ## Performance
 
-- **Paper extraction:** 5-10 seconds
-- **Code execution:** 2-5 minutes (repo-dependent)
-- **Evaluation:** 10-15 seconds
-- **Total:** ~3-5 minutes per paper
+- **Paper extraction (no cache):** 5-10 seconds
+- **Paper extraction (cache hit):** <1 second
+- **Code execution (no cache):** 2-5 minutes (repo-dependent)
+- **Code execution (cache hit):** <1 second
+- **Evaluation (no cache):** 10-15 seconds
+- **Evaluation (cache hit):** <1 second
+- **Total (worst case):** ~3-5 minutes per paper
+- **Total (best case with cache):** ~1-2 seconds
 
-Bottleneck: Depends on repo size and complexity.
+Bottleneck: Depends on repo size and agent execution complexity.
+Caching provides 100-300x speedup for repeated analyses.
 
 ## Deployment Targets
 

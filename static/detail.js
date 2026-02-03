@@ -8,11 +8,19 @@ let currentJob = null;
 
 // DOM Elements
 const statusSection = document.getElementById("statusSection");
+const progressSection = document.getElementById("progressSection");
+const metadataSection = document.getElementById("metadataSection");
+const citationsSection = document.getElementById("citationsSection");
 const artifactsSection = document.getElementById("artifactsSection");
 const aspectsSection = document.getElementById("aspectsSection");
 const logSection = document.getElementById("logSection");
 
 const statusContent = document.getElementById("statusContent");
+const progressFill = document.getElementById("progressFill");
+const progressText = document.getElementById("progressText");
+const metadataContent = document.getElementById("metadataContent");
+const citationsContent = document.getElementById("citationsContent");
+const citationCount = document.getElementById("citationCount");
 const artifactsContent = document.getElementById("artifactsContent");
 const aspectsContent = document.getElementById("aspectsContent");
 const eventLog = document.getElementById("eventLog");
@@ -79,8 +87,28 @@ async function loadJobData() {
 // ============================================================================
 
 function renderPage() {
-    // Header
-    docTitle.textContent = currentJob.pdf_filename || `Report ${currentJob.id.substring(0, 8)}`;
+    // Header with status indicator and paper title
+    const paperTitle = currentJob.paper_analysis?.title || currentJob.pdf_filename || `Report ${currentJob.id.substring(0, 8)}`;
+    const status = currentJob.report?.status || currentJob.status;
+    
+    let statusBadge = "";
+    let statusClass = "badge-neutral";
+    if (status === "success") {
+        statusBadge = "✓";
+        statusClass = "badge-success";
+    } else if (status === "completed") {
+        statusBadge = "✓";
+        statusClass = "badge-info";
+    } else if (status === "failed") {
+        statusBadge = "✗";
+        statusClass = "badge-error";
+    } else if (status === "processing") {
+        statusBadge = "⏳";
+        statusClass = "badge-warning";
+    }
+    
+    docTitle.innerHTML = `<span class="badge ${statusClass}">${statusBadge}</span> ${paperTitle}`;
+    
     const createdDate = new Date(currentJob.created_at).toLocaleString();
     let duration = "";
     if (currentJob.completed_at) {
@@ -92,8 +120,20 @@ function renderPage() {
     }
     docMeta.textContent = `${createdDate}${duration}`;
     
-    // Status section
-    renderStatus();
+    // Hide status section (now in header)
+    statusSection.style.display = "none";
+    
+    // Metadata section (Title & Abstract)
+    if (currentJob.paper_analysis && (currentJob.paper_analysis.title || currentJob.paper_analysis.abstract)) {
+        metadataSection.style.display = "block";
+        renderMetadata();
+    }
+    
+    // Citations section
+    if (currentJob.paper_analysis && currentJob.paper_analysis.citations && currentJob.paper_analysis.citations.length > 0) {
+        citationsSection.style.display = "block";
+        renderCitations();
+    }
     
     // Checklist section
     if (currentJob.report && currentJob.report.aspect_evaluations && currentJob.report.aspect_evaluations.length > 0) {
@@ -116,10 +156,41 @@ function renderPage() {
         renderAspects();
     }
     
-    // Event log
-    if (currentJob.events && currentJob.events.length > 0) {
-        logSection.style.display = "block";
-        renderEventLog();
+    // Progress section - show if processing OR if we have events
+    if (currentJob.status === "processing") {
+        progressSection.style.display = "block";
+        eventLog.innerHTML = "";
+        progressFill.value = 0;
+        progressText.textContent = "0%";
+        logSection.style.display = "block";  // Show log section for live updates
+        setupSSEConnection();
+    } else if (currentJob.events && currentJob.events.length > 0) {
+        // Show progress section with historical events for completed jobs
+        progressSection.style.display = "block";
+        logSection.style.display = "block";  // Show log section
+        renderProgressHistory();
+        
+        // For completed jobs, mark all stages as complete
+        if (currentJob.status === "completed" || currentJob.status === "success") {
+            const stage1Icon = document.getElementById("stage1Icon");
+            const stage2Icon = document.getElementById("stage2Icon");
+            const stage3Icon = document.getElementById("stage3Icon");
+            
+            stage1Icon.textContent = "✓";
+            stage1Icon.style.color = "#22c55e";
+            stage1Icon.className = "text-2xl mb-1";
+            
+            stage2Icon.textContent = "✓";
+            stage2Icon.style.color = "#22c55e";
+            stage2Icon.className = "text-2xl mb-1";
+            
+            stage3Icon.textContent = "✓";
+            stage3Icon.style.color = "#22c55e";
+            stage3Icon.className = "text-2xl mb-1";
+            
+            progressFill.value = 100;
+            progressText.textContent = "100%";
+        }
     }
 }
 
@@ -133,44 +204,98 @@ function renderStatus() {
     
     let html = "";
     
-    // Status badge
+    // Status badge (minimal)
+    let badgeClass = "badge-neutral";
+    let statusText = status || "Unknown";
+    
     if (status === "success") {
-        html += `<div class="alert alert-success"><span>✓ Reproducibility Check Passed</span></div>`;
+        badgeClass = "badge-success";
+        statusText = "✓ Passed";
     } else if (status === "completed") {
-        html += `<div class="alert alert-info"><span>✓ Analysis Completed</span></div>`;
+        badgeClass = "badge-info";
+        statusText = "✓ Completed";
     } else if (status === "failed") {
-        html += `<div class="alert alert-error"><span>✗ Reproducibility Check Failed</span></div>`;
+        badgeClass = "badge-error";
+        statusText = "✗ Failed";
     } else if (status === "processing") {
-        html += `<div class="alert alert-warning"><span>⏳ Processing...</span></div>`;
-    } else {
-        html += `<div class="alert"><span>${status || "Unknown"}</span></div>`;
+        badgeClass = "badge-warning";
+        statusText = "⏳ Processing";
     }
+    
+    html += `<div class="badge ${badgeClass} badge-lg gap-2 mb-4">${statusText}</div>`;
     
     // Score
     if (report.reproducibility_score !== undefined) {
         const percentage = Math.round(report.reproducibility_score * 100);
         html += `
-            <div class="mt-4">
+            <div class="mt-3">
                 <div class="flex justify-between mb-2">
-                    <span class="text-sm font-semibold">Reproducibility Score</span>
-                    <span class="text-sm font-bold">${percentage}%</span>
+                    <span class="text-xs opacity-70">Score</span>
+                    <span class="text-xs font-semibold">${percentage}%</span>
                 </div>
-                <progress class="progress progress-primary w-full" value="${percentage}" max="100"></progress>
+                <progress class="progress progress-sm w-full" value="${percentage}" max="100"></progress>
             </div>
         `;
     }
     
-    // Message
-    if (report.message) {
-        html += `<div class="mt-4 p-4 bg-base-200 rounded-lg text-sm">${escapeHtml(report.message)}</div>`;
-    }
-    
-    // Error
+    // Error only (if present)
     if (currentJob.error_message) {
-        html += `<div class="alert alert-error mt-4"><span><strong>Error:</strong> ${escapeHtml(currentJob.error_message)}</span></div>`;
+        html += `<div class="alert alert-error mt-3 py-2"><span class="text-xs"><strong>Error:</strong> ${escapeHtml(currentJob.error_message)}</span></div>`;
     }
     
     statusContent.innerHTML = html;
+}
+
+// ============================================================================
+// Render Metadata (Title & Abstract)
+// ============================================================================
+
+function renderMetadata() {
+    const paperAnalysis = currentJob.paper_analysis || {};
+    const abstract = paperAnalysis.abstract || "";
+    
+    let html = "";
+    
+    if (abstract) {
+        html += `<div class="prose prose-sm max-w-none"><p>${abstract}</p></div>`;
+    }
+    
+    metadataContent.innerHTML = html || "<p class='text-base-content/60'>No abstract available</p>";
+}
+
+// ============================================================================
+// Render Citations
+// ============================================================================
+
+function renderCitations() {
+    const paperAnalysis = currentJob.paper_analysis || {};
+    const citations = paperAnalysis.citations || [];
+    
+    citationCount.textContent = citations.length;
+    
+    let html = "";
+    
+    for (const citation of citations) {
+        const authors = citation.authors || "Unknown";
+        const year = citation.year || "n.d.";
+        const title = citation.title || "Unknown title";
+        const url = citation.url;
+        
+        let citationHtml = `
+            <div class="p-3 bg-base-100 rounded-lg border border-base-300">
+                <div class="font-semibold text-sm">${escapeHtml(title)}</div>
+                <div class="text-sm text-base-content/70 mt-1">${escapeHtml(authors)} (${year})</div>
+        `;
+        
+        if (url) {
+            citationHtml += `<div class="mt-2"><a href="${escapeHtml(url)}" target="_blank" class="link link-primary text-xs">${escapeHtml(url)}</a></div>`;
+        }
+        
+        citationHtml += `</div>`;
+        html += citationHtml;
+    }
+    
+    citationsContent.innerHTML = html;
 }
 
 // ============================================================================
@@ -442,6 +567,118 @@ function renderEventLog() {
         html += `<div class="${colorClass}">${time} ${step} ${escapeHtml(message)}</div>`;
     }
     eventLog.innerHTML = html;
+}
+
+// ============================================================================
+// Server-Sent Events (Live Progress)
+// ============================================================================
+
+function setupSSEConnection() {
+    const eventSource = new EventSource(`/events/${JOB_ID}`);
+    
+    eventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            handleProgressEvent(data);
+        } catch (e) {
+            console.error("Failed to parse event:", e);
+        }
+    };
+    
+    eventSource.onerror = (error) => {
+        console.error("SSE connection error:", error);
+        eventSource.close();
+    };
+}
+
+function handleProgressEvent(event) {
+    const { step, message, progress, severity, stage, stage_duration_ms } = event;
+    
+    // Update progress bar
+    if (progress !== undefined) {
+        progressFill.value = progress;
+        progressText.textContent = `${progress}%`;
+    }
+    
+    // Update stage icons and times
+    if (stage === "paper_analysis") {
+        const icon = document.getElementById("stage1Icon");
+        icon.textContent = "✓";
+        icon.style.color = "#22c55e";
+        icon.className = "text-2xl mb-1";
+        if (stage_duration_ms) {
+            document.getElementById("stage1Time").textContent = `${(stage_duration_ms / 1000).toFixed(1)}s`;
+        }
+    } else if (stage === "code_execution") {
+        const icon = document.getElementById("stage2Icon");
+        icon.textContent = "✓";
+        icon.style.color = "#22c55e";
+        icon.className = "text-2xl mb-1";
+        if (stage_duration_ms) {
+            document.getElementById("stage2Time").textContent = `${(stage_duration_ms / 1000).toFixed(1)}s`;
+        }
+    } else if (stage === "reproducibility_evaluation") {
+        const icon = document.getElementById("stage3Icon");
+        icon.textContent = "✓";
+        icon.style.color = "#22c55e";
+        icon.className = "text-2xl mb-1";
+        if (stage_duration_ms) {
+            document.getElementById("stage3Time").textContent = `${(stage_duration_ms / 1000).toFixed(1)}s`;
+        }
+    }
+    
+    // Add to event log
+    const time = new Date().toLocaleTimeString();
+    const stepLabel = step ? `[${step}]` : "";
+    const severityClass = severity === 'error' ? 'text-error' : severity === 'success' ? 'text-success' : severity === 'warning' ? 'text-warning' : 'text-base-content/70';
+    const logEntry = `<div class="${severityClass}">${time} ${stepLabel} ${escapeHtml(message)}</div>`;
+    eventLog.innerHTML += logEntry;
+    eventLog.scrollTop = eventLog.scrollHeight;
+    
+    // If job completed, refresh the page
+    if (progress === 100) {
+        setTimeout(() => {
+            location.reload();
+        }, 2000);
+    }
+}
+
+function renderProgressHistory() {
+    // Show historical events for completed jobs
+    const events = currentJob.events || [];
+    let html = "";
+    
+    for (const event of events) {
+        const time = new Date(event.timestamp).toLocaleTimeString();
+        const stepLabel = event.step ? `[${event.step}]` : "";
+        const severityClass = event.severity === 'error' ? 'text-error' : event.severity === 'success' ? 'text-success' : event.severity === 'warning' ? 'text-warning' : 'text-base-content/70';
+        const logEntry = `<div class="${severityClass}">${time} ${stepLabel} ${escapeHtml(event.message)}</div>`;
+        html += logEntry;
+        
+        // Try to extract stage info from events
+        if (event.message && event.message.includes("COMPLETE")) {
+            if (event.message.includes("STAGE 1")) {
+                const icon = document.getElementById("stage1Icon");
+                icon.textContent = "✓";
+                icon.style.color = "#22c55e";
+                icon.className = "text-2xl mb-1";
+            } else if (event.message.includes("STAGE 2")) {
+                const icon = document.getElementById("stage2Icon");
+                icon.textContent = "✓";
+                icon.style.color = "#22c55e";
+                icon.className = "text-2xl mb-1";
+            } else if (event.message.includes("STAGE 3")) {
+                const icon = document.getElementById("stage3Icon");
+                icon.textContent = "✓";
+                icon.style.color = "#22c55e";
+                icon.className = "text-2xl mb-1";
+            }
+        }
+    }
+    
+    eventLog.innerHTML = html;
+    progressFill.value = 100;
+    progressText.textContent = "100%";
 }
 
 // ============================================================================

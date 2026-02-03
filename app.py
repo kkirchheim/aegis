@@ -48,6 +48,7 @@ DATABASE = "reproducibility.db"
 MAX_PDF_SIZE = 100 * 1024 * 1024  # 100MB
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-1")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000")
+AGENT_CONTEXT_LIMIT = int(os.getenv("AGENT_CONTEXT_LIMIT", "10000"))
 
 # In-memory event queues for SSE connections
 # {job_id: [events]}
@@ -111,6 +112,10 @@ def init_db():
         CREATE TABLE IF NOT EXISTS paper_analysis (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             job_id TEXT UNIQUE NOT NULL,
+            pdf_hash TEXT,
+            title TEXT,
+            abstract TEXT,
+            citations JSON,
             extracted_text TEXT,
             claimed_results JSON,
             methodology TEXT,
@@ -120,6 +125,31 @@ def init_db():
             FOREIGN KEY(job_id) REFERENCES jobs(id)
         )
     """)
+    
+    # Add missing columns if they don't exist (migration)
+    try:
+        c.execute("ALTER TABLE paper_analysis ADD COLUMN pdf_hash TEXT")
+        app.logger.info("Added pdf_hash column to paper_analysis table")
+    except:
+        pass
+    
+    try:
+        c.execute("ALTER TABLE paper_analysis ADD COLUMN title TEXT")
+        app.logger.info("Added title column to paper_analysis table")
+    except:
+        pass
+    
+    try:
+        c.execute("ALTER TABLE paper_analysis ADD COLUMN abstract TEXT")
+        app.logger.info("Added abstract column to paper_analysis table")
+    except:
+        pass
+    
+    try:
+        c.execute("ALTER TABLE paper_analysis ADD COLUMN citations JSON")
+        app.logger.info("Added citations column to paper_analysis table")
+    except:
+        pass
     
     c.execute("""
         CREATE TABLE IF NOT EXISTS execution_details (
@@ -173,6 +203,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS cache_paper_analysis (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             pdf_hash TEXT UNIQUE NOT NULL,
+            title TEXT,
+            abstract TEXT,
+            citations JSON,
             extracted_text TEXT,
             claimed_results JSON,
             methodology TEXT,
@@ -181,6 +214,25 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    
+    # Add missing columns to cache_paper_analysis (migration)
+    try:
+        c.execute("ALTER TABLE cache_paper_analysis ADD COLUMN title TEXT")
+        app.logger.info("Added title column to cache_paper_analysis table")
+    except:
+        pass
+    
+    try:
+        c.execute("ALTER TABLE cache_paper_analysis ADD COLUMN abstract TEXT")
+        app.logger.info("Added abstract column to cache_paper_analysis table")
+    except:
+        pass
+    
+    try:
+        c.execute("ALTER TABLE cache_paper_analysis ADD COLUMN citations JSON")
+        app.logger.info("Added citations column to cache_paper_analysis table")
+    except:
+        pass
     
     c.execute("""
         CREATE TABLE IF NOT EXISTS cache_code_execution (
@@ -468,14 +520,19 @@ def extract_pdf_text(pdf_path, max_chars=50000):
 def store_paper_analysis(job_id: str, paper_info: dict, pdf_text: str):
     """Store paper analysis for later evaluation."""
     try:
+        pdf_hash = hashlib.md5(pdf_text.encode()).hexdigest()
         conn = get_db()
         c = conn.cursor()
         c.execute("""
             INSERT INTO paper_analysis 
-            (job_id, extracted_text, claimed_results, methodology, dependencies, dataset_description)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (job_id, pdf_hash, title, abstract, citations, extracted_text, claimed_results, methodology, dependencies, dataset_description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             job_id,
+            pdf_hash,
+            paper_info.get("title", ""),
+            paper_info.get("abstract", ""),
+            json.dumps(paper_info.get("citations", [])),
             pdf_text[:50000],  # Store first 50k chars of PDF text
             json.dumps(paper_info.get("claimed_results", {})),
             paper_info.get("methodology", ""),
@@ -484,9 +541,112 @@ def store_paper_analysis(job_id: str, paper_info: dict, pdf_text: str):
         ))
         conn.commit()
         conn.close()
-        app.logger.info(f"[{job_id}] Stored paper analysis in database")
+        app.logger.info(f"[{job_id}] Stored paper analysis in database (pdf_hash: {pdf_hash[:8]}, {len(paper_info.get('citations', []))} citations)")
     except Exception as e:
         app.logger.error(f"[{job_id}] Failed to store paper analysis: {e}")
+
+
+def get_cached_paper_analysis(pdf_hash: str):
+    """
+    Check if we've analyzed this PDF before (by hash).
+    Returns paper_info dict if cached, None otherwise.
+    """
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT title, abstract, citations, extracted_text, claimed_results, methodology, dependencies, dataset_description FROM cache_paper_analysis WHERE pdf_hash = ?", (pdf_hash,))
+        row = c.fetchone()
+        conn.close()
+        
+        if row:
+            app.logger.info(f"Cache hit: PDF analysis found for hash {pdf_hash[:8]}")
+            return {
+                "title": row["title"] or "",
+                "abstract": row["abstract"] or "",
+                "citations": json.loads(row["citations"] or "[]"),
+                "extracted_text": row["extracted_text"],
+                "claimed_results": json.loads(row["claimed_results"]),
+                "methodology": row["methodology"],
+                "dependencies": row["dependencies"],
+                "dataset_description": row["dataset_description"]
+            }
+    except Exception as e:
+        app.logger.error(f"Failed to check paper cache: {e}")
+    
+    return None
+
+
+def store_paper_analysis_cache(pdf_hash: str, pdf_text: str, paper_info: dict):
+    """
+    Store paper analysis in cache for future reuse.
+    """
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            INSERT OR REPLACE INTO cache_paper_analysis 
+            (pdf_hash, title, abstract, citations, extracted_text, claimed_results, methodology, dependencies, dataset_description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            pdf_hash,
+            paper_info.get("title", ""),
+            paper_info.get("abstract", ""),
+            json.dumps(paper_info.get("citations", [])),
+            pdf_text[:50000],
+            json.dumps(paper_info.get("claimed_results", {})),
+            paper_info.get("methodology", ""),
+            paper_info.get("dependencies", ""),
+            paper_info.get("dataset_description", "")
+        ))
+        conn.commit()
+        conn.close()
+        app.logger.info(f"Cached paper analysis for hash {pdf_hash[:8]} with {len(paper_info.get('citations', []))} citations")
+    except Exception as e:
+        app.logger.error(f"Failed to cache paper analysis: {e}")
+
+
+def get_cached_evaluation(paper_hash: str, code_hash: str):
+    """
+    Check if we've evaluated this paper+code combination before.
+    Returns evaluation dict if cached, None otherwise.
+    """
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT evaluations FROM cache_evaluation WHERE paper_hash = ? AND code_hash = ?", (paper_hash, code_hash))
+        row = c.fetchone()
+        conn.close()
+        
+        if row:
+            app.logger.info(f"Cache hit: Evaluation found for paper {paper_hash[:8]} + code {code_hash[:8]}")
+            return json.loads(row["evaluations"])
+    except Exception as e:
+        app.logger.error(f"Failed to check evaluation cache: {e}")
+    
+    return None
+
+
+def store_evaluation_cache(paper_hash: str, code_hash: str, evaluations: dict):
+    """
+    Store evaluation results in cache for future reuse.
+    """
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            INSERT OR REPLACE INTO cache_evaluation 
+            (paper_hash, code_hash, evaluations)
+            VALUES (?, ?, ?)
+        """, (
+            paper_hash,
+            code_hash,
+            json.dumps(evaluations)
+        ))
+        conn.commit()
+        conn.close()
+        app.logger.info(f"Cached evaluation for paper {paper_hash[:8]} + code {code_hash[:8]}")
+    except Exception as e:
+        app.logger.error(f"Failed to cache evaluation: {e}")
 
 
 def parse_paper_with_claude(pdf_text):
@@ -504,10 +664,15 @@ def parse_paper_with_claude(pdf_text):
     
     prompt = f"""Analyze this scientific paper and extract:
 
-1. **Code artifacts**: GitHub repos, datasets, supplementary code, Docker images
+1. **Title and Abstract**: Exact title and abstract from the paper
+   
+2. **Citations**: All references cited in the paper
+   - Extract authors, year, title, and URL (if available)
+   
+3. **Code artifacts**: GitHub repos, datasets, supplementary code, Docker images
    - Include URLs, file links, or descriptions of where to find code
    
-2. **Reproducibility aspects**:
+4. **Reproducibility aspects**:
    - Are hyperparameters documented?
    - Is dataset description sufficient?
    - Are implementation details provided?
@@ -515,6 +680,12 @@ def parse_paper_with_claude(pdf_text):
 
 Return valid JSON (no markdown, just JSON):
 {{
+  "title": "exact title of the paper",
+  "abstract": "exact abstract text or first 300 chars if very long",
+  "citations": [
+    {{"authors": "Smith et al.", "year": 2020, "title": "Paper title here", "url": "https://doi.org/... or null"}},
+    {{"authors": "Jones, Jane", "year": 2021, "title": "Another paper", "url": "https://..."}}
+  ],
   "artifacts": [
     {{"url": "https://...", "type": "github_repo|dataset|supplementary|docker|other", "description": "..."}},
   ],
@@ -735,9 +906,12 @@ def list_jobs():
     conn = get_db()
     c = conn.cursor()
     c.execute("""
-        SELECT id, status, pdf_filename, created_at, completed_at
-        FROM jobs
-        ORDER BY created_at DESC
+        SELECT 
+            j.id, j.status, j.pdf_filename, j.created_at, j.completed_at,
+            p.title, p.abstract
+        FROM jobs j
+        LEFT JOIN paper_analysis p ON j.id = p.job_id
+        ORDER BY j.created_at DESC
         LIMIT 50
     """)
     jobs = c.fetchall()
@@ -778,6 +952,21 @@ def get_job_full(job_id):
     """, (job_id,))
     artifacts = [dict(row) for row in c.fetchall()]
     
+    # Fetch paper analysis (title, abstract, and citations)
+    c.execute("""
+        SELECT title, abstract, citations
+        FROM paper_analysis
+        WHERE job_id = ?
+    """, (job_id,))
+    paper_analysis_row = c.fetchone()
+    paper_analysis = {}
+    if paper_analysis_row:
+        paper_analysis = {
+            "title": paper_analysis_row["title"] or "",
+            "abstract": paper_analysis_row["abstract"] or "",
+            "citations": json.loads(paper_analysis_row["citations"] or "[]")
+        }
+    
     conn.close()
     
     # Parse report
@@ -794,7 +983,8 @@ def get_job_full(job_id):
         "report": report,
         "error_message": job["error_message"],
         "events": events_list,
-        "artifacts": artifacts
+        "artifacts": artifacts,
+        "paper_analysis": paper_analysis
     }
     
     return jsonify(response)
@@ -857,20 +1047,23 @@ def delete_job(job_id):
 
 @app.route("/api/cache/stats", methods=["GET"])
 def cache_stats():
-    """Get cache statistics."""
+    """Get cache statistics from execution_details and paper_analysis."""
     try:
         conn = get_db()
         c = conn.cursor()
         
-        c.execute("SELECT COUNT(*) as count FROM cache_paper_analysis")
-        paper_row = c.fetchone()
-        paper_count = paper_row["count"] if paper_row else 0
-        
-        c.execute("SELECT COUNT(*) as count FROM cache_code_execution")
+        # Count jobs with cached execution results
+        c.execute("SELECT COUNT(*) as count FROM execution_details WHERE commands_run IS NOT NULL")
         code_row = c.fetchone()
         code_count = code_row["count"] if code_row else 0
         
-        c.execute("SELECT COUNT(*) as count FROM cache_evaluation")
+        # Count jobs with cached paper analysis
+        c.execute("SELECT COUNT(*) as count FROM paper_analysis WHERE extracted_text IS NOT NULL")
+        paper_row = c.fetchone()
+        paper_count = paper_row["count"] if paper_row else 0
+        
+        # Count jobs with cached aspect evaluations
+        c.execute("SELECT COUNT(DISTINCT job_id) as count FROM aspect_evaluations")
         eval_row = c.fetchone()
         eval_count = eval_row["count"] if eval_row else 0
         
@@ -892,21 +1085,44 @@ def cache_stats():
 
 @app.route("/api/cache/clear", methods=["DELETE"])
 def cache_clear():
-    """Clear all cache tables."""
+    """Clear all cached analysis data (jobs, execution details, evaluations)."""
     try:
         conn = get_db()
         c = conn.cursor()
         
-        c.execute("DELETE FROM cache_paper_analysis")
-        c.execute("DELETE FROM cache_code_execution")
+        # Get all job IDs to delete associated files
+        c.execute("SELECT id, pdf_path FROM jobs")
+        jobs = c.fetchall()
+        
+        # Delete PDF files
+        deleted_count = 0
+        for job in jobs:
+            if job["pdf_path"]:
+                pdf_file = Path(job["pdf_path"])
+                if pdf_file.exists():
+                    pdf_file.unlink()
+                    deleted_count += 1
+        
+        # Clear all job-related data
+        c.execute("DELETE FROM aspect_evaluations")
+        c.execute("DELETE FROM execution_details")
+        c.execute("DELETE FROM paper_analysis")
+        c.execute("DELETE FROM artifacts")
+        c.execute("DELETE FROM events")
+        c.execute("DELETE FROM jobs")
+        
+        # Clear all cache data
         c.execute("DELETE FROM cache_evaluation")
+        c.execute("DELETE FROM cache_code_execution")
+        c.execute("DELETE FROM cache_paper_analysis")
+        
         conn.commit()
         conn.close()
         
-        app.logger.info("Cache cleared successfully")
-        return jsonify({"ok": True, "message": "Cache cleared"})
+        app.logger.info(f"Cache cleared successfully - deleted {deleted_count} files and all job data")
+        return jsonify({"ok": True, "message": f"Cache cleared - deleted {deleted_count} PDF files and all analysis data"})
     except Exception as e:
-        app.logger.error(f"Failed to clear cache: {e}")
+        app.logger.error(f"Failed to clear cache: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -948,11 +1164,19 @@ def agent_think():
         errors = repo_state.get("errors") or []
         iteration = repo_state.get("iteration", 0)
         
-        # Summarize last output (truncate to prevent context explosion)
-        # Increased from 300 to 2000 chars so agent can see completion messages
-        last_output_summary = last_output[:2000] if last_output else "(none)"
-        if len(last_output) > 2000:
-            last_output_summary = last_output[:2000] + "... [truncated]"
+        # Summarize full output history (truncate to prevent context explosion)
+        # Configurable via AGENT_CONTEXT_LIMIT environment variable
+        combined_output = repo_state.get("combined_output", "") or ""
+        output_summary = combined_output[:AGENT_CONTEXT_LIMIT] if combined_output else "(none)"
+        if len(combined_output) > AGENT_CONTEXT_LIMIT:
+            output_summary = combined_output[:AGENT_CONTEXT_LIMIT] + "... [truncated]"
+        
+        # Show full command history
+        executed_commands = repo_state.get("executed_commands", [])
+        if executed_commands:
+            commands_summary = "Command history:\n" + "\n".join(f"  {i+1}. {cmd[:100]}" for i, cmd in enumerate(executed_commands))
+        else:
+            commands_summary = "No commands executed yet"
         
         # Summarize errors (only recent ones)
         error_lines = []
@@ -974,8 +1198,13 @@ CURRENT STATE:
 - Repository: {repo_state.get('repo_url', 'unknown')}
 - Files in root: {files_list}
 - Iteration: {iteration}/15
-- Last command output (truncated): {last_output_summary}
-- Errors encountered: {len(errors)} total
+
+{commands_summary}
+
+OUTPUT HISTORY (truncated):
+{output_summary}
+
+ERRORS:
 {error_section}
 
 IMPORTANT: All commands are executed in a BASH shell with full shell features enabled.
@@ -1028,14 +1257,13 @@ Good shell command examples:
   - cat requirements.txt | grep -i numpy
 
 Current iteration: {iteration}/15
-Last output: {last_output_summary if last_output_summary != "(none)" else "No output yet"}
 
 What should the agent do next?
 """
         
-        # Use Haiku for agent reasoning (simple decisions, save tokens)
+        # Use Claude model for agent reasoning (configurable via CLAUDE_MODEL env var)
         response = client.messages.create(
-            model="claude-3-5-haiku",
+            model=CLAUDE_MODEL,
             max_tokens=500,
             messages=[{
                 "role": "user",
@@ -1493,33 +1721,54 @@ Return ONLY valid JSON (no markdown, no explanation, just JSON):
         app.logger.info(f"[{job_id}] Discovered files ({len(discovered_files_list)} total): {discovered_files_list[:20]}")
         app.logger.info(f"[{job_id}] Test info: {(execution_details.get('test_info') or 'N/A')[:100]}")
         app.logger.info(f"[{job_id}] Randomness info: {(execution_details.get('randomness_info') or 'N/A')[:100]}")
-        app.logger.info(f"[{job_id}] Calling Claude for aspect evaluation...")
         
-        response = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=3000,
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }]
-        )
+        # Check evaluation cache before calling Claude
+        # Use stored pdf_hash if available, otherwise compute from extracted text
+        paper_hash = paper_analysis.get("pdf_hash") or hashlib.md5(paper_analysis.get("extracted_text", "").encode()).hexdigest()
+        code_hash = hashlib.md5(execution_details.get("stdout_combined", "").encode()).hexdigest()
         
-        response_text = response.content[0].text
-        app.logger.info(f"[{job_id}] Claude evaluation response: {len(response_text)} chars")
+        cached_evaluation = get_cached_evaluation(paper_hash, code_hash)
         
-        # Parse response
-        try:
-            evaluation_results = json.loads(response_text)
-        except json.JSONDecodeError:
-            # Try to extract JSON from markdown
-            if "```json" in response_text:
-                json_str = response_text.split("```json")[1].split("```")[0].strip()
-                evaluation_results = json.loads(json_str)
-            elif "```" in response_text:
-                json_str = response_text.split("```")[1].split("```")[0].strip()
-                evaluation_results = json.loads(json_str)
-            else:
-                raise ValueError("Could not parse evaluation response")
+        if cached_evaluation:
+            app.logger.info(f"[{job_id}] Cache hit for evaluation (paper: {paper_hash[:8]}, code: {code_hash[:8]})")
+            emit_event(job_id, {
+                "step": "cache_hit_evaluation",
+                "message": "Using cached evaluation results",
+                "progress": 85
+            })
+            evaluation_results = cached_evaluation
+        else:
+            app.logger.info(f"[{job_id}] Calling Claude for aspect evaluation...")
+            
+            response = client.messages.create(
+                model=CLAUDE_MODEL,
+                max_tokens=3000,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+            
+            response_text = response.content[0].text
+            app.logger.info(f"[{job_id}] Claude evaluation response: {len(response_text)} chars")
+            
+            # Parse response
+            try:
+                evaluation_results = json.loads(response_text)
+            except json.JSONDecodeError:
+                # Try to extract JSON from markdown
+                if "```json" in response_text:
+                    json_str = response_text.split("```json")[1].split("```")[0].strip()
+                    evaluation_results = json.loads(json_str)
+                elif "```" in response_text:
+                    json_str = response_text.split("```")[1].split("```")[0].strip()
+                    evaluation_results = json.loads(json_str)
+                else:
+                    raise ValueError("Could not parse evaluation response")
+            
+            # Cache the evaluation results if not from cache
+            store_evaluation_cache(paper_hash, code_hash, evaluation_results)
+            app.logger.info(f"[{job_id}] Cached evaluation results for future use")
         
         # Store evaluation results
         conn = get_db()
@@ -1663,17 +1912,35 @@ def analyze_paper_background(job_id, pdf_path):
             "progress": 20
         })
         
-        # Step 2: Parse paper with Claude
-        app.logger.info(f"[{job_id}] Step 2: Parsing paper with Claude (model: {CLAUDE_MODEL})")
-        emit_event(job_id, {
-            "step": "parsing_paper",
-            "message": "Analyzing paper with Claude...",
-            "progress": 25
-        })
+        # Step 2: Check cache for this PDF first
+        pdf_hash = hashlib.md5(pdf_text.encode()).hexdigest()
+        cached_paper_info = get_cached_paper_analysis(pdf_hash)
         
-        paper_info = parse_paper_with_claude(pdf_text)
+        if cached_paper_info:
+            # Cache hit: use cached results
+            app.logger.info(f"[{job_id}] Cache hit for PDF analysis")
+            emit_event(job_id, {
+                "step": "cache_hit_paper",
+                "message": "Using cached paper analysis",
+                "progress": 30
+            })
+            paper_info = cached_paper_info
+        else:
+            # Cache miss: parse paper with Claude
+            app.logger.info(f"[{job_id}] Step 2: Parsing paper with Claude (model: {CLAUDE_MODEL})")
+            emit_event(job_id, {
+                "step": "parsing_paper",
+                "message": "Analyzing paper with Claude...",
+                "progress": 25
+            })
+            
+            paper_info = parse_paper_with_claude(pdf_text)
+            
+            # Cache the results for future use
+            store_paper_analysis_cache(pdf_hash, pdf_text, paper_info)
+            app.logger.info(f"[{job_id}] Paper analysis cached for future use")
         
-        # Store paper analysis for later evaluation
+        # Store paper analysis for current job
         store_paper_analysis(job_id, paper_info, pdf_text)
         
         # Store artifacts in DB

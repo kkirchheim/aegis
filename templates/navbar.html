@@ -66,9 +66,11 @@
             </div>
 
             <p class="text-sm text-base-content/60 mb-4">
-                <span id="cacheInfoText">Caching speeds up analysis by reusing results from previous runs.</span>
-                <span id="cacheEmptyNote" class="block mt-2 italic text-base-content/40">No cached results yet. Results will be cached after your first analysis.</span>
+                Caching speeds up analysis by reusing results from previous runs. Clear cache to reset all analyses and free up storage.
             </p>
+            <div id="cacheEmptyNote" class="text-sm italic text-base-content/40 mb-4" style="display: none;">
+                No cached results yet. Results will be cached after your first analysis.
+            </div>
 
             <div class="modal-action">
                 <button class="btn btn-error gap-2" onclick="clearCache()">
