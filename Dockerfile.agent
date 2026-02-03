@@ -1,25 +1,57 @@
-FROM python:3.11-slim
+FROM python:3.11
 
 WORKDIR /app
 
-# Install essential tools for repo analysis
+# Install system dependencies for reproducible code execution
+# - git: Clone repositories
+# - build-essential: Compile Python packages with C extensions (numpy, scipy, etc.)
+# - python3-dev: Python development headers for packages needing compilation
+# - curl: Fetch remote resources
+# - git-lfs: Handle large files in repos
+# - ca-certificates: SSL/TLS support for package downloads
 RUN apt-get update && apt-get install -y \
     git \
+    git-lfs \
     curl \
     build-essential \
     python3-dev \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user for security
+# Running as root causes permission issues and is a security risk
+RUN groupadd -r agent && useradd -r -g agent -m agent
+
+# Create app directory with correct ownership
+RUN mkdir -p /app && chown -R agent:agent /app
+
 # Copy agent script
-COPY agent.py .
+COPY --chown=agent:agent agent.py .
 
-# Install requests for backend communication
-RUN pip install --no-cache-dir requests
+# Create workspace directory for repo analysis
+# This persists across containers
+RUN mkdir -p /workspace/repo && chown -R agent:agent /workspace
 
-# Create workspace directory
-RUN mkdir -p /workspace/repo
+# Switch to non-root user
+USER agent
 
+# Create Python virtual environment in user's home
+# This isolates dependencies and prevents global conflicts
+ENV VENV=/home/agent/venv
+RUN python -m venv $VENV
+ENV PATH="$VENV/bin:$PATH"
+
+# Install agent dependencies in virtual environment
+# Upgrade pip first to ensure compatibility
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir requests
+
+# Set working directory for code execution
 WORKDIR /workspace
 
 # Run agent (receives REPO_URL, JOB_ID, BACKEND_URL via environment)
+# The agent will:
+# 1. Clone repository to /workspace/repo
+# 2. Execute commands in isolated environment
+# 3. Report back to backend via API
 ENTRYPOINT ["python", "/app/agent.py"]

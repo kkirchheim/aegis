@@ -94,14 +94,90 @@ def init_db():
         )
     """)
     
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id TEXT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            step TEXT,
+            message TEXT,
+            severity TEXT DEFAULT 'info',
+            FOREIGN KEY(job_id) REFERENCES jobs(id)
+        )
+    """)
+    
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS paper_analysis (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id TEXT UNIQUE NOT NULL,
+            extracted_text TEXT,
+            claimed_results JSON,
+            methodology TEXT,
+            dependencies TEXT,
+            dataset_description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(job_id) REFERENCES jobs(id)
+        )
+    """)
+    
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS execution_details (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id TEXT UNIQUE NOT NULL,
+            commands_run TEXT,
+            stdout_combined TEXT,
+            actual_results JSON,
+            dependencies_used TEXT,
+            errors_summary TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(job_id) REFERENCES jobs(id)
+        )
+    """)
+    
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS aspect_evaluations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id TEXT NOT NULL,
+            aspect_id TEXT NOT NULL,
+            name TEXT,
+            status TEXT,
+            evidence TEXT,
+            paper_supports BOOLEAN,
+            code_supports BOOLEAN,
+            conclusion TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(job_id) REFERENCES jobs(id)
+        )
+    """)
+    
     conn.commit()
     conn.close()
 
 
 def emit_event(job_id, event_dict):
-    """Emit event to all SSE clients watching this job."""
+    """Emit event to all SSE clients watching this job and store in database."""
     event_dict["timestamp"] = datetime.utcnow().isoformat()
     
+    # Store event in database for later retrieval
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO events (job_id, timestamp, step, message, severity)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            job_id,
+            event_dict["timestamp"],
+            event_dict.get("step", "unknown"),
+            event_dict.get("message", ""),
+            event_dict.get("severity", "info")
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Failed to store event: {e}")
+    
+    # Emit to SSE clients
     with event_queues_lock:
         if job_id in event_queues:
             event_queues[job_id].append(event_dict)
@@ -143,24 +219,43 @@ def spawn_agent_container(job_id, repo_url):
         return False
     
     try:
-        container_name = f"agent-{job_id}"
+        container_name = f"agent-{job_id[:8]}"  # Shorter name for readability
         
-        # Determine backend URL (localhost or host.docker.internal)
-        backend_url = BACKEND_URL
-        if "localhost" in backend_url or "127.0.0.1" in backend_url:
-            backend_url = backend_url.replace("localhost", "host.docker.internal")
-            backend_url = backend_url.replace("127.0.0.1", "host.docker.internal")
+        app.logger.info(f"[{job_id}] === Agent Container Spawn ===")
+        app.logger.info(f"[{job_id}] Repository: {repo_url}")
+        
+        # Determine backend URL for agent
+        # Both Flask app and agent run on workspace_traefik network
+        # Agent reaches Flask app by container name: http://paper-reproducibility:5000
+        backend_url = "http://paper-reproducibility:5000"
+        
+        app.logger.info(f"[{job_id}] Backend URL for agent: {backend_url} (via Docker network)")
+        app.logger.info(f"[{job_id}] Container name: {container_name}")
         
         emit_event(job_id, {
             "step": "spawning_agent",
             "message": f"Spawning agent container for: {repo_url}"
         })
         
+        # Verify image exists
+        try:
+            docker_client.images.get("paper-reproducibility-agent:latest")
+            app.logger.info(f"[{job_id}] Agent image verified: paper-reproducibility-agent:latest")
+        except Exception as e:
+            app.logger.warning(f"[{job_id}] Agent image not found, attempting build: {e}")
+            build_agent_image()
+        
         # Run agent container
-        app.logger.info(f"Starting agent container: {container_name}")
+        app.logger.info(f"[{job_id}] Starting container with:")
+        app.logger.info(f"[{job_id}]   Memory: 2GB")
+        app.logger.info(f"[{job_id}]   CPU: 2 cores (nano_cpus={int(2 * 1e9)})")
+        app.logger.info(f"[{job_id}]   Network: workspace_traefik (shared with Flask app)")
+        
+        # Note: nano_cpus = CPU count * 1e9 (1 CPU = 1e9 nano_cpus)
+        # Use detach=True to get container object (then we can stream logs)
         container = docker_client.containers.run(
             "paper-reproducibility-agent:latest",
-            detach=False,
+            detach=True,  # Use True to get container object
             name=container_name,
             environment={
                 "REPO_URL": repo_url,
@@ -170,32 +265,73 @@ def spawn_agent_container(job_id, repo_url):
             },
             mem_limit="2g",
             memswap_limit="2g",
-            cpus=2.0,
-            network_mode="host" if os.name != "nt" else None,
-            remove=True,  # Auto-cleanup on exit
+            nano_cpus=int(2 * 1e9),  # 2 CPU cores
+            # Add agent to workspace_traefik network (same as Flask app)
+            # This allows agent to reach Flask app by container name
+            network="workspace_traefik",
+            remove=False,  # Manual cleanup to avoid race conditions
             stdout=True,
             stderr=True
         )
+        app.logger.info(f"[{job_id}] Container created and started: {container.id[:12]}")
         
-        # Stream container logs
-        for line in container.logs(stream=True):
-            message = line.decode('utf-8').strip()
-            if message:
-                print(f"[Agent {job_id}] {message}")
-                emit_event(job_id, {
-                    "step": "agent_output",
-                    "message": message
-                })
-        
-        emit_event(job_id, {
-            "step": "agent_completed",
-            "message": "Agent completed analysis"
-        })
+        try:
+            # Wait for container to complete and stream logs
+            app.logger.info(f"[{job_id}] Waiting for container to complete...")
+            line_count = 0
+            for line in container.logs(stream=True):
+                message = line.decode('utf-8').strip()
+                if message:
+                    line_count += 1
+                    app.logger.info(f"[{job_id}] [Agent] {message}")
+                    emit_event(job_id, {
+                        "step": "agent_output",
+                        "message": message
+                    })
+            
+            # Wait for container to exit and check status
+            app.logger.info(f"[{job_id}] Container logs complete, checking exit status...")
+            result = container.wait(timeout=30)
+            exit_code = result.get("StatusCode", -1)
+            app.logger.info(f"[{job_id}] Container exited with code: {exit_code}")
+            
+            app.logger.info(f"[{job_id}] Container execution complete ({line_count} lines of output)")
+            
+            emit_event(job_id, {
+                "step": "agent_completed",
+                "message": "Agent completed analysis"
+            })
+            
+            app.logger.info(f"[{job_id}] === Agent Container Success ===")
+            
+        finally:
+            # Manual cleanup (safe to call even if container already removed)
+            try:
+                container.reload()  # Refresh container state
+                app.logger.info(f"[{job_id}] Cleaning up container {container.id[:12]}...")
+                container.stop(timeout=5)
+                container.remove()
+                app.logger.info(f"[{job_id}] Container cleaned up successfully")
+            except docker.errors.NotFound:
+                app.logger.info(f"[{job_id}] Container already removed (expected)")
+            except Exception as e:
+                app.logger.warning(f"[{job_id}] Container cleanup warning: {e}")
         
         return True
     
     except Exception as e:
-        app.logger.error(f"Failed to run agent: {e}", exc_info=True)
+        app.logger.error(f"[{job_id}] === Agent Container Failed ===")
+        app.logger.error(f"[{job_id}] Exception type: {type(e).__name__}")
+        app.logger.error(f"[{job_id}] Error message: {str(e)}")
+        
+        # Try to clean up on failure too
+        try:
+            if 'container' in locals():
+                container.stop(timeout=5)
+                container.remove()
+        except Exception:
+            pass
+        
         emit_event(job_id, {
             "step": "error",
             "message": f"Agent execution failed: {str(e)}"
@@ -210,18 +346,50 @@ def spawn_agent_container(job_id, repo_url):
 def extract_pdf_text(pdf_path, max_chars=50000):
     """Extract text from PDF file."""
     try:
+        app.logger.info(f"Extracting PDF: {pdf_path}")
         text = ""
         with pdfplumber.open(pdf_path) as pdf:
+            total_pages = len(pdf.pages)
+            app.logger.info(f"PDF has {total_pages} pages")
             for i, page in enumerate(pdf.pages):
                 if len(text) >= max_chars:
+                    app.logger.info(f"Reached max_chars limit at page {i+1}")
                     break
                 page_text = page.extract_text()
                 if page_text:
                     text += f"\n--- Page {i+1} ---\n{page_text}"
+                    if (i + 1) % 5 == 0:
+                        app.logger.info(f"Extracted {i+1}/{total_pages} pages, {len(text)} chars so far")
         
+        app.logger.info(f"PDF extraction complete: {len(text)} characters from {total_pages} pages")
         return text
     except Exception as e:
+        app.logger.error(f"Failed to extract PDF: {str(e)}", exc_info=True)
         raise Exception(f"Failed to extract PDF: {str(e)}")
+
+
+def store_paper_analysis(job_id: str, paper_info: dict, pdf_text: str):
+    """Store paper analysis for later evaluation."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO paper_analysis 
+            (job_id, extracted_text, claimed_results, methodology, dependencies, dataset_description)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            job_id,
+            pdf_text[:50000],  # Store first 50k chars of PDF text
+            json.dumps(paper_info.get("claimed_results", {})),
+            paper_info.get("methodology", ""),
+            paper_info.get("dependencies", ""),
+            paper_info.get("dataset_description", "")
+        ))
+        conn.commit()
+        conn.close()
+        app.logger.info(f"[{job_id}] Stored paper analysis in database")
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Failed to store paper analysis: {e}")
 
 
 def parse_paper_with_claude(pdf_text):
@@ -234,6 +402,8 @@ def parse_paper_with_claude(pdf_text):
             "reproducibility_aspects": {...}
         }
     """
+    
+    app.logger.info(f"Parsing paper with Claude (model: {CLAUDE_MODEL}, input: {len(pdf_text)} chars)")
     
     prompt = f"""Analyze this scientific paper and extract:
 
@@ -266,6 +436,7 @@ Paper text:
 """
 
     try:
+        app.logger.info(f"Calling Claude API with max_tokens=2000")
         response = client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=2000,
@@ -277,24 +448,31 @@ Paper text:
         
         # Extract JSON from response
         response_text = response.content[0].text
+        app.logger.info(f"Claude response received: {len(response_text)} chars")
         
         # Try to parse JSON
         try:
+            app.logger.info(f"Parsing Claude response as JSON")
             result = json.loads(response_text)
+            app.logger.info(f"Successfully parsed JSON with {len(result.get('artifacts', []))} artifacts")
         except json.JSONDecodeError:
+            app.logger.info(f"Direct JSON parsing failed, trying to extract from markdown")
             # If Claude wrapped in markdown, extract it
             if "```json" in response_text:
                 json_str = response_text.split("```json")[1].split("```")[0].strip()
                 result = json.loads(json_str)
+                app.logger.info(f"Extracted JSON from markdown code block")
             elif "```" in response_text:
                 json_str = response_text.split("```")[1].split("```")[0].strip()
                 result = json.loads(json_str)
+                app.logger.info(f"Extracted JSON from plain code block")
             else:
                 raise ValueError(f"Could not parse Claude response: {response_text}")
         
         return result
     
     except Exception as e:
+        app.logger.error(f"Claude parsing failed: {str(e)}", exc_info=True)
         raise Exception(f"Claude parsing failed: {str(e)}")
 
 
@@ -459,6 +637,105 @@ def list_jobs():
     return jsonify([dict(job) for job in jobs])
 
 
+@app.route("/api/job/<job_id>/full", methods=["GET"])
+def get_job_full(job_id):
+    """Get full job data including events, artifacts, and reproducibility aspects."""
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Fetch job
+    c.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    job = c.fetchone()
+    
+    if not job:
+        conn.close()
+        return jsonify({"error": "Job not found"}), 404
+    
+    # Fetch all events
+    c.execute("""
+        SELECT timestamp, step, message, severity
+        FROM events
+        WHERE job_id = ?
+        ORDER BY timestamp ASC
+    """, (job_id,))
+    events_list = [dict(row) for row in c.fetchall()]
+    
+    # Fetch artifacts
+    c.execute("""
+        SELECT url, artifact_type, description
+        FROM artifacts
+        WHERE job_id = ?
+    """, (job_id,))
+    artifacts = [dict(row) for row in c.fetchall()]
+    
+    conn.close()
+    
+    # Parse report
+    report = {}
+    if job["report"]:
+        report = json.loads(job["report"])
+    
+    response = {
+        "id": job["id"],
+        "status": job["status"],
+        "pdf_filename": job["pdf_filename"],
+        "created_at": job["created_at"],
+        "completed_at": job["completed_at"],
+        "report": report,
+        "error_message": job["error_message"],
+        "events": events_list,
+        "artifacts": artifacts
+    }
+    
+    return jsonify(response)
+
+
+@app.route("/reports/<job_id>")
+def detail_page(job_id):
+    """Serve detail page for a job."""
+    return render_template("detail.html", job_id=job_id)
+
+
+@app.route("/job/<job_id>", methods=["DELETE"])
+def delete_job(job_id):
+    """Delete a job and all related data."""
+    
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Get job to find PDF path
+        c.execute("SELECT pdf_path FROM jobs WHERE id = ?", (job_id,))
+        job = c.fetchone()
+        
+        if not job:
+            conn.close()
+            return jsonify({"error": "Job not found"}), 404
+        
+        # Delete PDF file
+        if job["pdf_path"]:
+            pdf_file = Path(job["pdf_path"])
+            if pdf_file.exists():
+                pdf_file.unlink()
+                app.logger.info(f"[{job_id}] Deleted PDF file: {job['pdf_path']}")
+        
+        # Delete from database
+        c.execute("DELETE FROM events WHERE job_id = ?", (job_id,))
+        c.execute("DELETE FROM artifacts WHERE job_id = ?", (job_id,))
+        c.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+        conn.commit()
+        conn.close()
+        
+        app.logger.info(f"[{job_id}] Job deleted successfully")
+        
+        return jsonify({"ok": True, "message": "Job deleted"})
+        
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Failed to delete job: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 # ============================================================================
 # Agent API - Backend provides Claude reasoning to agent
 # ============================================================================
@@ -491,10 +768,28 @@ def agent_think():
     
     try:
         # Format current state for Claude
-        files_list = repo_state.get("discovered_files", [])[:15]
-        last_output = repo_state.get("last_output", "")
-        errors = repo_state.get("errors", [])
+        # Use `or []` to handle both missing keys AND None values
+        files_list = (repo_state.get("discovered_files") or [])[:15]
+        last_output = repo_state.get("last_output") or ""
+        errors = repo_state.get("errors") or []
         iteration = repo_state.get("iteration", 0)
+        
+        # Summarize last output (truncate to prevent context explosion)
+        # Increased from 300 to 2000 chars so agent can see completion messages
+        last_output_summary = last_output[:2000] if last_output else "(none)"
+        if len(last_output) > 2000:
+            last_output_summary = last_output[:2000] + "... [truncated]"
+        
+        # Summarize errors (only recent ones)
+        error_lines = []
+        if errors:
+            recent_errors = errors[-2:]  # Last 2 errors only
+            for e in recent_errors:
+                cmd = e.get('command', 'unknown')
+                stderr = e.get('stderr', 'unknown')[:100]
+                error_lines.append(f"  - {cmd}: {stderr}")
+        
+        error_section = ("Recent errors:\n" + "\n".join(error_lines)) if error_lines else "- No errors yet"
         
         # Build prompt for Claude
         prompt = f"""You are an agent inside a Docker container attempting to reproduce a code artifact.
@@ -505,17 +800,38 @@ CURRENT STATE:
 - Repository: {repo_state.get('repo_url', 'unknown')}
 - Files in root: {files_list}
 - Iteration: {iteration}/15
-- Last command output: {last_output[:300] if last_output else '(none)'}
+- Last command output (truncated): {last_output_summary}
 - Errors encountered: {len(errors)} total
-{f"- Recent error: {errors[-1] if errors else '(none)'}" if errors else ""}
+{error_section}
+
+IMPORTANT: All commands are executed in a BASH shell with full shell features enabled.
+You CAN use:
+  - Pipes: | (e.g., pip list | grep numpy)
+  - Redirects: >, >>, 2>&1 (e.g., pip install -r requirements.txt 2>&1 | tail -20)
+  - Operators: && (run if success), || (run if fail)
+  - Examples: python script.py && echo "Success" || echo "Failed"
 
 INSTRUCTIONS:
 1. First, always list and read README.md or similar documentation
 2. Look for setup.py, requirements.txt, environment.yml, Dockerfile, or package.json
 3. Understand what this code does and what dependencies it needs
-4. Install all required dependencies
+4. Install all required dependencies (pip, conda, apt-get, etc.)
 5. Find and run the main script, notebook, or application
-6. Report success or document what failed
+6. Once working, report success with check_success action
+7. If stuck, try different approaches (different Python versions, skip optional deps, etc.)
+
+DEPENDENCY CONFLICT HANDLING:
+- If you see "requires X>=Y.Z but you have X==A.B", you MUST fix this!
+- Option 1: Install a compatible version that satisfies all requirements
+- Option 2: Check if only some dependencies are optional/needed
+- Option 3: Try a different Python version (e.g., python3.9 vs python3.11)
+- AVOID: Going in circles (trying same versions repeatedly)
+
+ENVIRONMENT:
+- Container has Python 3.11 pre-installed
+- You CAN modify requirements files if needed
+- You CAN create virtual environments if needed
+- You MUST resolve dependency conflicts before running code
 
 RESPONSE FORMAT:
 Return ONLY valid JSON (no markdown, plain JSON):
@@ -527,12 +843,18 @@ Return ONLY valid JSON (no markdown, plain JSON):
 
 Action meanings:
 - read_file: Read and understand a file
-- run_command: Execute a shell command (use absolute paths when possible)
-- check_success: Confirm the execution was successful
-- done: Finished (either succeeded or gave up)
+- run_command: Execute a shell command (full bash syntax supported)
+- check_success: Confirm execution succeeded
+- done: Finished analysis (success or gave up after many attempts)
+
+Good shell command examples:
+  - pip install -r requirements.txt 2>&1 | head -30
+  - python script.py || echo "Command failed with exit code: $?"
+  - grep -r "def main" . --include="*.py"
+  - cat requirements.txt | grep -i numpy
 
 Current iteration: {iteration}/15
-{f'Last output: {last_output[:200]}...' if last_output else ''}
+Last output: {last_output_summary if last_output_summary != "(none)" else "No output yet"}
 
 What should the agent do next?
 """
@@ -547,22 +869,67 @@ What should the agent do next?
         )
         
         response_text = response.content[0].text
-        app.logger.info(f"[{job_id}] Claude decision: {response_text[:200]}")
         
-        # Parse JSON
+        # Log full response for debugging (not truncated!)
+        app.logger.info(f"[{job_id}] === Claude Response (Full, {len(response_text)} chars) ===")
+        app.logger.info(f"[{job_id}] {response_text}")
+        app.logger.info(f"[{job_id}] === End Claude Response ===")
+        
+        # Parse JSON with detailed logging
+        action = None
+        
+        # Try 1: Direct JSON parsing
         try:
             action = json.loads(response_text)
-        except json.JSONDecodeError:
-            # Try to extract JSON from markdown code blocks
+            app.logger.info(f"[{job_id}] ✓ Parsed JSON directly (Method 1)")
+        except json.JSONDecodeError as e:
+            app.logger.warning(f"[{job_id}] ✗ Direct JSON parsing failed: {str(e)}")
+            
+            # Try 2: Extract from ```json code block
             if "```json" in response_text:
-                json_str = response_text.split("```json")[1].split("```")[0].strip()
-                action = json.loads(json_str)
-            elif "```" in response_text:
-                json_str = response_text.split("```")[1].split("```")[0].strip()
-                action = json.loads(json_str)
-            else:
-                # Last resort: return done action
-                app.logger.warning(f"Could not parse Claude response: {response_text}")
+                try:
+                    json_str = response_text.split("```json")[1].split("```")[0].strip()
+                    action = json.loads(json_str)
+                    app.logger.info(f"[{job_id}] ✓ Extracted JSON from ```json block (Method 2)")
+                except Exception as e2:
+                    app.logger.warning(f"[{job_id}] ✗ Method 2 failed: {str(e2)}")
+            
+            # Try 3: Extract from plain ``` code block
+            if not action and "```" in response_text:
+                try:
+                    json_str = response_text.split("```")[1].split("```")[0].strip()
+                    action = json.loads(json_str)
+                    app.logger.info(f"[{job_id}] ✓ Extracted JSON from ``` block (Method 3)")
+                except Exception as e3:
+                    app.logger.warning(f"[{job_id}] ✗ Method 3 failed: {str(e3)}")
+            
+            # Try 4: Find JSON object in response
+            if not action and "{" in response_text:
+                try:
+                    json_start = response_text.index("{")
+                    # Try progressively shorter substrings
+                    for json_end in range(len(response_text), json_start, -1):
+                        try:
+                            potential_json = response_text[json_start:json_end]
+                            action = json.loads(potential_json)
+                            app.logger.info(f"[{job_id}] ✓ Found valid JSON substring (Method 4, {json_end - json_start} chars)")
+                            break
+                        except:
+                            continue
+                    
+                    if not action:
+                        app.logger.warning(f"[{job_id}] ✗ Method 4 failed: No valid JSON substring found")
+                except Exception as e4:
+                    app.logger.warning(f"[{job_id}] ✗ Method 4 failed: {str(e4)}")
+            
+            # If all parsing failed, return default
+            if not action:
+                app.logger.error(f"[{job_id}] ✗ ALL PARSING METHODS FAILED!")
+                app.logger.error(f"[{job_id}] Response text: {response_text[:500]}")
+                app.logger.error(f"[{job_id}] Response length: {len(response_text)}")
+                app.logger.error(f"[{job_id}] Response contains '{{': {'{'  in response_text}")
+                app.logger.error(f"[{job_id}] Response contains '```': {'```' in response_text}")
+                
                 action = {
                     "action": "done",
                     "reasoning": "Could not parse Claude response, aborting"
@@ -595,6 +962,447 @@ def agent_log():
     return jsonify({"ok": True})
 
 
+@app.route("/api/agent/execution", methods=["POST"])
+def agent_execution():
+    """Agent stores execution details for later evaluation."""
+    
+    data = request.json
+    job_id = data.get("job_id")
+    
+    if not job_id:
+        return jsonify({"error": "job_id required"}), 400
+    
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO execution_details 
+            (job_id, commands_run, stdout_combined, actual_results, dependencies_used, errors_summary)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            job_id,
+            data.get("commands_run", ""),
+            data.get("stdout_combined", ""),
+            json.dumps(data.get("actual_results", {})),
+            data.get("dependencies_used", ""),
+            data.get("errors_summary", "")
+        ))
+        conn.commit()
+        conn.close()
+        
+        app.logger.info(f"[{job_id}] Stored execution details in database")
+        
+        return jsonify({"ok": True})
+        
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Failed to store execution details: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/agent/complete", methods=["POST"])
+def agent_complete():
+    """
+    Agent calls this to report success/failure and terminate.
+    
+    Request body:
+        {
+            "job_id": "...",
+            "success": true|false,
+            "message": "completion message",
+            "accuracy": 0.93,  # Optional: reproducibility score
+            "reproducibility_aspects": {...}  # Optional: extensible aspects array
+        }
+    """
+    
+    data = request.json
+    job_id = data.get("job_id")
+    success = data.get("success", False)
+    message = data.get("message", "Analysis complete")
+    accuracy = data.get("accuracy")
+    aspects = data.get("reproducibility_aspects")
+    
+    if not job_id:
+        return jsonify({"error": "job_id required"}), 400
+    
+    try:
+        # Build result report
+        report = {
+            "status": "success" if success else "failed",
+            "message": message,
+            "completed_at": datetime.utcnow().isoformat()
+        }
+        
+        if accuracy is not None:
+            report["reproducibility_score"] = accuracy
+        
+        if aspects is not None:
+            report["reproducibility_aspects"] = aspects
+        
+        # Update database
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            """UPDATE jobs SET status = ?, report = ?, completed_at = CURRENT_TIMESTAMP 
+               WHERE id = ?""",
+            ("completed" if success else "failed", json.dumps(report), job_id)
+        )
+        conn.commit()
+        conn.close()
+        
+        app.logger.info(f"[{job_id}] Agent reported {'SUCCESS' if success else 'FAILURE'}: {message}")
+        
+        # Emit completion event to frontend
+        emit_event(job_id, {
+            "step": "complete",
+            "message": message,
+            "status": "success" if success else "failed",
+            "report": report
+        })
+        
+        # Log final summary
+        app.logger.info(f"[{job_id}] === AGENT ANALYSIS COMPLETE ===")
+        app.logger.info(f"[{job_id}] Status: {'✓ SUCCESS' if success else '✗ FAILED'}")
+        app.logger.info(f"[{job_id}] Message: {message}")
+        if accuracy is not None:
+            app.logger.info(f"[{job_id}] Reproducibility Score: {accuracy:.2%}")
+        
+        # Trigger aspect evaluation if agent succeeded
+        if success:
+            app.logger.info(f"[{job_id}] Triggering aspect evaluation...")
+            emit_event(job_id, {
+                "step": "evaluating_aspects",
+                "message": "Evaluating reproducibility aspects..."
+            })
+            # Run evaluation in background thread
+            threading.Thread(
+                target=evaluate_reproducibility_aspects,
+                args=(job_id,),
+                daemon=True
+            ).start()
+        
+        return jsonify({
+            "ok": True,
+            "status": "success" if success else "failed"
+        })
+        
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Error in agent_complete: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# Aspect Evaluation (Stage 3 of pipeline)
+# ============================================================================
+
+def evaluate_reproducibility_aspects(job_id: str):
+    """
+    STAGE 3: Evaluate aspects using all available context.
+    Runs after agent completes successfully.
+    """
+    
+    try:
+        app.logger.info(f"[{job_id}] === STAGE 3: Aspect Evaluation Starting ===")
+        
+        # Fetch all data
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Get paper analysis
+        c.execute("SELECT * FROM paper_analysis WHERE job_id = ?", (job_id,))
+        paper_analysis_row = c.fetchone()
+        
+        # Get execution details
+        c.execute("SELECT * FROM execution_details WHERE job_id = ?", (job_id,))
+        execution_details_row = c.fetchone()
+        
+        # Get artifacts
+        c.execute("SELECT url, artifact_type, description FROM artifacts WHERE job_id = ?", (job_id,))
+        artifacts = [dict(row) for row in c.fetchall()]
+        
+        # Get job to access discovered_files from job report if available
+        c.execute("SELECT report FROM jobs WHERE id = ?", (job_id,))
+        job_row = c.fetchone()
+        discovered_files = []
+        if job_row and job_row["report"]:
+            try:
+                report = json.loads(job_row["report"])
+                discovered_files = report.get("discovered_files", []) if report else []
+            except:
+                pass
+        
+        conn.close()
+        
+        if not paper_analysis_row or not execution_details_row:
+            app.logger.warning(f"[{job_id}] Missing paper or execution data for evaluation")
+            emit_event(job_id, {
+                "step": "evaluation_skipped",
+                "message": "Skipped: Missing required data for evaluation"
+            })
+            return
+        
+        # Convert rows to dicts
+        paper_analysis = dict(paper_analysis_row)
+        execution_details = dict(execution_details_row)
+        
+        # Parse JSON fields
+        paper_analysis["claimed_results"] = json.loads(paper_analysis.get("claimed_results", "{}"))
+        execution_details["actual_results"] = json.loads(execution_details.get("actual_results", "{}"))
+        execution_details["discovered_files"] = discovered_files
+        
+        # Build evaluation prompt
+        prompt = f"""You are evaluating the reproducibility of a scientific paper and its code implementation.
+
+PAPER CONTENT:
+═══════════════════════════════════════════════════════════
+Extracted Text (first 2000 chars):
+{paper_analysis.get("extracted_text", "")[:2000]}
+
+Methodology:
+{paper_analysis.get("methodology", "No methodology found")}
+
+Claimed Results:
+{json.dumps(paper_analysis.get("claimed_results", {}), indent=2)}
+
+Dependencies:
+{paper_analysis.get("dependencies", "No dependencies mentioned")}
+
+Dataset:
+{paper_analysis.get("dataset_description", "No dataset description")}
+
+CODE EXECUTION:
+═══════════════════════════════════════════════════════════
+Artifacts Found:
+{json.dumps(artifacts, indent=2)}
+
+Files in Repository:
+{json.dumps(execution_details.get("discovered_files", [])[:20], default=str)}
+
+Test Suite Information:
+{execution_details.get("test_info", "No test info")}
+
+Randomness Seed Information:
+{execution_details.get("randomness_info", "No randomness info")}
+
+Commands Run:
+{execution_details.get("commands_run", "No commands recorded")[:1000]}
+
+Execution Output (last 1500 chars):
+{execution_details.get("stdout_combined", "No output recorded")[-1500:]}
+
+Actual Results:
+{json.dumps(execution_details.get("actual_results", {}), indent=2)}
+
+Dependencies Used:
+{execution_details.get("dependencies_used", "No dependencies logged")}
+
+Errors Summary:
+{execution_details.get("errors_summary", "No errors")}
+
+EVALUATION TASKS:
+═══════════════════════════════════════════════════════════
+
+Evaluate each aspect by comparing paper claims with code implementation and execution results.
+For each aspect, determine: 
+- status: "pass", "partial", or "fail"
+- paper_supports: Does paper documentation support this?
+- code_supports: Does code/execution support this?
+- evidence: Quote or describe findings from all sources
+- conclusion: Brief explanation of rating
+
+ASPECTS TO EVALUATE:
+
+TIER 1: CRITICAL
+
+1. DEPENDENCIES_PINNED
+   Q: Are dependencies pinned to exact versions?
+   Look for: numpy==1.21.0 (pass), numpy>=1.21.0 (fail), numpy (fail)
+   Files shown: {execution_details.get("dependencies_used", "")}
+   Status: pass=all pinned, partial=some pinned, fail=none pinned
+
+2. RESULTS_REPRODUCIBLE
+   Q: Do execution results match paper claims?
+   Paper claims: {json.dumps(paper_analysis.get("claimed_results", {}))}
+   Execution achieved: {json.dumps(execution_details.get("actual_results", {}))}
+   Tolerance: ±2% for accuracy metrics acceptable
+
+3. HYPERPARAMETERS_DOCUMENTED
+   Q: Are hyperparameters documented AND match paper claims?
+   Paper claims: {paper_analysis.get("claimed_results", {})}
+   Code uses: {execution_details.get("actual_results", {})}
+   Status: pass=clearly documented, partial=some documented, fail=missing
+
+TIER 2: HIGH VALUE
+
+4. DATASET_AVAILABLE
+   Q: Is dataset easy to obtain? Public or built-in?
+   Paper describes: {paper_analysis.get("dataset_description", "")}
+   Status: pass=public/built-in, partial=hard to find, fail=unclear/missing
+
+5. ENVIRONMENT_DOCUMENTED
+   Q: Are Python version, OS, dependencies clearly specified?
+   Check: Paper text, code comments, requirements files, README
+   Status: pass=all documented, partial=some documented, fail=missing
+
+6. TEST_SUITE_PRESENT
+   Q: Are tests included? (test_*.py, tests/ folder, pytest.ini, etc)?
+   Execution log: {execution_details.get("commands_run", "")[:500]}
+   Status: pass=tests found, fail=no tests found
+
+7. CONFIG_FILE_PRESENT
+   Q: Are hyperparameters in separate config file (not hardcoded)?
+   Look for: config.yaml, config.json, settings.py, params.yaml
+   Execution log files: {json.dumps(execution_details.get("discovered_files", [])[:15], default=str)}
+   Status: pass=config file found, partial=mixed hardcoded/config, fail=all hardcoded
+
+8. DOCUMENTATION_QUALITY
+   Q: Is documentation comprehensive? (README present, inline comments, docstrings)
+   Check: README existence, README length, comment density
+   Status: pass=comprehensive, partial=moderate, fail=minimal/none
+
+TIER 3: NICE-TO-HAVE
+
+9. RANDOMNESS_CONTROLLED
+   Q: Are random seeds set for reproducibility?
+   Look for: np.random.seed(), tf.set_seed(), torch.manual_seed()
+   Code shown: {execution_details.get("stdout_combined", "")[:1000]}
+   Status: pass=seeds set, partial=some seeds, fail=no seeds
+
+10. LICENSE_SPECIFIED
+    Q: Is license specified? (LICENSE file or license in setup.py)
+    Files shown: {json.dumps(execution_details.get("discovered_files", [])[:15], default=str)}
+    Status: pass=license found, fail=no license
+
+11. CONTINUOUS_INTEGRATION
+    Q: Is CI/CD pipeline configured? (.github/workflows, .travis.yml, etc)
+    Files shown: {json.dumps(execution_details.get("discovered_files", [])[:15], default=str)}
+    Status: pass=CI found, fail=no CI
+
+12. DATA_VERSIONING
+    Q: Is dataset version/hash/commit specified (not just URL)?
+    Paper describes: {paper_analysis.get("dataset_description", "")}
+    Status: pass=version specified, partial=URL only, fail=unclear
+
+13. COMPUTATIONAL_REQUIREMENTS
+    Q: Are time/memory/GPU requirements documented?
+    Paper text: {paper_analysis.get("methodology", "")[:500]}
+    Status: pass=documented, partial=partially mentioned, fail=not documented
+
+14. OUTPUT_FORMAT_DOCUMENTED
+    Q: Is output format and meaning clearly explained?
+    Paper text: {paper_analysis.get("methodology", "")[:500]}
+    Status: pass=documented, partial=partially clear, fail=unclear
+
+15. PYTHON_VERSION_COMPATIBILITY
+    Q: Is code tested on multiple Python versions?
+    Check: setup.py python_requires, .travis.yml/GitHub Actions matrix
+    Status: pass=multiple versions tested, fail=single version only
+
+RESPONSE FORMAT:
+Return ONLY valid JSON (no markdown, no explanation, just JSON):
+{{
+  "evaluations": [
+    {{
+      "aspect_id": "dependencies_pinned",
+      "name": "Dependencies Pinned",
+      "status": "pass",
+      "paper_supports": true,
+      "code_supports": true,
+      "evidence": "requirements.txt uses exact versions (numpy==1.21.0)",
+      "conclusion": "All dependencies pinned to exact versions"
+    }},
+    ...
+  ]
+}}
+"""
+
+        app.logger.info(f"[{job_id}] Calling Claude for aspect evaluation...")
+        
+        response = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=3000,
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }]
+        )
+        
+        response_text = response.content[0].text
+        app.logger.info(f"[{job_id}] Claude evaluation response: {len(response_text)} chars")
+        
+        # Parse response
+        try:
+            evaluation_results = json.loads(response_text)
+        except json.JSONDecodeError:
+            # Try to extract JSON from markdown
+            if "```json" in response_text:
+                json_str = response_text.split("```json")[1].split("```")[0].strip()
+                evaluation_results = json.loads(json_str)
+            elif "```" in response_text:
+                json_str = response_text.split("```")[1].split("```")[0].strip()
+                evaluation_results = json.loads(json_str)
+            else:
+                raise ValueError("Could not parse evaluation response")
+        
+        # Store evaluation results
+        conn = get_db()
+        c = conn.cursor()
+        
+        for eval_item in evaluation_results.get("evaluations", []):
+            c.execute("""
+                INSERT INTO aspect_evaluations
+                (job_id, aspect_id, name, status, evidence, paper_supports, code_supports, conclusion)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                job_id,
+                eval_item.get("aspect_id"),
+                eval_item.get("name"),
+                eval_item.get("status"),
+                eval_item.get("evidence"),
+                eval_item.get("paper_supports"),
+                eval_item.get("code_supports"),
+                eval_item.get("conclusion")
+            ))
+        
+        conn.commit()
+        conn.close()
+        
+        app.logger.info(f"[{job_id}] Stored {len(evaluation_results.get('evaluations', []))} aspect evaluations")
+        
+        # Update job report with evaluations
+        job_conn = get_db()
+        job_c = job_conn.cursor()
+        job_c.execute("SELECT report FROM jobs WHERE id = ?", (job_id,))
+        job_row = job_c.fetchone()
+        job_conn.close()
+        
+        if job_row:
+            report = json.loads(job_row["report"]) if job_row["report"] else {}
+            report["aspect_evaluations"] = evaluation_results.get("evaluations", [])
+            
+            job_conn = get_db()
+            job_c = job_conn.cursor()
+            job_c.execute(
+                "UPDATE jobs SET report = ? WHERE id = ?",
+                (json.dumps(report), job_id)
+            )
+            job_conn.commit()
+            job_conn.close()
+        
+        app.logger.info(f"[{job_id}] === ASPECT EVALUATION COMPLETE ===")
+        
+        emit_event(job_id, {
+            "step": "evaluation_complete",
+            "message": f"Evaluated {len(evaluation_results.get('evaluations', []))} reproducibility aspects"
+        })
+        
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Error in aspect evaluation: {e}", exc_info=True)
+        emit_event(job_id, {
+            "step": "error",
+            "message": f"Aspect evaluation failed: {str(e)}"
+        })
+
+
 # ============================================================================
 # Background Job Processing
 # ============================================================================
@@ -603,6 +1411,7 @@ def analyze_paper_background(job_id, pdf_path):
     """Main background job: analyze paper for reproducibility."""
     
     try:
+        app.logger.info(f"[{job_id}] === ANALYSIS START ===")
         emit_event(job_id, {
             "step": "starting",
             "message": "Analysis starting...",
@@ -610,6 +1419,7 @@ def analyze_paper_background(job_id, pdf_path):
         })
         
         # Update DB status
+        app.logger.info(f"[{job_id}] Updating job status to 'processing'")
         conn = get_db()
         c = conn.cursor()
         c.execute("UPDATE jobs SET status = ? WHERE id = ?", ("processing", job_id))
@@ -617,6 +1427,7 @@ def analyze_paper_background(job_id, pdf_path):
         conn.close()
         
         # Step 1: Extract PDF text
+        app.logger.info(f"[{job_id}] Step 1: Extracting PDF text from {pdf_path}")
         emit_event(job_id, {
             "step": "extracting_pdf",
             "message": "Extracting text from PDF...",
@@ -624,6 +1435,7 @@ def analyze_paper_background(job_id, pdf_path):
         })
         
         pdf_text = extract_pdf_text(pdf_path)
+        app.logger.info(f"[{job_id}] Successfully extracted {len(pdf_text)} characters from PDF")
         emit_event(job_id, {
             "step": "pdf_extracted",
             "message": f"Extracted {len(pdf_text)} characters from PDF",
@@ -631,6 +1443,7 @@ def analyze_paper_background(job_id, pdf_path):
         })
         
         # Step 2: Parse paper with Claude
+        app.logger.info(f"[{job_id}] Step 2: Parsing paper with Claude (model: {CLAUDE_MODEL})")
         emit_event(job_id, {
             "step": "parsing_paper",
             "message": "Analyzing paper with Claude...",
@@ -639,11 +1452,18 @@ def analyze_paper_background(job_id, pdf_path):
         
         paper_info = parse_paper_with_claude(pdf_text)
         
+        # Store paper analysis for later evaluation
+        store_paper_analysis(job_id, paper_info, pdf_text)
+        
         # Store artifacts in DB
         artifacts = paper_info.get("artifacts", [])
+        app.logger.info(f"[{job_id}] Found {len(artifacts)} artifacts from Claude analysis")
+        
         conn = get_db()
         c = conn.cursor()
-        for artifact in artifacts:
+        for i, artifact in enumerate(artifacts, 1):
+            app.logger.info(f"[{job_id}]   Artifact {i}: {artifact.get('type')} - {artifact.get('url')}")
+            app.logger.info(f"[{job_id}]     Description: {artifact.get('description')}")
             c.execute(
                 """INSERT INTO artifacts (job_id, url, artifact_type, description)
                    VALUES (?, ?, ?, ?)""",
@@ -651,6 +1471,7 @@ def analyze_paper_background(job_id, pdf_path):
             )
         conn.commit()
         conn.close()
+        app.logger.info(f"[{job_id}] Stored {len(artifacts)} artifacts in database")
         
         emit_event(job_id, {
             "step": "paper_parsed",
@@ -661,6 +1482,7 @@ def analyze_paper_background(job_id, pdf_path):
         
         # Step 3: Run agents for GitHub repos
         github_artifacts = [a for a in artifacts if a.get("type") == "github_repo" and a.get("url")]
+        app.logger.info(f"[{job_id}] Step 3: Identified {len(github_artifacts)} GitHub repositories to analyze")
         
         agent_results = []
         if github_artifacts:
@@ -671,24 +1493,38 @@ def analyze_paper_background(job_id, pdf_path):
             
             # Build agent image if needed
             if DOCKER_AVAILABLE:
+                app.logger.info(f"[{job_id}] Building Docker agent image...")
                 build_agent_image()
+            else:
+                app.logger.warning(f"[{job_id}] Docker not available - agent execution will fail")
             
             # Run agent for each GitHub repo
             for i, artifact in enumerate(github_artifacts, 1):
                 repo_url = artifact.get("url")
+                app.logger.info(f"[{job_id}] [{i}/{len(github_artifacts)}] Spawning agent for {repo_url}")
                 emit_event(job_id, {
                     "step": "running_agent",
                     "message": f"[{i}/{len(github_artifacts)}] Running agent on {repo_url}",
                     "progress": 40 + int(50 * i / len(github_artifacts))
                 })
                 
-                spawn_agent_container(job_id, repo_url)
-                agent_results.append({
-                    "url": repo_url,
-                    "status": "analyzed"
-                })
+                try:
+                    spawn_agent_container(job_id, repo_url)
+                    app.logger.info(f"[{job_id}] Agent container completed for {repo_url}")
+                    agent_results.append({
+                        "url": repo_url,
+                        "status": "analyzed"
+                    })
+                except Exception as e:
+                    app.logger.error(f"[{job_id}] Agent failed for {repo_url}: {e}", exc_info=True)
+                    agent_results.append({
+                        "url": repo_url,
+                        "status": "failed",
+                        "error": str(e)
+                    })
         
         # Step 4: Prepare report
+        app.logger.info(f"[{job_id}] Step 4: Generating final report")
         report = {
             "code_found": len(artifacts) > 0,
             "artifacts": artifacts,
@@ -698,6 +1534,7 @@ def analyze_paper_background(job_id, pdf_path):
         }
         
         # Save report to DB
+        app.logger.info(f"[{job_id}] Saving report to database (artifacts: {len(artifacts)}, agents run: {len(agent_results)})")
         conn = get_db()
         c = conn.cursor()
         c.execute(
@@ -715,10 +1552,11 @@ def analyze_paper_background(job_id, pdf_path):
             "report": report
         })
         
-        app.logger.info(f"Job {job_id} completed successfully")
+        app.logger.info(f"[{job_id}] === ANALYSIS COMPLETE === (artifacts: {len(artifacts)}, agents: {len(agent_results)})")
     
     except Exception as e:
-        app.logger.error(f"Job {job_id} failed: {str(e)}", exc_info=True)
+        app.logger.error(f"[{job_id}] === ANALYSIS FAILED ===", exc_info=True)
+        app.logger.error(f"[{job_id}] Error details: {str(e)}")
         
         emit_event(job_id, {
             "step": "error",
@@ -735,6 +1573,7 @@ def analyze_paper_background(job_id, pdf_path):
         )
         conn.commit()
         conn.close()
+        app.logger.error(f"[{job_id}] Job marked as failed in database")
 
 
 # ============================================================================

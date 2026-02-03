@@ -136,7 +136,7 @@ function connectToEventStream(jobId) {
 }
 
 function handleProgressEvent(event) {
-    const { step, message, progress, error, report, artifacts } = event;
+    const { step, message, progress, error, report, artifacts, status } = event;
     
     // Update progress bar
     if (progress !== undefined) {
@@ -153,7 +153,11 @@ function handleProgressEvent(event) {
     
     // Handle completion
     if (step === "complete") {
-        handleAnalysisComplete(report);
+        // Include status in report if present
+        if (status && report) {
+            report.status = status;
+        }
+        handleAnalysisComplete(report || { status, message });
         eventSource.close();
         analyzeBtn.disabled = false;
     } else if (step === "error") {
@@ -198,14 +202,53 @@ function handleAnalysisComplete(report) {
 function displayReport(report) {
     let html = "";
     
-    // Code Found Badge
-    const codeStatus = report.code_found ? "found" : "not-found";
-    const codeEmoji = report.code_found ? "✓" : "✗";
-    html += `
-        <div class="status-badge ${codeStatus}">
-            ${codeEmoji} Code Artifacts: ${report.code_found ? "Found" : "Not Found"}
-        </div>
-    `;
+    // Status Badge (for agent completion)
+    if (report.status) {
+        const statusClass = report.status === "success" ? "success" : "error";
+        const statusEmoji = report.status === "success" ? "✓" : "✗";
+        const statusText = report.status === "success" ? "Reproducibility Check Passed" : "Reproducibility Check Failed";
+        html += `
+            <div class="status-badge ${statusClass}">
+                ${statusEmoji} ${statusText}
+            </div>
+        `;
+        
+        // Add completion message
+        if (report.message) {
+            html += `
+                <div class="report-section">
+                    <h4>Analysis Result</h4>
+                    <p style="line-height: 1.6; color: #555;">${escapeHtml(report.message)}</p>
+                </div>
+            `;
+        }
+        
+        // Add reproducibility score if available
+        if (report.reproducibility_score !== undefined) {
+            const percentage = Math.round(report.reproducibility_score * 100);
+            const scoreClass = percentage >= 80 ? "success" : percentage >= 50 ? "warning" : "error";
+            html += `
+                <div class="report-section">
+                    <h4>Reproducibility Score</h4>
+                    <div class="reproducibility-check">
+                        <span class="check-label">Score</span>
+                        <span class="check-value ${scoreClass}">${percentage}%</span>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    // Code Found Badge (for paper analysis)
+    if (report.code_found !== undefined) {
+        const codeStatus = report.code_found ? "found" : "not-found";
+        const codeEmoji = report.code_found ? "✓" : "✗";
+        html += `
+            <div class="status-badge ${codeStatus}">
+                ${codeEmoji} Code Artifacts: ${report.code_found ? "Found" : "Not Found"}
+            </div>
+        `;
+    }
     
     // Artifacts Section
     if (report.artifacts && report.artifacts.length > 0) {
@@ -328,11 +371,16 @@ async function loadJobsHistory() {
         for (const job of jobs) {
             const createdDate = new Date(job.created_at).toLocaleString();
             html += `
-                <div class="job-item" onclick="viewJob('${job.id}')">
-                    <div class="job-filename">📄 ${escapeHtml(job.pdf_filename)}</div>
-                    <div class="job-meta">Job ID: ${job.id.substring(0, 8)}...</div>
-                    <div class="job-meta">Created: ${createdDate}</div>
-                    <span class="job-status ${job.status}">${job.status.toUpperCase()}</span>
+                <div class="job-item">
+                    <div class="job-content" onclick="viewJob('${job.id}')">
+                        <div class="job-filename">📄 ${escapeHtml(job.pdf_filename)}</div>
+                        <div class="job-meta">Job ID: ${job.id.substring(0, 8)}...</div>
+                        <div class="job-meta">Created: ${createdDate}</div>
+                    </div>
+                    <div class="job-actions">
+                        <span class="job-status ${job.status}">${job.status.toUpperCase()}</span>
+                        <button class="btn-delete" onclick="deleteJobFromList('${job.id}', event)" title="Delete">🗑️</button>
+                    </div>
                 </div>
             `;
         }
@@ -343,27 +391,36 @@ async function loadJobsHistory() {
     }
 }
 
-async function viewJob(jobId) {
+async function deleteJobFromList(jobId, event) {
+    // Prevent triggering viewJob
+    event.stopPropagation();
+    
+    if (!confirm("Delete this analysis? This action cannot be undone.")) {
+        return;
+    }
+    
     try {
-        const response = await fetch(`/job/${jobId}`);
-        const job = await response.json();
+        const response = await fetch(`/job/${jobId}`, {
+            method: "DELETE"
+        });
         
-        currentJobId = jobId;
-        progressSection.style.display = "none";
-        reportSection.style.display = "block";
-        
-        if (job.report) {
-            displayReport(job.report);
-        } else {
-            reportContent.innerHTML = `<p>Job status: ${job.status}</p>`;
+        if (!response.ok) {
+            const error = await response.json();
+            alert(`Delete failed: ${error.error}`);
+            return;
         }
         
-        // Scroll to report
-        reportSection.scrollIntoView({ behavior: "smooth" });
+        // Reload list
+        loadJobsHistory();
     } catch (error) {
-        console.error("Failed to load job:", error);
-        reportContent.innerHTML = `<p style="color: red;">Error loading job: ${error.message}</p>`;
+        console.error("Failed to delete job:", error);
+        alert(`Delete error: ${error.message}`);
     }
+}
+
+async function viewJob(jobId) {
+    // Navigate to detail page
+    window.location.href = `/reports/${jobId}`;
 }
 
 // ============================================================================

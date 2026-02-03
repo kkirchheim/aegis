@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reproducibility Report</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='detail.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="detail-header">
+            <a href="/" class="back-link">← Back</a>
+            <div class="header-title">
+                <h1 id="docTitle">Loading...</h1>
+                <p id="docMeta" class="meta"></p>
+            </div>
+            <button id="deleteBtn" class="btn btn-danger">Delete</button>
+        </header>
+
+        <main class="detail-main">
+            <!-- Checklist Section (inserted dynamically) -->
+            <!-- Will be inserted here by detail.js if evaluations exist -->
+            
+            <!-- Status Section -->
+            <section id="statusSection" class="section">
+                <h2>📊 Reproducibility Status</h2>
+                <div id="statusContent"></div>
+            </section>
+
+            <!-- Artifacts Section -->
+            <section id="artifactsSection" class="section" style="display: none;">
+                <h2>🎯 Artifacts Found</h2>
+                <div id="artifactsContent"></div>
+            </section>
+
+            <!-- Reproducibility Aspects (Extensible) -->
+            <section id="aspectsSection" class="section" style="display: none;">
+                <h2>🔬 Reproducibility Aspects</h2>
+                <div id="aspectsContent" class="aspects-grid"></div>
+            </section>
+
+            <!-- Agent Execution Log -->
+            <section id="logSection" class="section" style="display: none;">
+                <h2>📋 Execution Log</h2>
+                <div id="logContent" class="log-container">
+                    <div id="eventLog" class="log"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>Delete Report?</h3>
+            <p>This action cannot be undone. All data for this analysis will be permanently deleted.</p>
+            <div class="modal-actions">
+                <button id="cancelDeleteBtn" class="btn btn-secondary">Cancel</button>
+                <button id="confirmDeleteBtn" class="btn btn-danger">Delete Permanently</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='detail.js') }}"></script>
+    <script>
+        // Pass job_id to detail.js
+        const JOB_ID = "{{ job_id }}";
+    </script>
+</body>
+</html>

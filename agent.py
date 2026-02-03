@@ -52,15 +52,15 @@ def print_command(command: str):
     """Print command being executed (for debugging)."""
     print(f"{Color.CYAN}$ {command}{Color.RESET}")
 
-def execute_command(command: str, cwd: Optional[str] = None, shell: bool = False) -> Dict[str, Any]:
+def execute_command(command: str, cwd: Optional[str] = None, shell: bool = True) -> Dict[str, Any]:
     """
     Execute a shell command in sandbox.
     CRITICAL: All execution happens in container, never on host.
     
     Args:
-        command: Command to execute
+        command: Command to execute (bash syntax with pipes, redirects, etc.)
         cwd: Working directory (default: repo root)
-        shell: Whether to use shell (avoid for security)
+        shell: Whether to use shell (True to support pipes, redirects, &&, ||, etc.)
     
     Returns:
         Dict with: {success, stdout, stderr, returncode}
@@ -72,22 +72,30 @@ def execute_command(command: str, cwd: Optional[str] = None, shell: bool = False
     log_message(f"Executing: {command}")
     
     try:
+        # Always use shell=True (we're in container sandbox, safe here)
+        # This allows: pipes (|), redirects (>, 2>&1), operators (&&, ||)
         result = subprocess.run(
-            command if shell else shlex.split(command),
+            command,  # Pass command as string when shell=True
             cwd=cwd,
             capture_output=True,
             text=True,
             timeout=COMMAND_TIMEOUT,
-            shell=shell
+            shell=True  # Always True - allows full bash syntax
         )
         
         success = result.returncode == 0
         
+        # Print stdout (regardless of success)
         if result.stdout:
             print(f"{Color.GREEN}{result.stdout}{Color.RESET}")
+            # Log first 500 chars of stdout to backend
+            log_message(f"Output: {result.stdout[:500]}", severity="info")
         
-        if result.stderr and result.returncode != 0:
+        # Print and log stderr
+        if result.stderr:
             print(f"{Color.RED}{result.stderr}{Color.RESET}")
+            # Log stderr to backend
+            log_message(f"Error output: {result.stderr[:500]}", severity="warning" if success else "error")
         
         output = {
             "success": success,
@@ -97,7 +105,7 @@ def execute_command(command: str, cwd: Optional[str] = None, shell: bool = False
         }
         
         if success:
-            log_message(f"✓ Command succeeded", severity="success")
+            log_message(f"✓ Command succeeded (exit code 0)", severity="success")
         else:
             log_message(f"✗ Command failed (exit code {result.returncode})", severity="error")
         
@@ -183,6 +191,254 @@ def ask_claude(state: Dict[str, Any]) -> Optional[Dict[str, str]]:
         log_message(f"✗ Backend communication error: {e}", severity="error")
         return None
 
+
+def report_execution_details(state: Dict[str, Any]) -> bool:
+    """Report collected execution details to backend for evaluation."""
+    try:
+        # Compile execution details from state
+        execution_details = {
+            "job_id": JOB_ID,
+            "commands_run": "\n".join(state.get("executed_commands", [])),
+            "stdout_combined": state.get("combined_output", ""),
+            "actual_results": parse_actual_results(state.get("combined_output", "")),
+            "dependencies_used": get_installed_packages(),
+            "errors_summary": format_errors(state.get("errors", [])),
+            "discovered_files": state.get("discovered_files", []),
+            "test_info": check_for_tests(),
+            "randomness_info": check_for_randomness_seeds()
+        }
+        
+        response = requests.post(
+            f"{BACKEND_URL}/api/agent/execution",
+            json=execution_details,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            log_message(f"✓ Execution details reported to backend", severity="info")
+            return True
+        else:
+            log_message(f"✗ Backend returned {response.status_code} for execution details", severity="error")
+            return False
+            
+    except requests.RequestException as e:
+        log_message(f"✗ Failed to report execution details: {e}", severity="error")
+        return False
+
+
+def get_installed_packages() -> str:
+    """Get list of installed Python packages and requirements files."""
+    details = []
+    
+    try:
+        # Get pip list
+        result = subprocess.run(
+            "pip list",
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        details.append("INSTALLED PACKAGES:\n" + result.stdout[:1500])
+    except Exception as e:
+        details.append(f"Failed to get package list: {e}")
+    
+    # Try to read requirements.txt
+    for req_file in ["requirements.txt", "setup.py", "environment.yml", "Pipfile"]:
+        try:
+            path = Path(REPO_PATH) / req_file
+            if path.exists():
+                with open(path, 'r') as f:
+                    content = f.read()[:1000]
+                    details.append(f"\n{req_file}:\n{content}")
+                    break  # Only show first found file
+        except Exception as e:
+            details.append(f"Failed to read {req_file}: {e}")
+    
+    return "\n".join(details)[:3000]  # Limit to 3000 chars total
+
+
+def parse_actual_results(output: str) -> Dict[str, Any]:
+    """Extract key results from execution output (accuracy, metrics, etc.)."""
+    results = {}
+    
+    # Look for accuracy
+    import re
+    accuracy_match = re.search(r'(?:accuracy|test_acc|val_acc)[:\s=]+([0-9.]+)', output.lower())
+    if accuracy_match:
+        try:
+            results["accuracy"] = float(accuracy_match.group(1))
+        except:
+            pass
+    
+    # Look for loss
+    loss_match = re.search(r'(?:loss|test_loss|val_loss)[:\s=]+([0-9.]+)', output.lower())
+    if loss_match:
+        try:
+            results["loss"] = float(loss_match.group(1))
+        except:
+            pass
+    
+    # Look for F1 score
+    f1_match = re.search(r'(?:f1|f1-score)[:\s=]+([0-9.]+)', output.lower())
+    if f1_match:
+        try:
+            results["f1_score"] = float(f1_match.group(1))
+        except:
+            pass
+    
+    return results
+
+
+def format_errors(errors: list) -> str:
+    """Format error list for readability."""
+    if not errors:
+        return "No errors"
+    
+    formatted = []
+    for err in errors[-5:]:  # Last 5 errors
+        cmd = err.get("command", "unknown")[:100]
+        stderr = err.get("stderr", "unknown")[:200]
+        formatted.append(f"- {cmd}: {stderr}")
+    
+    return "\n".join(formatted)
+
+
+def check_for_tests() -> str:
+    """Check if tests are present and try to run them."""
+    findings = []
+    
+    # Check for test files/directories
+    test_patterns = ["test_*.py", "*_test.py", "tests/", "test/"]
+    has_tests = False
+    
+    try:
+        for file in Path(REPO_PATH).rglob("*"):
+            if any(pattern in str(file) for pattern in test_patterns):
+                has_tests = True
+                findings.append(f"Found test: {file.name}")
+                break
+    except Exception as e:
+        findings.append(f"Error checking for tests: {e}")
+    
+    # Try to run tests if pytest available
+    if has_tests:
+        try:
+            result = subprocess.run(
+                "cd {REPO_PATH} && python -m pytest --co -q 2>/dev/null | head -10",
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.stdout:
+                findings.append(f"Pytest found: {result.stdout[:200]}")
+        except:
+            pass
+    
+    if not findings:
+        findings.append("No test files detected")
+    
+    return "\n".join(findings)
+
+
+def check_for_randomness_seeds() -> str:
+    """Check if random seeds are set in code."""
+    findings = []
+    seed_patterns = [
+        "np.random.seed",
+        "tf.set_seed",
+        "torch.manual_seed",
+        "random.seed"
+    ]
+    
+    try:
+        for file in Path(REPO_PATH).rglob("*.py"):
+            if file.is_file():
+                try:
+                    with open(file, 'r') as f:
+                        content = f.read()
+                        for pattern in seed_patterns:
+                            if pattern in content:
+                                findings.append(f"Found seed: {pattern} in {file.name}")
+                                break
+                except:
+                    pass
+    except Exception as e:
+        findings.append(f"Error checking for seeds: {e}")
+    
+    if not findings:
+        findings.append("No random seeds detected in code")
+    
+    return "\n".join(findings)
+
+
+def build_reproducibility_aspects(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Build reproducibility aspects array from analysis state."""
+    aspects = {
+        "aspects": [
+            {
+                "id": "code_availability",
+                "name": "Code Availability",
+                "category": "code",
+                "status": "available" if state.get("repo_url") else "missing",
+                "value": state.get("repo_url", "No code artifact found"),
+                "severity": "high",
+                "emoji": "📦"
+            },
+            {
+                "id": "execution_success",
+                "name": "Execution Status",
+                "category": "code",
+                "status": "passed" if len(state.get("errors", [])) == 0 else "failed",
+                "value": f"Completed with {len(state.get('errors', []))} error(s)" if state.get("errors") else "Executed successfully",
+                "severity": "high",
+                "emoji": "✓"
+            },
+            {
+                "id": "file_discovery",
+                "name": "Repository Exploration",
+                "category": "code",
+                "status": "documented" if state.get("discovered_files") else "unknown",
+                "value": f"Found {len(state.get('discovered_files', []))} files in repository",
+                "severity": "medium",
+                "emoji": "📁"
+            }
+        ]
+    }
+    return aspects
+
+def report_completion(success: bool, message: str = "", accuracy: Optional[float] = None, state: Optional[Dict[str, Any]] = None):
+    """Report completion back to backend to terminate agent loop."""
+    try:
+        payload = {
+            "job_id": JOB_ID,
+            "success": success,
+            "message": message or ("Analysis completed successfully" if success else "Analysis failed"),
+            "accuracy": accuracy
+        }
+        
+        # Add reproducibility aspects if state is provided
+        if state:
+            payload["reproducibility_aspects"] = build_reproducibility_aspects(state)
+        
+        response = requests.post(
+            f"{BACKEND_URL}/api/agent/complete",
+            json=payload,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            log_message(f"✓ Completion reported to backend: {'SUCCESS' if success else 'FAILED'}", severity="info")
+            return True
+        else:
+            log_message(f"✗ Backend returned {response.status_code} for completion report", severity="error")
+            return False
+            
+    except requests.RequestException as e:
+        log_message(f"✗ Failed to report completion: {e}", severity="error")
+        return False
+
 def clone_repository():
     """Clone repository into sandbox."""
     log_message(f"🔍 Cloning repository: {REPO_URL}")
@@ -223,7 +479,9 @@ def main():
         "last_command": None,
         "last_output": None,
         "errors": [],
-        "iteration": 0
+        "iteration": 0,
+        "executed_commands": [],  # Track all commands
+        "combined_output": ""     # Accumulate all output
     }
     
     # Step 2: List files in repo
@@ -268,6 +526,13 @@ def main():
             result = execute_command(target)
             state["last_output"] = result.get("stdout", "") + result.get("stderr", "")
             
+            # Track command and output for execution details
+            state["executed_commands"].append(target)
+            state["combined_output"] += f"\n$ {target}\n"
+            state["combined_output"] += result.get("stdout", "")
+            if result.get("stderr"):
+                state["combined_output"] += f"[STDERR] {result.get('stderr')}\n"
+            
             if not result["success"]:
                 state["errors"].append({
                     "command": target,
@@ -277,10 +542,35 @@ def main():
         
         elif action == "check_success":
             log_message("✓ Reproducibility check passed!")
+            # Extract accuracy if available in output
+            accuracy = None
+            if "accuracy" in state.get("last_output", "").lower():
+                # Try to extract accuracy from output
+                import re
+                match = re.search(r'(\d+\.?\d*)\s*%|\baccuracy[:\s]+([0-9.]+)', state.get("last_output", ""), re.IGNORECASE)
+                if match:
+                    try:
+                        accuracy = float(match.group(1) or match.group(2)) / 100 if '%' in (match.group(0) or '') else float(match.group(1) or match.group(2))
+                    except:
+                        pass
+            
+            # Report execution details first (for evaluation stage)
+            report_execution_details(state)
+            
+            # Report success to backend
+            report_completion(
+                success=True,
+                message=reasoning,  # Use Claude's reasoning as message
+                accuracy=accuracy,
+                state=state
+            )
             print()
+            break  # Exit the loop after reporting success
             
         elif action == "done":
             log_message(f"✓ Agent completed analysis (iteration {iteration})")
+            report_execution_details(state)
+            report_completion(success=True, message="Analysis completed", state=state)
             break
         
         else:
@@ -291,6 +581,14 @@ def main():
     
     if iteration >= MAX_ITERATIONS:
         log_message(f"⚠ Max iterations reached ({MAX_ITERATIONS})", severity="warn")
+        # Report execution details even on failure
+        report_execution_details(state)
+        # Report failure if max iterations without success
+        report_completion(
+            success=False,
+            message=f"Max iterations ({MAX_ITERATIONS}) reached without successful execution. {len(state['errors'])} errors encountered.",
+            state=state
+        )
     
     # Final summary
     print(f"{Color.CYAN}=== Final Report ==={Color.RESET}")
