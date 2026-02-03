@@ -843,15 +843,8 @@ function streamChatResponse() {
                     chatHistory.appendChild(messageDiv);
                 }
                 
-                // Update message with latest content (trim all whitespace, preserve newlines in display)
-                messageDiv.innerHTML = `
-                    <div class="flex gap-2">
-                        <div class="font-semibold text-sm text-primary">Assistant:</div>
-                        <div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important; white-space: pre-wrap;">
-                            ${escapeHtml(assistantMessage.trim())}
-                        </div>
-                    </div>
-                `;
+                // Update message with latest content (trim whitespace, preserve internal newlines)
+                messageDiv.innerHTML = `<div class="flex gap-2"><div class="font-semibold text-sm text-primary">Assistant:</div><div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important; white-space: pre-wrap;">${escapeHtml(assistantMessage.trim())}</div></div>`;
                 
                 // Auto-scroll to bottom
                 chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -880,14 +873,7 @@ function addChatMessageToUI(role, content) {
     messageDiv.className = 'mb-3';
     
     if (role === 'user') {
-        messageDiv.innerHTML = `
-            <div class="flex gap-2 justify-end">
-                <div class="text-sm flex-1 max-w-md bg-primary text-primary-content rounded" style="padding: 4px 8px !important; white-space: pre-wrap;">
-                    ${escapeHtml(content.trim())}
-                </div>
-                <div class="font-semibold text-sm">You:</div>
-            </div>
-        `;
+        messageDiv.innerHTML = `<div class="flex gap-2 justify-end"><div class="text-sm flex-1 max-w-md bg-primary text-primary-content rounded" style="padding: 4px 8px !important; white-space: pre-wrap;">${escapeHtml(content.trim())}</div><div class="font-semibold text-sm">You:</div></div>`;
     } else if (role === 'error') {
         messageDiv.innerHTML = `
             <div class="alert alert-error text-sm py-2">
@@ -895,14 +881,7 @@ function addChatMessageToUI(role, content) {
             </div>
         `;
     } else {
-        messageDiv.innerHTML = `
-            <div class="flex gap-2">
-                <div class="font-semibold text-sm text-primary">Assistant:</div>
-                <div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important; white-space: pre-wrap;">
-                    ${escapeHtml(content.trim())}
-                </div>
-            </div>
-        `;
+        messageDiv.innerHTML = `<div class="flex gap-2"><div class="font-semibold text-sm text-primary">Assistant:</div><div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important; white-space: pre-wrap;">${escapeHtml(content.trim())}</div></div>`;
     }
     
     chatHistory.appendChild(messageDiv);
