@@ -10,9 +10,7 @@ let currentSort = 'date'; // date, score, name
 // DOM Elements
 const searchInput = document.getElementById('searchInput');
 const statusFilter = document.getElementById('statusFilter');
-const scoreFilter = document.getElementById('scoreFilter');
 const sortDate = document.getElementById('sortDate');
-const sortScore = document.getElementById('sortScore');
 const sortName = document.getElementById('sortName');
 const jobsList = document.getElementById('jobsList');
 const emptyState = document.getElementById('emptyState');
@@ -30,15 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupEventListeners() {
     searchInput.addEventListener('input', filterJobs);
     statusFilter.addEventListener('change', filterJobs);
-    scoreFilter.addEventListener('change', filterJobs);
     
     sortDate.addEventListener('click', () => {
         currentSort = 'date';
-        updateSortButtons();
-        sortAndRender();
-    });
-    sortScore.addEventListener('click', () => {
-        currentSort = 'score';
         updateSortButtons();
         sortAndRender();
     });
@@ -51,11 +43,9 @@ function setupEventListeners() {
 
 function updateSortButtons() {
     sortDate.classList.toggle('btn-primary', currentSort === 'date');
-    sortScore.classList.toggle('btn-primary', currentSort === 'score');
     sortName.classList.toggle('btn-primary', currentSort === 'name');
     
     sortDate.classList.toggle('btn-outline', currentSort !== 'date');
-    sortScore.classList.toggle('btn-outline', currentSort !== 'score');
     sortName.classList.toggle('btn-outline', currentSort !== 'name');
 }
 
@@ -92,7 +82,6 @@ async function loadJobs() {
 function filterJobs() {
     const search = searchInput.value.toLowerCase();
     const status = statusFilter.value;
-    const minScore = scoreFilter.value ? parseInt(scoreFilter.value) : 0;
     
     filteredJobs = allJobs.filter(job => {
         // Search filter
@@ -104,21 +93,6 @@ function filterJobs() {
         // Status filter
         if (status && job.status !== status) {
             return false;
-        }
-        
-        // Score filter
-        if (minScore > 0 && job.report) {
-            try {
-                const report = typeof job.report === 'string' ? JSON.parse(job.report) : job.report;
-                const score = report.reproducibility_score || report.status;
-                if (score && typeof score === 'number') {
-                    if (score * 100 < minScore) {
-                        return false;
-                    }
-                }
-            } catch (e) {
-                // If can't parse, include it
-            }
         }
         
         return true;
@@ -135,12 +109,6 @@ function sortAndRender() {
     // Sort
     if (currentSort === 'date') {
         filteredJobs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    } else if (currentSort === 'score') {
-        filteredJobs.sort((a, b) => {
-            const scoreA = getScore(a);
-            const scoreB = getScore(b);
-            return scoreB - scoreA;
-        });
     } else if (currentSort === 'name') {
         filteredJobs.sort((a, b) => {
             const nameA = (a.pdf_filename || '').toLowerCase();
@@ -151,18 +119,6 @@ function sortAndRender() {
     
     // Render
     renderJobs();
-}
-
-function getScore(job) {
-    try {
-        const report = typeof job.report === 'string' ? JSON.parse(job.report) : job.report;
-        if (report && typeof report.reproducibility_score === 'number') {
-            return report.reproducibility_score * 100;
-        }
-    } catch (e) {
-        // Ignore parse errors
-    }
-    return 0;
 }
 
 // ============================================================================
@@ -193,16 +149,6 @@ function renderJobs() {
         const createdDate = new Date(job.created_at).toLocaleDateString();
         const createdTime = new Date(job.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         
-        let scoreHtml = '';
-        let score = getScore(job);
-        if (score > 0) {
-            const scoreColor = score >= 80 ? 'text-success' : score >= 60 ? 'text-warning' : 'text-error';
-            scoreHtml = `<div class="text-right">
-                <div class="${scoreColor} font-bold">${Math.round(score)}%</div>
-                <div class="text-xs text-base-content/50">Reproducibility</div>
-            </div>`;
-        }
-        
         html += `
             <div class="card card-compact bg-base-200 hover:shadow-lg transition-shadow cursor-pointer" onclick="viewJob('${job.id}')">
                 <div class="card-body p-4">
@@ -217,7 +163,6 @@ function renderJobs() {
                                 ${createdDate} at ${createdTime}
                             </div>
                         </div>
-                        ${scoreHtml}
                     </div>
                 </div>
             </div>

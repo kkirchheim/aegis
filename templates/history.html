@@ -42,7 +42,7 @@
                         <span>Search & Filter</span>
                     </h2>
                     
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <!-- Search by filename -->
                         <div>
                             <label class="label">
@@ -63,26 +63,12 @@
                                 <option value="processing">⏳ Processing</option>
                             </select>
                         </div>
-                        
-                        <!-- Filter by score -->
-                        <div>
-                            <label class="label">
-                                <span class="label-text">Min Score</span>
-                            </label>
-                            <select id="scoreFilter" class="select select-bordered w-full">
-                                <option value="">Any score</option>
-                                <option value="80">80% or higher</option>
-                                <option value="60">60% or higher</option>
-                                <option value="40">40% or higher</option>
-                            </select>
-                        </div>
                     </div>
                     
                     <!-- Sort Options -->
                     <div class="mt-4 flex gap-2 flex-wrap">
                         <span class="text-sm text-base-content/60">Sort by:</span>
                         <button id="sortDate" class="btn btn-sm btn-outline gap-1">📅 Date</button>
-                        <button id="sortScore" class="btn btn-sm btn-outline gap-1">📊 Score</button>
                         <button id="sortName" class="btn btn-sm btn-outline gap-1">A-Z Name</button>
                     </div>
                 </div>
