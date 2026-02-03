@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install essential tools for repo analysis
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    build-essential \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy agent script
+COPY agent.py .
+
+# Install requests for backend communication
+RUN pip install --no-cache-dir requests
+
+# Create workspace directory
+RUN mkdir -p /workspace/repo
+
+WORKDIR /workspace
+
+# Run agent (receives REPO_URL, JOB_ID, BACKEND_URL via environment)
+ENTRYPOINT ["python", "/app/agent.py"]
