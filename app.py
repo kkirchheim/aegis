@@ -265,6 +265,27 @@ def init_db():
         )
     """)
     
+    # Chat tables for interactive paper Q&A
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id TEXT NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(job_id) REFERENCES jobs(id)
+        )
+    """)
+    
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(session_id) REFERENCES chat_sessions(id)
+        )
+    """)
+    
     conn.commit()
     conn.close()
 
@@ -649,6 +670,171 @@ def store_evaluation_cache(paper_hash: str, code_hash: str, evaluations: dict):
         app.logger.info(f"Cached evaluation for paper {paper_hash[:8]} + code {code_hash[:8]}")
     except Exception as e:
         app.logger.error(f"Failed to cache evaluation: {e}")
+
+
+# ============================================================================
+# Chat Functions
+# ============================================================================
+
+def get_or_create_chat_session(job_id: str) -> dict:
+    """Get existing chat session or create new one."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Check if session exists
+        c.execute("SELECT id FROM chat_sessions WHERE job_id = ?", (job_id,))
+        row = c.fetchone()
+        
+        if row:
+            session_id = row["id"]
+        else:
+            # Create new session
+            c.execute("INSERT INTO chat_sessions (job_id) VALUES (?)", (job_id,))
+            conn.commit()
+            session_id = c.lastrowid
+        
+        conn.close()
+        return {"id": session_id, "job_id": job_id}
+    
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Failed to get/create chat session: {e}")
+        raise
+
+
+def store_chat_message(session_id: int, role: str, content: str):
+    """Store chat message in database."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO chat_messages (session_id, role, content)
+            VALUES (?, ?, ?)
+        """, (session_id, role, content))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        app.logger.error(f"Failed to store chat message: {e}")
+
+
+def get_chat_history(session_id: int, limit: int = 20) -> list:
+    """Get chat history for a session."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            SELECT role, content, created_at FROM chat_messages
+            WHERE session_id = ?
+            ORDER BY created_at ASC
+            LIMIT ?
+        """, (session_id, limit))
+        messages = c.fetchall()
+        conn.close()
+        return [dict(m) for m in messages]
+    except Exception as e:
+        app.logger.error(f"Failed to get chat history: {e}")
+        return []
+
+
+def build_chat_context(job_id: str) -> str:
+    """
+    Build rich context from all analysis stages for chat.
+    This becomes the system prompt for chat interactions.
+    """
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Fetch paper analysis
+        c.execute("""
+            SELECT title, abstract, extracted_text, methodology, dependencies, dataset_description
+            FROM paper_analysis WHERE job_id = ?
+        """, (job_id,))
+        paper_row = c.fetchone()
+        
+        # Fetch execution details
+        c.execute("""
+            SELECT commands_run, stdout_combined, dependencies_used, errors_summary
+            FROM execution_details WHERE job_id = ?
+        """, (job_id,))
+        exec_row = c.fetchone()
+        
+        # Fetch evaluations
+        c.execute("""
+            SELECT name, status, evidence FROM aspect_evaluations
+            WHERE job_id = ? ORDER BY name
+        """, (job_id,))
+        evaluations = c.fetchall()
+        
+        # Fetch artifacts
+        c.execute("""
+            SELECT url, artifact_type, description FROM artifacts
+            WHERE job_id = ?
+        """, (job_id,))
+        artifacts = c.fetchall()
+        
+        conn.close()
+        
+        # Build context string
+        context = """You are an expert assistant analyzing a scientific paper for reproducibility.
+You have access to complete analysis results from three stages:
+1. Paper extraction (title, methodology, claimed results)
+2. Code execution (actual execution, dependencies, test results)
+3. Reproducibility evaluation (15 aspects assessed)
+
+Answer questions about:
+- Why certain aspects passed or failed
+- Differences between claimed and actual results
+- Dependencies and environment requirements
+- Code artifacts and where to find them
+- Suggestions for improving reproducibility
+
+Be concise and reference specific findings from the analysis.
+
+"""
+        
+        if paper_row:
+            context += f"""PAPER INFORMATION:
+Title: {paper_row['title'] or 'Unknown'}
+Abstract: {paper_row['abstract'] or 'Not extracted'}
+
+Methodology: {paper_row['methodology'] or 'Not documented'}
+Dependencies mentioned: {paper_row['dependencies'] or 'None found'}
+Dataset: {paper_row['dataset_description'] or 'Not documented'}
+
+"""
+        
+        if artifacts:
+            context += "CODE ARTIFACTS FOUND:\n"
+            for art in artifacts:
+                context += f"- {art['artifact_type']}: {art['url']}\n  {art['description']}\n"
+            context += "\n"
+        
+        if exec_row:
+            context += f"""EXECUTION RESULTS:
+Commands run: {exec_row['commands_run'][:500] if exec_row['commands_run'] else 'None'}
+
+Output (first 1000 chars): {(exec_row['stdout_combined'] or '')[:1000]}
+
+Dependencies used: {exec_row['dependencies_used'] or 'None identified'}
+
+Errors: {exec_row['errors_summary'] or 'None'}
+
+"""
+        
+        if evaluations:
+            context += "REPRODUCIBILITY EVALUATION:\n"
+            for ev in evaluations:
+                context += f"- {ev['name']}: {ev['status']}\n"
+                if ev['evidence']:
+                    context += f"  Evidence: {ev['evidence'][:100]}...\n"
+            context += "\n"
+        
+        return context
+    
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Failed to build chat context: {e}")
+        return "Unable to load paper analysis context."
 
 
 def parse_paper_with_claude(pdf_text):
@@ -1121,6 +1307,143 @@ def cache_clear():
         return jsonify({"ok": True, "message": f"Cache cleared - deleted {deleted_count} PDF files and all analysis data"})
     except Exception as e:
         app.logger.error(f"Failed to clear cache: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# Chat API - Interactive Q&A about papers
+# ============================================================================
+
+@app.route("/api/job/<job_id>/chat", methods=["POST"])
+def chat_with_paper(job_id):
+    """
+    User asks a question about the analyzed paper.
+    
+    Request:
+        {"message": "Why did the test fail?"}
+    
+    Returns:
+        {"ok": true}  (response streams via SSE)
+    """
+    
+    data = request.json
+    user_message = data.get("message", "").strip()
+    
+    if not user_message:
+        return jsonify({"error": "Empty message"}), 400
+    
+    try:
+        # Verify job exists and is complete
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT status FROM jobs WHERE id = ?", (job_id,))
+        job = c.fetchone()
+        conn.close()
+        
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+        
+        if job["status"] not in ["completed", "processing"]:
+            return jsonify({"error": "Job analysis not complete"}), 400
+        
+        # Get or create chat session
+        session = get_or_create_chat_session(job_id)
+        
+        # Store user message
+        store_chat_message(session["id"], "user", user_message)
+        
+        # Build context from analysis
+        system_prompt = build_chat_context(job_id)
+        
+        # Get conversation history (last 10 messages for context)
+        history = get_chat_history(session["id"], limit=10)
+        
+        # Prepare messages for LLM
+        messages = [{"role": msg["role"], "content": msg["content"]} for msg in history]
+        
+        # Add the new user message if not already in history
+        if not messages or messages[-1]["content"] != user_message:
+            messages.append({"role": "user", "content": user_message})
+        
+        # Start background thread to generate response
+        thread = threading.Thread(
+            target=generate_chat_response,
+            args=(job_id, session["id"], system_prompt, messages),
+            daemon=True
+        )
+        thread.start()
+        
+        return jsonify({"ok": True})
+    
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Chat error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+def generate_chat_response(job_id: str, session_id: int, system_prompt: str, messages: list):
+    """Generate and store chat response in background."""
+    try:
+        app.logger.info(f"[{job_id}] Generating chat response...")
+        
+        # Stream response from LLM
+        full_response = ""
+        for chunk in llm_provider.stream(
+            messages=messages,
+            system=system_prompt,
+            max_tokens=2048,
+            temperature=0.7
+        ):
+            full_response += chunk
+            
+            # Emit to SSE clients
+            emit_event(job_id, {
+                "step": "chat_response",
+                "content": chunk
+            })
+        
+        # Store complete response
+        store_chat_message(session_id, "assistant", full_response)
+        
+        # Signal end of response
+        emit_event(job_id, {
+            "step": "chat_complete",
+            "message": "Response complete"
+        })
+        
+        app.logger.info(f"[{job_id}] Chat response complete ({len(full_response)} chars)")
+    
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Failed to generate chat response: {e}")
+        emit_event(job_id, {
+            "step": "chat_error",
+            "message": f"Error: {str(e)}"
+        })
+
+
+@app.route("/api/job/<job_id>/chat/history", methods=["GET"])
+def get_chat_history_endpoint(job_id):
+    """Get chat history for a job."""
+    
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Get session
+        c.execute("SELECT id FROM chat_sessions WHERE job_id = ?", (job_id,))
+        row = c.fetchone()
+        conn.close()
+        
+        if not row:
+            return jsonify([])
+        
+        # Get messages
+        session_id = row["id"]
+        history = get_chat_history(session_id, limit=100)
+        
+        return jsonify(history)
+    
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Failed to get chat history: {e}")
         return jsonify({"error": str(e)}), 500
 
 

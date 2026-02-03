@@ -14,6 +14,7 @@ const citationsSection = document.getElementById("citationsSection");
 const artifactsSection = document.getElementById("artifactsSection");
 const aspectsSection = document.getElementById("aspectsSection");
 const logSection = document.getElementById("logSection");
+const chatSection = document.getElementById("chatSection");
 
 const statusContent = document.getElementById("statusContent");
 const progressFill = document.getElementById("progressFill");
@@ -24,6 +25,10 @@ const citationCount = document.getElementById("citationCount");
 const artifactsContent = document.getElementById("artifactsContent");
 const aspectsContent = document.getElementById("aspectsContent");
 const eventLog = document.getElementById("eventLog");
+
+const chatHistory = document.getElementById("chatHistory");
+const chatInput = document.getElementById("chatInput");
+const chatSendBtn = document.getElementById("chatSendBtn");
 
 const docTitle = document.getElementById("docTitle");
 const docMeta = document.getElementById("docMeta");
@@ -57,6 +62,15 @@ function setupEventListeners() {
     });
     
     confirmDeleteBtn.addEventListener("click", deleteJob);
+    
+    // Chat listeners
+    chatSendBtn.addEventListener("click", sendChatMessage);
+    chatInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendChatMessage();
+        }
+    });
 }
 
 // ============================================================================
@@ -154,6 +168,12 @@ function renderPage() {
     if (currentJob.report && currentJob.report.reproducibility_aspects) {
         aspectsSection.style.display = "block";
         renderAspects();
+    }
+    
+    // Chat section - show for completed analyses
+    if (currentJob.status === "completed" || currentJob.status === "success") {
+        chatSection.style.display = "block";
+        loadChatHistory();
     }
     
     // Progress section - show if processing OR if we have events
@@ -720,6 +740,145 @@ function escapeHtml(text) {
         "'": '&#039;'
     };
     return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// ============================================================================
+// Chat Functions
+// ============================================================================
+
+async function loadChatHistory() {
+    try {
+        const response = await fetch(`/api/job/${JOB_ID}/chat/history`);
+        if (!response.ok) return;
+        
+        const messages = await response.json();
+        chatHistory.innerHTML = '';
+        
+        messages.forEach(msg => {
+            addChatMessageToUI(msg.role, msg.content);
+        });
+    } catch (error) {
+        console.error("Failed to load chat history:", error);
+    }
+}
+
+async function sendChatMessage() {
+    const message = chatInput.value.trim();
+    if (!message) return;
+    
+    // Add user message to display immediately
+    addChatMessageToUI('user', message);
+    chatInput.value = '';
+    chatSendBtn.disabled = true;
+    
+    try {
+        // Send message to backend
+        const response = await fetch(`/api/job/${JOB_ID}/chat`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message})
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+        }
+        
+        // Stream response via SSE
+        streamChatResponse();
+        
+    } catch (error) {
+        console.error("Chat error:", error);
+        addChatMessageToUI('error', `Error: ${error.message}`);
+    } finally {
+        chatSendBtn.disabled = false;
+    }
+}
+
+function streamChatResponse() {
+    // Listen for chat response events from server
+    const eventSource = new EventSource(`/events/${JOB_ID}`);
+    let assistantMessage = '';
+    let messageDiv = null;
+    
+    eventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            
+            if (data.step === 'chat_response') {
+                // Streaming content
+                assistantMessage += data.content;
+                
+                // Create or update message div
+                if (!messageDiv) {
+                    messageDiv = document.createElement('div');
+                    messageDiv.className = 'mb-3';
+                    chatHistory.appendChild(messageDiv);
+                }
+                
+                // Update message with latest content
+                messageDiv.innerHTML = `
+                    <div class="flex gap-2">
+                        <div class="font-semibold text-sm text-primary">Assistant:</div>
+                        <div class="text-sm flex-1 bg-base-200 rounded px-3 py-2 whitespace-pre-wrap">
+                            ${escapeHtml(assistantMessage)}
+                        </div>
+                    </div>
+                `;
+                
+                // Auto-scroll to bottom
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+                
+            } else if (data.step === 'chat_complete') {
+                // Response finished
+                eventSource.close();
+            } else if (data.step === 'chat_error') {
+                // Error occurred
+                addChatMessageToUI('error', data.message);
+                eventSource.close();
+            }
+        } catch (e) {
+            console.error("Error parsing SSE message:", e);
+        }
+    };
+    
+    eventSource.onerror = () => {
+        console.error("SSE connection error");
+        eventSource.close();
+    };
+}
+
+function addChatMessageToUI(role, content) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'mb-3';
+    
+    if (role === 'user') {
+        messageDiv.innerHTML = `
+            <div class="flex gap-2 justify-end">
+                <div class="text-sm flex-1 max-w-md bg-primary text-primary-content rounded px-3 py-2 whitespace-pre-wrap">
+                    ${escapeHtml(content)}
+                </div>
+                <div class="font-semibold text-sm">You:</div>
+            </div>
+        `;
+    } else if (role === 'error') {
+        messageDiv.innerHTML = `
+            <div class="alert alert-error text-sm py-2">
+                ${escapeHtml(content)}
+            </div>
+        `;
+    } else {
+        messageDiv.innerHTML = `
+            <div class="flex gap-2">
+                <div class="font-semibold text-sm text-primary">Assistant:</div>
+                <div class="text-sm flex-1 bg-base-200 rounded px-3 py-2 whitespace-pre-wrap">
+                    ${escapeHtml(content)}
+                </div>
+            </div>
+        `;
+    }
+    
+    chatHistory.appendChild(messageDiv);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
 // Theme toggle

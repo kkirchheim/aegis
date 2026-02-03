@@ -175,6 +175,39 @@
             </div>
         </section>
 
+        <!-- Chat Section -->
+        <section id="chatSection" class="mb-8" style="display: none;">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>💬</span>
+                        <span>Chat with Analysis</span>
+                    </h2>
+                    
+                    <!-- Chat History -->
+                    <div id="chatHistory" class="bg-base-200 rounded-lg p-4 max-h-96 overflow-y-auto mb-4 min-h-32">
+                        <div class="text-center text-base-content/60 text-sm">
+                            Ask questions about the paper's reproducibility...
+                        </div>
+                    </div>
+                    
+                    <!-- Chat Input -->
+                    <div class="flex gap-2">
+                        <input 
+                            id="chatInput" 
+                            type="text" 
+                            placeholder="Ask a question about this paper..."
+                            class="input input-bordered flex-1"
+                        />
+                        <button id="chatSendBtn" class="btn btn-primary gap-2">
+                            <span>Send</span>
+                            <span id="chatSendIcon">✉️</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </div>
 
     <!-- Delete Confirmation Modal -->
