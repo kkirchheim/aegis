@@ -24,7 +24,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-client = Anthropic()
+# Initialize Anthropic client with explicit API key
+api_key = os.getenv("ANTHROPIC_API_KEY")
+if not api_key:
+    raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+client = Anthropic(api_key=api_key)
 
 # Configuration
 UPLOAD_FOLDER = Path("uploads")

@@ -4,12 +4,10 @@ services:
   app:
     build: .
     container_name: paper-reproducibility
-    ports:
-      - "5000:5000"
+    env_file: .env
     environment:
       - FLASK_ENV=development
       - FLASK_DEBUG=1
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     volumes:
       # Docker-in-Docker: allow container to spawn other containers
       - /var/run/docker.sock:/var/run/docker.sock
@@ -19,8 +17,13 @@ services:
       # Live code reload for development
       - .:/app
     networks:
-      - paper-net
+      - workspace_traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.repro.rule=Host(`repro.selene.local`)"
+      - "traefik.http.routers.repro.entrypoints=web"
+      - "traefik.http.services.repro.loadbalancer.server.port=5000"
 
 networks:
-  paper-net:
-    driver: bridge
+  workspace_traefik:
+    external: true
