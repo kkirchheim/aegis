@@ -291,33 +291,37 @@ def init_db():
 
 
 def emit_event(job_id, event_dict):
-    """Emit event to all SSE clients watching this job and store in database."""
+    """Emit event to all SSE clients watching this job and store in database (skip chat events)."""
     event_dict["timestamp"] = datetime.utcnow().isoformat()
     
-    # Store event in database for later retrieval
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("""
-            INSERT INTO events (job_id, timestamp, step, message, severity)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            job_id,
-            event_dict["timestamp"],
-            event_dict.get("step", "unknown"),
-            event_dict.get("message", ""),
-            event_dict.get("severity", "info")
-        ))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        app.logger.error(f"[{job_id}] Failed to store event: {e}")
+    # Skip storing chat events in database (only stream to SSE)
+    step = event_dict.get("step", "unknown")
+    is_chat_event = step and (step.startswith("chat_") or step == "chat_error")
+    
+    if not is_chat_event:
+        # Store non-chat events in database for later retrieval
+        try:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO events (job_id, timestamp, step, message, severity)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                job_id,
+                event_dict["timestamp"],
+                step,
+                event_dict.get("message", ""),
+                event_dict.get("severity", "info")
+            ))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            app.logger.error(f"[{job_id}] Failed to store event: {e}")
     
     # Emit to SSE clients
     with event_queues_lock:
         if job_id in event_queues:
             event_queues[job_id].append(event_dict)
-            step = event_dict.get("step", "unknown")
             msg = event_dict.get("message", event_dict.get("content", ""))
             app.logger.info(f"[{job_id}] Event: {step} - {msg[:100]}")
 

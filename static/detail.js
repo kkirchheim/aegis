@@ -616,6 +616,11 @@ function setupSSEConnection() {
 function handleProgressEvent(event) {
     const { step, message, progress, severity, stage, stage_duration_ms } = event;
     
+    // Skip chat-related events (they shouldn't be in execution log)
+    if (step && (step.startsWith('chat_') || step === 'chat_error')) {
+        return;
+    }
+    
     // Update progress bar
     if (progress !== undefined) {
         progressFill.value = progress;
@@ -666,11 +671,16 @@ function handleProgressEvent(event) {
 }
 
 function renderProgressHistory() {
-    // Show historical events for completed jobs
+    // Show historical events for completed jobs (skip chat events)
     const events = currentJob.events || [];
     let html = "";
     
     for (const event of events) {
+        // Skip chat-related events
+        if (event.step && (event.step.startsWith('chat_') || event.step === 'chat_error')) {
+            continue;
+        }
+        
         const time = new Date(event.timestamp).toLocaleTimeString();
         const stepLabel = event.step ? `[${event.step}]` : "";
         const severityClass = event.severity === 'error' ? 'text-error' : event.severity === 'success' ? 'text-success' : event.severity === 'warning' ? 'text-warning' : 'text-base-content/70';

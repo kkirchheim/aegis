@@ -10,10 +10,57 @@
     <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
     
     <style>
-        :root {
-            --primary: #ffa500;
-            --secondary: #4ade80;
-            --accent: #f87171;
+        /* Override primary color to blue */
+        .text-primary { color: #0068b4 !important; }
+        .bg-primary { background-color: #0068b4 !important; }
+        .btn-primary { background-color: #0068b4 !important; border-color: #0068b4 !important; color: white !important; }
+        .btn-primary:hover { background-color: #004d8f !important; }
+        .badge-primary { background-color: #0068b4 !important; border-color: #0068b4 !important; color: white !important; }
+        .link-primary { color: #0068b4 !important; }
+        
+        /* Secondary button red */
+        .btn-secondary { background-color: #ef4444 !important; border-color: #ef4444 !important; color: white !important; }
+        .btn-secondary:hover { background-color: #dc2626 !important; }
+        
+        /* Progress bar */
+        .progress-primary { background-color: #0068b4 !important; }
+        .progress-primary::-webkit-progress-value { background-color: #0068b4 !important; }
+        .progress-primary::-moz-progress-bar { background-color: #0068b4 !important; }
+        
+        /* Progress bar primary color */
+        .progress-primary {
+            background-color: #0068b4 !important;
+        }
+        
+        .progress-primary::-webkit-progress-bar {
+            background-color: #0068b4 !important;
+        }
+        
+        .progress-primary::-webkit-progress-value {
+            background-color: #0068b4 !important;
+        }
+        
+        .progress-primary::-moz-progress-bar {
+            background-color: #0068b4 !important;
+        }
+        
+        /* Override any violet/accent color to blue */
+        .badge-accent, .btn-accent, [class*="accent"] {
+            background-color: #0068b4 !important;
+            border-color: #0068b4 !important;
+            color: white !important;
+        }
+        
+        .badge-accent:hover, .btn-accent:hover {
+            background-color: #004d8f !important;
+            border-color: #004d8f !important;
+        }
+        
+        /* Override any element with background-color of violet to blue */
+        [style*="background-color: rgb(148, 0, 255)"],
+        [style*="background-color:#9400ff"],
+        [style*="background-color: #9400ff"] {
+            background-color: #0068b4 !important;
         }
         
         html[data-theme="light"] {

@@ -10,11 +10,26 @@
     <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
     
     <style>
-        :root {
-            --primary: #ffa500;
-            --secondary: #4ade80;
-            --accent: #f87171;
-        }
+        /* Override primary color to blue */
+        .text-primary { color: #0068b4; }
+        .bg-primary { background-color: #0068b4; }
+        .btn-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .btn-primary:hover { background-color: #004d8f; }
+        .badge-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .link-primary { color: #0068b4; }
+        
+        /* Secondary button red */
+        .btn-secondary { background-color: #ef4444; border-color: #ef4444; color: white; }
+        .btn-secondary:hover { background-color: #dc2626; }
+        
+        /* Delete button red */
+        #deleteBtn { background-color: #ef4444; border-color: #ef4444; color: white; }
+        #deleteBtn:hover { background-color: #dc2626; }
+        
+        /* Progress bar */
+        .progress-primary { background-color: #0068b4; }
+        .progress-primary::-webkit-progress-value { background-color: #0068b4; }
+        .progress-primary::-moz-progress-bar { background-color: #0068b4; }
     </style>
 </head>
 <body class="bg-base-100">
@@ -203,7 +218,7 @@
                             <span>Send</span>
                             <span id="chatSendIcon">✉️</span>
                         </button>
-                        <button id="chatClearBtn" class="btn btn-secondary btn-sm gap-1">
+                        <button id="chatClearBtn" class="btn btn-secondary gap-2">
                             <span>Clear</span>
                             <span>🗑️</span>
                         </button>
