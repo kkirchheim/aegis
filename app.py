@@ -1114,11 +1114,17 @@ def agent_complete():
 # Aspect Evaluation (Stage 3 of pipeline)
 # ============================================================================
 
-def evaluate_reproducibility_aspects(job_id: str):
+def evaluate_reproducibility_aspects(job_id: str, stage3_start: float = None):
     """
     STAGE 3: Evaluate aspects using all available context.
     Runs after agent completes successfully.
+    
+    Args:
+        job_id: Job identifier
+        stage3_start: Unix timestamp when stage 3 started (for timing)
     """
+    if stage3_start is None:
+        stage3_start = time.time()
     
     try:
         app.logger.info(f"[{job_id}] === STAGE 3: Aspect Evaluation Starting ===")
@@ -1410,6 +1416,17 @@ Return ONLY valid JSON (no markdown, no explanation, just JSON):
         
         app.logger.info(f"[{job_id}] === ASPECT EVALUATION COMPLETE ===")
         
+        # Stage 3 complete
+        stage3_duration = int((time.time() - stage3_start) * 1000)
+        emit_event(job_id, {
+            "step": "stage_3_complete",
+            "stage": "reproducibility_evaluation",
+            "message": "Stage 3 Complete: Evaluation finished",
+            "progress": 100,
+            "stage_duration_ms": stage3_duration
+        })
+        app.logger.info(f"[{job_id}] STAGE 3 COMPLETE in {stage3_duration}ms")
+        
         emit_event(job_id, {
             "step": "evaluation_complete",
             "message": f"Evaluated {len(evaluation_results.get('evaluations', []))} reproducibility aspects"
@@ -1445,6 +1462,15 @@ def analyze_paper_background(job_id, pdf_path):
         c.execute("UPDATE jobs SET status = ? WHERE id = ?", ("processing", job_id))
         conn.commit()
         conn.close()
+        
+        # ===== STAGE 1: PAPER ANALYSIS =====
+        stage1_start = time.time()
+        emit_event(job_id, {
+            "step": "stage_1_starting",
+            "stage": "paper_analysis",
+            "message": "Stage 1: Analyzing Paper...",
+            "progress": 5
+        })
         
         # Step 1: Extract PDF text
         app.logger.info(f"[{job_id}] Step 1: Extracting PDF text from {pdf_path}")
@@ -1500,9 +1526,29 @@ def analyze_paper_background(job_id, pdf_path):
             "artifacts": artifacts
         })
         
+        # Stage 1 complete
+        stage1_duration = int((time.time() - stage1_start) * 1000)
+        emit_event(job_id, {
+            "step": "stage_1_complete",
+            "stage": "paper_analysis",
+            "message": "Stage 1 Complete: Paper analyzed",
+            "progress": 40,
+            "stage_duration_ms": stage1_duration
+        })
+        app.logger.info(f"[{job_id}] STAGE 1 COMPLETE in {stage1_duration}ms")
+        
+        # ===== STAGE 2: CODE EXECUTION =====
+        stage2_start = time.time()
         # Step 3: Run agents for GitHub repos
         github_artifacts = [a for a in artifacts if a.get("type") == "github_repo" and a.get("url")]
         app.logger.info(f"[{job_id}] Step 3: Identified {len(github_artifacts)} GitHub repositories to analyze")
+        
+        emit_event(job_id, {
+            "step": "stage_2_starting",
+            "stage": "code_execution",
+            "message": "Stage 2: Executing Code...",
+            "progress": 40
+        })
         
         agent_results = []
         if github_artifacts:
@@ -1542,9 +1588,44 @@ def analyze_paper_background(job_id, pdf_path):
                         "status": "failed",
                         "error": str(e)
                     })
+        else:
+            # No GitHub artifacts to analyze
+            app.logger.info(f"[{job_id}] No GitHub artifacts to analyze")
+            emit_event(job_id, {
+                "step": "no_agents_needed",
+                "message": "No code artifacts to execute"
+            })
+        
+        # Stage 2 complete
+        stage2_duration = int((time.time() - stage2_start) * 1000)
+        emit_event(job_id, {
+            "step": "stage_2_complete",
+            "stage": "code_execution",
+            "message": "Stage 2 Complete: Code executed",
+            "progress": 80,
+            "stage_duration_ms": stage2_duration
+        })
+        app.logger.info(f"[{job_id}] STAGE 2 COMPLETE in {stage2_duration}ms")
+        
+        # ===== STAGE 3: REPRODUCIBILITY EVALUATION =====
+        stage3_start = time.time()
+        emit_event(job_id, {
+            "step": "stage_3_starting",
+            "stage": "reproducibility_evaluation",
+            "message": "Stage 3: Evaluating Reproducibility...",
+            "progress": 80
+        })
+        
+        # Trigger evaluation in background thread
+        # (This will emit stage_3_complete when done)
+        threading.Thread(
+            target=evaluate_reproducibility_aspects,
+            args=(job_id, stage3_start),
+            daemon=True
+        ).start()
         
         # Step 4: Prepare report
-        app.logger.info(f"[{job_id}] Step 4: Generating final report")
+        app.logger.info(f"[{job_id}] Step 4: Background evaluation triggered")
         report = {
             "code_found": len(artifacts) > 0,
             "artifacts": artifacts,

@@ -11,6 +11,11 @@
 // State
 let currentJobId = null;
 let eventSource = null;
+let stages = {
+  paper_analysis: { name: '📄 Paper Analysis', status: 'pending', start: null, duration: null },
+  code_execution: { name: '⚙️ Code Execution', status: 'pending', start: null, duration: null },
+  reproducibility_evaluation: { name: '📊 Evaluation', status: 'pending', start: null, duration: null }
+};
 
 // DOM Elements
 const pdfInput = document.getElementById("pdfInput");
@@ -87,6 +92,12 @@ async function handleAnalyzeClick() {
         progressFill.style.width = "0%";
         progressText.textContent = "Uploading...";
         
+        // Reset stages
+        Object.keys(stages).forEach(key => {
+            stages[key] = { name: stages[key].name, status: 'pending', start: null, duration: null };
+        });
+        updateStagesUI();
+        
         // Upload PDF
         const response = await fetch("/upload", {
             method: "POST",
@@ -136,7 +147,20 @@ function connectToEventStream(jobId) {
 }
 
 function handleProgressEvent(event) {
-    const { step, message, progress, error, report, artifacts, status } = event;
+    const { step, message, progress, error, report, artifacts, status, stage, stage_duration_ms } = event;
+    
+    // Handle stage events
+    if (step.includes('stage_') && step.includes('starting')) {
+        stages[stage].status = 'active';
+        stages[stage].start = Date.now();
+        updateStagesUI();
+    }
+    
+    if (step.includes('stage_') && step.includes('complete')) {
+        stages[stage].status = 'complete';
+        stages[stage].duration = stage_duration_ms;
+        updateStagesUI();
+    }
     
     // Update progress bar
     if (progress !== undefined) {
@@ -144,11 +168,13 @@ function handleProgressEvent(event) {
         progressText.textContent = `${Math.round(progress)}%`;
     }
     
-    // Add to log
-    if (error) {
-        logError(`[${step}] ${message}`);
-    } else {
-        addLog(`[${step}] ${message}`);
+    // Add to log (skip stage starting/complete events)
+    if (!step.includes('stage_')) {
+        if (error) {
+            logError(`[${step}] ${message}`);
+        } else {
+            addLog(`[${step}] ${message}`);
+        }
     }
     
     // Handle completion
@@ -164,6 +190,35 @@ function handleProgressEvent(event) {
         eventSource.close();
         analyzeBtn.disabled = false;
     }
+}
+
+function updateStagesUI() {
+    const stageMap = {
+        paper_analysis: { id: 'stage1', icon: 'stage1Icon', time: 'stage1Time' },
+        code_execution: { id: 'stage2', icon: 'stage2Icon', time: 'stage2Time' },
+        reproducibility_evaluation: { id: 'stage3', icon: 'stage3Icon', time: 'stage3Time' }
+    };
+    
+    Object.entries(stages).forEach(([key, stage]) => {
+        const map = stageMap[key];
+        const iconEl = document.getElementById(map.icon);
+        const timeEl = document.getElementById(map.time);
+        
+        if (stage.status === 'complete') {
+            iconEl.textContent = '✓';
+            iconEl.className = 'text-2xl mb-1 text-green-500';
+            const seconds = (stage.duration / 1000).toFixed(1);
+            timeEl.textContent = `${seconds}s`;
+        } else if (stage.status === 'active') {
+            iconEl.textContent = '▶';
+            iconEl.className = 'text-2xl mb-1 text-orange-500 animate-pulse';
+            timeEl.textContent = 'running...';
+        } else {
+            iconEl.textContent = '○';
+            iconEl.className = 'text-2xl mb-1';
+            timeEl.textContent = 'pending';
+        }
+    });
 }
 
 function addLog(message) {
