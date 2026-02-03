@@ -35,6 +35,7 @@ UPLOAD_FOLDER = Path("uploads")
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 DATABASE = "reproducibility.db"
 MAX_PDF_SIZE = 100 * 1024 * 1024  # 100MB
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-1")
 
 # In-memory event queues for SSE connections
 # {job_id: [events]}
@@ -160,7 +161,7 @@ Paper text:
 
     try:
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model=CLAUDE_MODEL,
             max_tokens=2000,
             messages=[{
                 "role": "user",
@@ -418,7 +419,7 @@ Start now. What's your first action?
 """
         
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model=CLAUDE_MODEL,
             max_tokens=500,
             messages=[{
                 "role": "user",
