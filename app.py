@@ -936,6 +936,15 @@ Paper text:
 # Flask Routes - Core API
 # ============================================================================
 
+@app.after_request
+def set_cache_headers(response):
+    """Disable caching for static files (especially JS/CSS)."""
+    if request.path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
 @app.route("/")
 def index():
     """Home page - upload form."""
