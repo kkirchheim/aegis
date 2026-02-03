@@ -250,8 +250,117 @@ function handleAnalysisComplete(report) {
         return;
     }
     
-    displayReport(report);
+    // Add completion card with "View Full Results" button
+    let html = `
+        <div class="card bg-success text-success-content shadow-lg mb-6">
+            <div class="card-body">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="card-title">✓ Analysis Complete</h3>
+                        <p>Your reproducibility analysis is ready</p>
+                    </div>
+                    <button class="btn btn-success-content gap-2" onclick="window.location.href='/results/${currentJobId}'">
+                        <span>→</span>
+                        <span>View Full Results</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Get existing report HTML
+    const reportHtml = getReportHtml(report);
+    
+    reportContent.innerHTML = html + reportHtml;
     loadJobsHistory();
+}
+
+function getReportHtml(report) {
+    let html = "";
+    
+    // Status Badge (for agent completion)
+    if (report.status) {
+        const statusClass = report.status === "success" ? "success" : "error";
+        const statusEmoji = report.status === "success" ? "✓" : "✗";
+        const statusText = report.status === "success" ? "Reproducibility Check Passed" : "Reproducibility Check Failed";
+        html += `
+            <div class="status-badge ${statusClass}">
+                ${statusEmoji} ${statusText}
+            </div>
+        `;
+        
+        // Add completion message
+        if (report.message) {
+            html += `
+                <div class="report-section">
+                    <h4>Analysis Result</h4>
+                    <p style="line-height: 1.6; color: #555;">${escapeHtml(report.message)}</p>
+                </div>
+            `;
+        }
+        
+        // Add reproducibility score if available
+        if (report.reproducibility_score !== undefined) {
+            const percentage = Math.round(report.reproducibility_score * 100);
+            const scoreClass = percentage >= 80 ? "success" : percentage >= 50 ? "warning" : "error";
+            html += `
+                <div class="report-section">
+                    <h4>Reproducibility Score</h4>
+                    <div class="reproducibility-check">
+                        <span class="check-label">Score</span>
+                        <span class="check-value ${scoreClass}">${percentage}%</span>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    // Code Found Badge (for paper analysis)
+    if (report.code_found !== undefined) {
+        const codeStatus = report.code_found ? "found" : "not-found";
+        const codeEmoji = report.code_found ? "✓" : "✗";
+        html += `
+            <div class="status-badge ${codeStatus}">
+                ${codeEmoji} Code Artifacts: ${report.code_found ? "Found" : "Not Found"}
+            </div>
+        `;
+    }
+    
+    // Artifacts Section
+    if (report.artifacts && report.artifacts.length > 0) {
+        html += `
+            <div class="report-section">
+                <h4>Code Artifacts Found</h4>
+                <ul class="artifact-list">
+        `;
+        
+        for (const artifact of report.artifacts) {
+            html += `
+                <li class="artifact-item">
+                    <div class="artifact-url">🔗 ${escapeHtml(artifact.url)}</div>
+                    <div class="artifact-type">${escapeHtml(artifact.type || "unknown")}</div>
+                    ${artifact.description ? `<div class="artifact-description">${escapeHtml(artifact.description)}</div>` : ""}
+                </li>
+            `;
+        }
+        
+        html += `
+                </ul>
+            </div>
+        `;
+    }
+    
+    // Summary
+    if (report.summary) {
+        html += `
+            <div class="report-section">
+                <h4>Summary</h4>
+                <p style="line-height: 1.6; color: #555;">${escapeHtml(report.summary)}</p>
+            </div>
+        `;
+    }
+    
+    return html;
 }
 
 function displayReport(report) {

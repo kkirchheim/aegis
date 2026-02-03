@@ -177,7 +177,7 @@ function renderJobs() {
 // ============================================================================
 
 function viewJob(jobId) {
-    window.location.href = `/reports/${jobId}`;
+    window.location.href = `/results/${jobId}`;
 }
 
 // ============================================================================

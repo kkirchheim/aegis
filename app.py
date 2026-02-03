@@ -168,6 +168,49 @@ def init_db():
         )
     """)
     
+    # Cache tables for pipeline stages
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS cache_paper_analysis (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pdf_hash TEXT UNIQUE NOT NULL,
+            extracted_text TEXT,
+            claimed_results JSON,
+            methodology TEXT,
+            dependencies TEXT,
+            dataset_description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS cache_code_execution (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            repo_url TEXT NOT NULL,
+            repo_hash TEXT NOT NULL,
+            commands_run TEXT,
+            stdout_combined TEXT,
+            actual_results JSON,
+            dependencies_used TEXT,
+            errors_summary TEXT,
+            discovered_files JSON,
+            test_info TEXT,
+            randomness_info TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(repo_url, repo_hash)
+        )
+    """)
+    
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS cache_evaluation (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            paper_hash TEXT NOT NULL,
+            code_hash TEXT NOT NULL,
+            evaluations JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(paper_hash, code_hash)
+        )
+    """)
+    
     conn.commit()
     conn.close()
 
@@ -763,6 +806,12 @@ def detail_page(job_id):
     return render_template("detail.html", job_id=job_id)
 
 
+@app.route("/results/<job_id>")
+def results_page(job_id):
+    """Serve results page for a job (alias for detail)."""
+    return render_template("detail.html", job_id=job_id)
+
+
 @app.route("/job/<job_id>", methods=["DELETE"])
 def delete_job(job_id):
     """Delete a job and all related data."""
@@ -799,6 +848,65 @@ def delete_job(job_id):
         
     except Exception as e:
         app.logger.error(f"[{job_id}] Failed to delete job: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# Cache Management
+# ============================================================================
+
+@app.route("/api/cache/stats", methods=["GET"])
+def cache_stats():
+    """Get cache statistics."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        c.execute("SELECT COUNT(*) as count FROM cache_paper_analysis")
+        paper_row = c.fetchone()
+        paper_count = paper_row["count"] if paper_row else 0
+        
+        c.execute("SELECT COUNT(*) as count FROM cache_code_execution")
+        code_row = c.fetchone()
+        code_count = code_row["count"] if code_row else 0
+        
+        c.execute("SELECT COUNT(*) as count FROM cache_evaluation")
+        eval_row = c.fetchone()
+        eval_count = eval_row["count"] if eval_row else 0
+        
+        total = paper_count + code_count + eval_count
+        app.logger.info(f"Cache stats: paper={paper_count}, code={code_count}, eval={eval_count}, total={total}")
+        
+        conn.close()
+        
+        return jsonify({
+            "paper_analysis": paper_count,
+            "code_execution": code_count,
+            "evaluation": eval_count,
+            "total": total
+        })
+    except Exception as e:
+        app.logger.error(f"Failed to get cache stats: {e}", exc_info=True)
+        return jsonify({"paper_analysis": 0, "code_execution": 0, "evaluation": 0, "total": 0, "error": str(e)}), 200
+
+
+@app.route("/api/cache/clear", methods=["DELETE"])
+def cache_clear():
+    """Clear all cache tables."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        c.execute("DELETE FROM cache_paper_analysis")
+        c.execute("DELETE FROM cache_code_execution")
+        c.execute("DELETE FROM cache_evaluation")
+        conn.commit()
+        conn.close()
+        
+        app.logger.info("Cache cleared successfully")
+        return jsonify({"ok": True, "message": "Cache cleared"})
+    except Exception as e:
+        app.logger.error(f"Failed to clear cache: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -1383,8 +1491,8 @@ Return ONLY valid JSON (no markdown, no explanation, just JSON):
         discovered_files_list = execution_details.get("discovered_files", [])
         app.logger.info(f"[{job_id}] === Evaluation Context ===")
         app.logger.info(f"[{job_id}] Discovered files ({len(discovered_files_list)} total): {discovered_files_list[:20]}")
-        app.logger.info(f"[{job_id}] Test info: {execution_details.get('test_info', 'N/A')[:100]}")
-        app.logger.info(f"[{job_id}] Randomness info: {execution_details.get('randomness_info', 'N/A')[:100]}")
+        app.logger.info(f"[{job_id}] Test info: {(execution_details.get('test_info') or 'N/A')[:100]}")
+        app.logger.info(f"[{job_id}] Randomness info: {(execution_details.get('randomness_info') or 'N/A')[:100]}")
         app.logger.info(f"[{job_id}] Calling Claude for aspect evaluation...")
         
         response = client.messages.create(
@@ -1393,35 +1501,7 @@ Return ONLY valid JSON (no markdown, no explanation, just JSON):
             messages=[{
                 "role": "user",
                 "content": prompt
-            }],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "reproducibility_evaluation",
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "evaluations": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "aspect_id": {"type": "string"},
-                                        "name": {"type": "string"},
-                                        "status": {"type": "string", "enum": ["pass", "partial", "fail"]},
-                                        "paper_supports": {"type": "boolean"},
-                                        "code_supports": {"type": "boolean"},
-                                        "evidence": {"type": "string"},
-                                        "conclusion": {"type": "string"}
-                                    },
-                                    "required": ["aspect_id", "name", "status", "paper_supports", "code_supports", "evidence", "conclusion"]
-                                }
-                            }
-                        },
-                        "required": ["evaluations"]
-                    }
-                }
-            }
+            }]
         )
         
         response_text = response.content[0].text

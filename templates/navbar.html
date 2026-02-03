@@ -17,7 +17,7 @@
             <span class="hidden sm:inline">Checker</span>
         </a>
     </div>
-    
+
     <div class="navbar-center hidden lg:flex">
         <ul class="menu menu-horizontal px-1">
             <li><a href="/" class="gap-2"><span>📤</span> Upload</a></li>
@@ -25,7 +25,7 @@
             <li><a href="/about" class="gap-2"><span>ℹ️</span> About</a></li>
         </ul>
     </div>
-    
+
     <div class="navbar-end px-4 gap-2">
         <a href="https://github.com/kkirchheim/paper-reproducibility" target="_blank" class="btn btn-ghost btn-sm gap-1">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
@@ -33,8 +33,57 @@
             </svg>
             <span class="hidden sm:inline">GitHub</span>
         </a>
+        <button class="btn btn-sm btn-ghost" onclick="openCacheModal()">
+            <span>💾</span>
+        </button>
         <button class="btn btn-sm btn-ghost" onclick="toggleTheme()">
             <span id="themeIcon">🌙</span>
         </button>
     </div>
+
+    <!-- Cache Management Modal -->
+    <dialog id="cacheModal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">💾 Cache Management</h3>
+
+            <div class="stats stats-vertical shadow mb-4 w-full">
+                <div class="stat">
+                    <div class="stat-title">Paper Analysis Cache</div>
+                    <div class="stat-value text-sm" id="cacheStatPaper">-</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Code Execution Cache</div>
+                    <div class="stat-value text-sm" id="cacheStatCode">-</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Evaluation Cache</div>
+                    <div class="stat-value text-sm" id="cacheStatEval">-</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title font-bold">Total Cached Items</div>
+                    <div class="stat-value text-lg" id="cacheStatTotal">-</div>
+                </div>
+            </div>
+
+            <p class="text-sm text-base-content/60 mb-4">
+                <span id="cacheInfoText">Caching speeds up analysis by reusing results from previous runs.</span>
+                <span id="cacheEmptyNote" class="block mt-2 italic text-base-content/40">No cached results yet. Results will be cached after your first analysis.</span>
+            </p>
+
+            <div class="modal-action">
+                <button class="btn btn-error gap-2" onclick="clearCache()">
+                    <span>🗑️</span>
+                    <span>Clear Cache</span>
+                </button>
+                <form method="dialog">
+                    <button class="btn">Close</button>
+                </form>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button></button>
+        </form>
+    </dialog>
 </div>
+
+<script src="{{ url_for('static', filename='cache.js') }}"></script>
