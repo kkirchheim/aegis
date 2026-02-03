@@ -35,40 +35,35 @@
     </style>
 </head>
 <body class="bg-base-100">
-    <!-- Header -->
-    <div class="navbar bg-base-200 shadow-md sticky top-0 z-50">
-        <div class="flex-1 px-4">
-            <h1 class="text-2xl font-bold flex items-center gap-2">
-                <span>📄</span>
-                <span class="text-primary">Paper Reproducibility</span>
-                <span>Checker</span>
-            </h1>
-        </div>
-        <div class="flex-none px-4">
-            <button class="btn btn-sm btn-ghost" onclick="toggleTheme()">
-                <span id="themeIcon">🌙</span>
-            </button>
-        </div>
-    </div>
+    {% include 'navbar.html' %}
 
     <!-- Main Container -->
     <div class="container mx-auto px-4 py-8 max-w-5xl">
         
+        <!-- Hero Section -->
+        <section class="mb-12 text-center">
+            <h1 class="text-4xl font-bold mb-4">Analyze Your Paper's Reproducibility</h1>
+            <p class="text-xl text-base-content/70 mb-8">
+                Upload a scientific paper and get an instant reproducibility assessment across 15 metrics.
+            </p>
+        </section>
+
         <!-- Upload Section -->
         <section id="uploadSection" class="mb-8">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2">
-                        <span>1️⃣</span>
-                        <span>Upload Paper</span>
+                        <span>📤</span>
+                        <span>Upload PDF</span>
                     </h2>
                     
                     <div class="upload-area" id="uploadArea">
                         <input type="file" id="pdfInput" accept=".pdf" />
                         <label for="pdfInput" class="upload-label cursor-pointer">
-                            <div class="text-5xl mb-2">📤</div>
+                            <div class="text-5xl mb-2">📑</div>
                             <div class="text-lg font-semibold">Click to upload PDF</div>
                             <div class="text-sm text-base-content/60">or drag and drop</div>
+                            <div class="text-xs text-base-content/50 mt-2">Max 100MB</div>
                         </label>
                     </div>
                     
@@ -87,7 +82,7 @@
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2">
-                        <span>2️⃣</span>
+                        <span>⚙️</span>
                         <span>Analysis Progress</span>
                     </h2>
                     
@@ -130,24 +125,6 @@
         <!-- Report Section -->
         <section id="reportSection" class="mb-8" style="display: none;">
             <div id="reportContent"></div>
-        </section>
-
-        <!-- Jobs History -->
-        <section id="historySection" class="mb-8">
-            <div class="card bg-base-100 shadow-lg">
-                <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2">
-                        <span>📚</span>
-                        <span>Previous Analyses</span>
-                    </h2>
-                    
-                    <div id="jobsList" class="space-y-2">
-                        <div id="noJobs" class="text-center py-8 text-base-content/60">
-                            <p>No previous analyses yet</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </section>
 
     </div>

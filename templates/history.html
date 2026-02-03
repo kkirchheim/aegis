@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis History - Paper Reproducibility Checker</title>
+    
+    <!-- Tailwind CSS + DaisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+    
+    <style>
+        :root {
+            --primary: #ffa500;
+            --secondary: #4ade80;
+            --accent: #f87171;
+        }
+        
+        html[data-theme="light"] {
+            color-scheme: light;
+        }
+    </style>
+</head>
+<body class="bg-base-100">
+    {% include 'navbar.html' %}
+
+    <!-- Main Container -->
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        
+        <!-- Header -->
+        <section class="mb-8">
+            <h1 class="text-3xl font-bold mb-4">Analysis History</h1>
+            <p class="text-base-content/70">Browse and search all your previous analyses</p>
+        </section>
+
+        <!-- Search & Filter Section -->
+        <section class="mb-8">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>🔍</span>
+                        <span>Search & Filter</span>
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Search by filename -->
+                        <div>
+                            <label class="label">
+                                <span class="label-text">Filename</span>
+                            </label>
+                            <input type="text" id="searchInput" placeholder="Search by filename..." class="input input-bordered w-full" />
+                        </div>
+                        
+                        <!-- Filter by status -->
+                        <div>
+                            <label class="label">
+                                <span class="label-text">Status</span>
+                            </label>
+                            <select id="statusFilter" class="select select-bordered w-full">
+                                <option value="">All</option>
+                                <option value="completed">✓ Completed</option>
+                                <option value="failed">✗ Failed</option>
+                                <option value="processing">⏳ Processing</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Filter by score -->
+                        <div>
+                            <label class="label">
+                                <span class="label-text">Min Score</span>
+                            </label>
+                            <select id="scoreFilter" class="select select-bordered w-full">
+                                <option value="">Any score</option>
+                                <option value="80">80% or higher</option>
+                                <option value="60">60% or higher</option>
+                                <option value="40">40% or higher</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Sort Options -->
+                    <div class="mt-4 flex gap-2 flex-wrap">
+                        <span class="text-sm text-base-content/60">Sort by:</span>
+                        <button id="sortDate" class="btn btn-sm btn-outline gap-1">📅 Date</button>
+                        <button id="sortScore" class="btn btn-sm btn-outline gap-1">📊 Score</button>
+                        <button id="sortName" class="btn btn-sm btn-outline gap-1">A-Z Name</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section>
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>📚</span>
+                        <span id="resultCount">Loading...</span>
+                    </h2>
+                    
+                    <!-- Jobs Table -->
+                    <div id="jobsList" class="space-y-3">
+                        <div class="text-center py-8 text-base-content/60">
+                            <div class="loading loading-spinner"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Empty State -->
+                    <div id="emptyState" style="display: none;" class="text-center py-12">
+                        <div class="text-5xl mb-4">📭</div>
+                        <p class="text-lg text-base-content/60">No analyses found</p>
+                        <p class="text-sm text-base-content/50 mb-4">Try adjusting your filters or <a href="/" class="link link-primary">upload a new paper</a></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Theme Toggle Script -->
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+        
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+    </script>
+
+    <script src="{{ url_for('static', filename='history.js') }}"></script>
+</body>
+</html>

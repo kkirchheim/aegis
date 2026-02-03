@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About - Paper Reproducibility Checker</title>
+    
+    <!-- Tailwind CSS + DaisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+    
+    <style>
+        :root {
+            --primary: #ffa500;
+            --secondary: #4ade80;
+            --accent: #f87171;
+        }
+        
+        html[data-theme="light"] {
+            color-scheme: light;
+        }
+    </style>
+</head>
+<body class="bg-base-100">
+    {% include 'navbar.html' %}
+
+    <!-- Main Container -->
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        
+        <!-- Hero Section -->
+        <section class="mb-12 text-center">
+            <h1 class="text-4xl font-bold mb-4">Paper Reproducibility Checker</h1>
+            <p class="text-xl text-base-content/70">
+                An AI-powered tool for evaluating the reproducibility of scientific research
+            </p>
+        </section>
+
+        <!-- What is Reproducibility? -->
+        <section class="mb-12">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>❓</span>
+                        <span>What is Reproducibility?</span>
+                    </h2>
+                    <p class="text-base-content/70">
+                        Scientific reproducibility means that the same experimental results can be obtained again 
+                        by following the same methodology. A reproducible paper clearly documents:
+                    </p>
+                    <ul class="list-disc list-inside space-y-2 mt-4 text-base-content/70">
+                        <li><strong>Methodology:</strong> How the experiment was conducted</li>
+                        <li><strong>Data:</strong> Where and how to obtain the datasets used</li>
+                        <li><strong>Code:</strong> The source code that implements the methodology</li>
+                        <li><strong>Dependencies:</strong> Exact versions of libraries and tools</li>
+                        <li><strong>Environment:</strong> Hardware, OS, and Python version specifications</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works -->
+        <section class="mb-12">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>⚙️</span>
+                        <span>How It Works</span>
+                    </h2>
+                    
+                    <div class="steps steps-vertical lg:steps-horizontal w-full">
+                        <div class="step step-primary">
+                            <div class="step-content">
+                                <h3 class="font-semibold">📄 Upload</h3>
+                                <p class="text-sm text-base-content/70">Upload your PDF paper</p>
+                            </div>
+                        </div>
+                        <div class="step step-primary">
+                            <div class="step-content">
+                                <h3 class="font-semibold">🔍 Analyze</h3>
+                                <p class="text-sm text-base-content/70">AI extracts code artifacts & methodology</p>
+                            </div>
+                        </div>
+                        <div class="step step-primary">
+                            <div class="step-content">
+                                <h3 class="font-semibold">⚡ Execute</h3>
+                                <p class="text-sm text-base-content/70">Run code in isolated sandbox</p>
+                            </div>
+                        </div>
+                        <div class="step step-primary">
+                            <div class="step-content">
+                                <h3 class="font-semibold">📊 Evaluate</h3>
+                                <p class="text-sm text-base-content/70">Get reproducibility score & details</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 15 Reproducibility Aspects -->
+        <section class="mb-12">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>✓</span>
+                        <span>15 Reproducibility Aspects</span>
+                    </h2>
+                    
+                    <div class="grid md:grid-cols-2 gap-6 mt-4">
+                        <!-- Tier 1 -->
+                        <div class="card bg-error/10 border border-error/30">
+                            <div class="card-body p-4">
+                                <h3 class="font-semibold flex items-center gap-2">
+                                    <span>🔴</span>
+                                    <span>Critical (5)</span>
+                                </h3>
+                                <ul class="text-sm space-y-1 mt-2 text-base-content/70">
+                                    <li>✓ Dependencies Pinned</li>
+                                    <li>✓ Results Reproducible</li>
+                                    <li>✓ Hyperparameters Documented</li>
+                                    <li>✓ Dataset Available</li>
+                                    <li>✓ Environment Documented</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <!-- Tier 2 -->
+                        <div class="card bg-warning/10 border border-warning/30">
+                            <div class="card-body p-4">
+                                <h3 class="font-semibold flex items-center gap-2">
+                                    <span>🟠</span>
+                                    <span>High Value (4)</span>
+                                </h3>
+                                <ul class="text-sm space-y-1 mt-2 text-base-content/70">
+                                    <li>✓ Test Suite Present</li>
+                                    <li>✓ Config File Present</li>
+                                    <li>✓ Documentation Quality</li>
+                                    <li>✓ Randomness Controlled</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <!-- Tier 3 -->
+                        <div class="card col-span-1 md:col-span-2 bg-info/10 border border-info/30">
+                            <div class="card-body p-4">
+                                <h3 class="font-semibold flex items-center gap-2">
+                                    <span>🟡</span>
+                                    <span>Nice-to-Have (6)</span>
+                                </h3>
+                                <div class="grid md:grid-cols-3 gap-2 mt-2 text-sm text-base-content/70">
+                                    <div>✓ License Specified</div>
+                                    <div>✓ Continuous Integration</div>
+                                    <div>✓ Data Versioning</div>
+                                    <div>✓ Computational Requirements</div>
+                                    <div>✓ Output Format Documented</div>
+                                    <div>✓ Python Version Compatibility</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Technology -->
+        <section class="mb-12">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>🛠️</span>
+                        <span>Technology</span>
+                    </h2>
+                    
+                    <div class="grid md:grid-cols-2 gap-6 mt-4 text-sm">
+                        <div>
+                            <h3 class="font-semibold mb-2 flex items-center gap-2">
+                                <span>🧠</span>
+                                AI & Analysis
+                            </h3>
+                            <ul class="space-y-1 text-base-content/70">
+                                <li>• Claude 3 (Anthropic API)</li>
+                                <li>• Multi-source evaluation</li>
+                                <li>• Natural language understanding</li>
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h3 class="font-semibold mb-2 flex items-center gap-2">
+                                <span>🐳</span>
+                                Execution
+                            </h3>
+                            <ul class="space-y-1 text-base-content/70">
+                                <li>• Docker containerization</li>
+                                <li>• Isolated sandboxes</li>
+                                <li>• Resource limits (2GB RAM, 2 CPU)</li>
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h3 class="font-semibold mb-2 flex items-center gap-2">
+                                <span>⚡</span>
+                                Backend
+                            </h3>
+                            <ul class="space-y-1 text-base-content/70">
+                                <li>• Flask web framework</li>
+                                <li>• SQLite database</li>
+                                <li>• Server-Sent Events (SSE)</li>
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h3 class="font-semibold mb-2 flex items-center gap-2">
+                                <span>🎨</span>
+                                Frontend
+                            </h3>
+                            <ul class="space-y-1 text-base-content/70">
+                                <li>• Tailwind CSS</li>
+                                <li>• DaisyUI components</li>
+                                <li>• Dark mode support</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Links & Resources -->
+        <section class="mb-12">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>📚</span>
+                        <span>Resources</span>
+                    </h2>
+                    
+                    <div class="space-y-2 mt-4">
+                        <a href="https://github.com/kkirchheim/paper-reproducibility" target="_blank" class="btn btn-outline gap-2 w-full justify-start">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v 3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"></path>
+                            </svg>
+                            <span>View on GitHub</span>
+                        </a>
+                        
+                        <a href="/history" class="btn btn-outline gap-2 w-full justify-start">
+                            <span>📚</span>
+                            <span>View Your Analyses</span>
+                        </a>
+                        
+                        <a href="/" class="btn btn-primary gap-2 w-full justify-start">
+                            <span>📤</span>
+                            <span>Analyze a Paper</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="text-center py-8 text-sm text-base-content/50">
+            <p>Paper Reproducibility Checker • Built with ❤️ • Open Source</p>
+        </footer>
+
+    </div>
+
+    <!-- Theme Toggle Script -->
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+        
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+    </script>
+</body>
+</html>

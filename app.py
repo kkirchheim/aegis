@@ -499,8 +499,20 @@ Paper text:
 
 @app.route("/")
 def index():
-    """Home page."""
+    """Home page - upload form."""
     return render_template("index.html")
+
+
+@app.route("/history")
+def history():
+    """History page - browse past analyses."""
+    return render_template("history.html")
+
+
+@app.route("/about")
+def about():
+    """About page - project information."""
+    return render_template("about.html")
 
 
 @app.route("/upload", methods=["POST"])
