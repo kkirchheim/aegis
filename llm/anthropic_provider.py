@@ -36,13 +36,18 @@ class AnthropicProvider(LLMProvider):
         temperature: float = 0.7
     ) -> str:
         """Get text completion from Claude."""
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system,
-            messages=messages
-        )
+        kwargs = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": messages
+        }
+        
+        # Only include system if provided
+        if system:
+            kwargs["system"] = system
+        
+        response = self.client.messages.create(**kwargs)
         return response.content[0].text
     
     def stream(
@@ -53,13 +58,18 @@ class AnthropicProvider(LLMProvider):
         temperature: float = 0.7
     ) -> Generator[str, None, None]:
         """Stream text completion from Claude."""
-        with self.client.messages.stream(
-            model=self.model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system,
-            messages=messages
-        ) as stream:
+        kwargs = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": messages
+        }
+        
+        # Only include system if provided
+        if system:
+            kwargs["system"] = system
+        
+        with self.client.messages.stream(**kwargs) as stream:
             for text in stream.text_stream:
                 yield text
     
