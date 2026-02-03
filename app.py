@@ -433,7 +433,7 @@ def spawn_agent_container(job_id, repo_url):
                 "REPO_URL": repo_url,
                 "JOB_ID": job_id,
                 "BACKEND_URL": backend_url,
-                "ANTHROPIC_API_KEY": api_key
+                "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", "")
             },
             mem_limit="2g",
             memswap_limit="2g",
