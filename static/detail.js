@@ -847,7 +847,7 @@ function streamChatResponse() {
                 messageDiv.innerHTML = `
                     <div class="flex gap-2">
                         <div class="font-semibold text-sm text-primary">Assistant:</div>
-                        <div class="text-sm flex-1 bg-base-200 rounded whitespace-pre-wrap" style="padding: 4px 8px !important;">
+                        <div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important; white-space: normal;">
                             ${escapeHtml(assistantMessage.trim())}
                         </div>
                     </div>
@@ -882,7 +882,7 @@ function addChatMessageToUI(role, content) {
     if (role === 'user') {
         messageDiv.innerHTML = `
             <div class="flex gap-2 justify-end">
-                <div class="text-sm flex-1 max-w-md bg-primary text-primary-content rounded whitespace-pre-wrap" style="padding: 4px 8px !important;">
+                <div class="text-sm flex-1 max-w-md bg-primary text-primary-content rounded" style="padding: 4px 8px !important; white-space: normal;">
                     ${escapeHtml(content)}
                 </div>
                 <div class="font-semibold text-sm">You:</div>
@@ -898,7 +898,7 @@ function addChatMessageToUI(role, content) {
         messageDiv.innerHTML = `
             <div class="flex gap-2">
                 <div class="font-semibold text-sm text-primary">Assistant:</div>
-                <div class="text-sm flex-1 bg-base-200 rounded whitespace-pre-wrap" style="padding: 4px 8px !important;">
+                <div class="text-sm flex-1 bg-base-200 rounded" style="padding: 4px 8px !important; white-space: normal;">
                     ${escapeHtml(content.trim())}
                 </div>
             </div>
