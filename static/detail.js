@@ -230,12 +230,12 @@ function renderChecklist() {
             
             const tierInfo = tierLabels[tier];
             html += `
-                <div class="mt-6">
-                    <h3 class="text-lg font-semibold flex items-center gap-2 mb-4">
+                <div class="mt-4">
+                    <h3 class="text-sm font-semibold flex items-center gap-2 mb-2">
                         <span>${tierInfo.emoji}</span>
                         <span>${tierInfo.label}</span>
                     </h3>
-                    <div class="space-y-3">
+                    <div class="space-y-1">
             `;
             
             for (const eval_item of items) {
@@ -244,32 +244,20 @@ function renderChecklist() {
                 const badgeColor = status === "pass" ? "badge-success" : status === "partial" ? "badge-warning" : "badge-error";
                 
                 html += `
-                    <div class="card bg-base-200">
-                        <div class="card-body p-4">
-                            <div class="flex justify-between items-start gap-4">
-                                <div class="flex gap-3 flex-1">
-                                    <span class="text-xl">${icon}</span>
-                                    <div>
-                                        <h4 class="font-semibold">${escapeHtml(eval_item.name)}</h4>
-                                        <p class="text-xs text-base-content/60 mt-1">${escapeHtml(eval_item.evidence)}</p>
-                                    </div>
-                                </div>
-                                <div class="badge ${badgeColor} gap-1">
-                                    ${escapeHtml(status)}
-                                </div>
+                    <div class="collapse collapse-arrow bg-base-200 border border-base-300">
+                        <input type="checkbox" class="peer" />
+                        <div class="collapse-title flex items-center gap-3 p-3 min-h-fit">
+                            <span class="text-lg">${icon}</span>
+                            <span class="font-medium text-sm flex-1">${escapeHtml(eval_item.name)}</span>
+                            <div class="badge ${badgeColor} badge-sm">
+                                ${escapeHtml(status)}
                             </div>
-                            
-                            <div class="collapse mt-3">
-                                <input type="checkbox" class="peer" />
-                                <div class="collapse-title text-sm font-semibold cursor-pointer text-primary peer-checked:bg-base-300 rounded">
-                                    View Evidence
-                                </div>
-                                <div class="collapse-content text-sm space-y-2 peer-checked:bg-base-300 rounded">
-                                    <p><strong>Paper supports:</strong> ${eval_item.paper_supports ? "✓ Yes" : "✗ No"}</p>
-                                    <p><strong>Code supports:</strong> ${eval_item.code_supports ? "✓ Yes" : "✗ No"}</p>
-                                    <p><strong>Conclusion:</strong> ${escapeHtml(eval_item.conclusion)}</p>
-                                </div>
-                            </div>
+                        </div>
+                        <div class="collapse-content p-3 space-y-2 text-sm bg-base-100">
+                            <p><strong>Evidence:</strong> ${escapeHtml(eval_item.evidence)}</p>
+                            <p><strong>Paper supports:</strong> ${eval_item.paper_supports ? "✓ Yes" : "✗ No"}</p>
+                            <p><strong>Code supports:</strong> ${eval_item.code_supports ? "✓ Yes" : "✗ No"}</p>
+                            <p><strong>Conclusion:</strong> ${escapeHtml(eval_item.conclusion)}</p>
                         </div>
                     </div>
                 `;
