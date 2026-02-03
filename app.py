@@ -317,7 +317,9 @@ def emit_event(job_id, event_dict):
     with event_queues_lock:
         if job_id in event_queues:
             event_queues[job_id].append(event_dict)
-            app.logger.info(f"[{job_id}] Event: {event_dict['step']} - {event_dict['message']}")
+            step = event_dict.get("step", "unknown")
+            msg = event_dict.get("message", event_dict.get("content", ""))
+            app.logger.info(f"[{job_id}] Event: {step} - {msg[:100]}")
 
 
 def build_agent_image():
