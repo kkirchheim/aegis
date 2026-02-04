@@ -143,7 +143,14 @@ def events(job_id):
         return jsonify({"error": "Access denied"}), 403
     
     def generate():
-        # First, send all historical events from database
+        # CREATE QUEUE FIRST - before any events are sent
+        # This captures events emitted during historical event sending
+        q = []
+        with event_queues_lock:
+            event_queues[job_id] = q
+        print(f"[{job_id}] Queue registered immediately")
+        
+        # Then send all historical events from database
         from services.job_service import get_job_events
         try:
             print(f"[{job_id}] Loading historical events from DB...")
@@ -157,11 +164,6 @@ def events(job_id):
             print(f"[{job_id}] Error loading historical events: {e}")
             import traceback
             traceback.print_exc()
-        
-        # Then create queue for new events
-        q = []
-        with event_queues_lock:
-            event_queues[job_id] = q
         
         try:
             print(f"[{job_id}] Starting to listen for new events")
