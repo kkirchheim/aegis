@@ -24,10 +24,19 @@
         .btn-secondary { background-color: #ef4444; border-color: #ef4444; color: white; }
         .btn-secondary:hover { background-color: #dc2626; }
         
-        /* Progress bar */
-        .progress-primary { background-color: #0068b4; }
-        .progress-primary::-webkit-progress-value { background-color: #0068b4; }
-        .progress-primary::-moz-progress-bar { background-color: #0068b4; }
+        /* Progress bar - filled portion blue, unfilled gray */
+        .progress-primary { 
+            background-color: #e5e7eb; 
+        }
+        .progress-primary::-webkit-progress-bar {
+            background-color: #e5e7eb;
+        }
+        .progress-primary::-webkit-progress-value { 
+            background-color: #0068b4; 
+        }
+        .progress-primary::-moz-progress-bar { 
+            background-color: #0068b4; 
+        }
         
         /* Steps component */
         .step-content { text-align: left !important; }
@@ -172,6 +181,14 @@
                                 <span class="label-text">Max Iterations</span>
                             </label>
                             <input type="number" id="maxIterations" class="input input-bordered w-full" value="3" min="1" max="10" step="1" />
+                        </div>
+                        
+                        <!-- Storage Limit -->
+                        <div>
+                            <label class="label">
+                                <span class="label-text">Storage Limit (GB)</span>
+                            </label>
+                            <input type="number" id="storageLimit" class="input input-bordered w-full" value="10" min="1" max="100" step="1" />
                         </div>
                     </div>
                     

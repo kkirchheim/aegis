@@ -28,9 +28,19 @@
         #deleteBtn:hover { background-color: #dc2626; }
         
         /* Progress bar */
-        .progress-primary { background-color: #0068b4; }
-        .progress-primary::-webkit-progress-value { background-color: #0068b4; }
-        .progress-primary::-moz-progress-bar { background-color: #0068b4; }
+        /* Progress bar - filled portion blue, unfilled gray */
+        .progress-primary { 
+            background-color: #e5e7eb; 
+        }
+        .progress-primary::-webkit-progress-bar {
+            background-color: #e5e7eb;
+        }
+        .progress-primary::-webkit-progress-value { 
+            background-color: #0068b4; 
+        }
+        .progress-primary::-moz-progress-bar { 
+            background-color: #0068b4; 
+        }
         
         /* Steps component */
         .step-content { text-align: left; }
@@ -60,6 +70,36 @@
                 <span>🗑️</span>
                 <span>Delete</span>
             </button>
+
+            <!-- User Menu Dropdown -->
+            {% if session.get('username') %}
+            <div class="dropdown dropdown-end">
+                <button tabindex="0" class="btn btn-ghost btn-sm gap-2">
+                    <span>👤</span>
+                    <span class="hidden sm:inline text-sm">{{ session.get('username') }}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+                <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                    <li class="menu-title">
+                        <span class="text-xs">{{ session.get('username') }}</span>
+                    </li>
+                    <li><a href="/" class="gap-2"><span>📤</span> Upload Paper</a></li>
+                    <li><a href="/history" class="gap-2"><span>📚</span> History</a></li>
+                    <li><a href="/about" class="gap-2"><span>ℹ️</span> About</a></li>
+                    <li><hr class="my-1"></li>
+                    <li>
+                        <form action="/logout" method="POST" style="padding: 0; margin: 0;">
+                            <button type="submit" class="gap-2 text-error">
+                                <span>🚪</span>
+                                <span>Logout</span>
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+            {% endif %}
         </div>
     </div>
 

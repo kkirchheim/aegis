@@ -151,11 +151,32 @@ function renderJobs() {
         const abstract = job.abstract ? `<p class="text-sm text-base-content/70 line-clamp-2 mt-2 mb-2">${escapeHtml(job.abstract)}</p>` : '';
         const createdDate = new Date(job.created_at).toLocaleDateString();
         const createdTime = new Date(job.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const pageCount = job.num_pages ? `📄 ${job.num_pages} page${job.num_pages !== 1 ? 's' : ''}` : '';
+        
+        // Build thumbnail HTML
+        let thumbnailHtml = '';
+        if (job.thumbnail_path) {
+            thumbnailHtml = `
+                <div class="flex-shrink-0 hidden sm:block">
+                    <img src="/${job.thumbnail_path}" alt="PDF thumbnail" class="w-24 h-32 object-cover rounded shadow-md" onerror="this.style.display='none'">
+                </div>
+            `;
+        }
+        
+        // Fallback placeholder icon if no thumbnail
+        if (!job.thumbnail_path) {
+            thumbnailHtml = `
+                <div class="flex-shrink-0 hidden sm:flex items-center justify-center w-24 h-32 bg-base-300 rounded shadow-md text-2xl">
+                    📄
+                </div>
+            `;
+        }
         
         html += `
             <div class="card card-compact bg-base-200 hover:shadow-lg transition-shadow cursor-pointer" onclick="viewJob('${job.id}')">
                 <div class="card-body p-4">
                     <div class="flex justify-between items-start gap-4">
+                        ${thumbnailHtml}
                         <div class="flex-1">
                             <div class="font-semibold text-base flex items-center gap-2 mb-1">
                                 <span class="text-lg">${statusIcon}</span>
@@ -163,8 +184,9 @@ function renderJobs() {
                                 <span class="badge ${statusBadge} badge-sm flex-shrink-0">${status}</span>
                             </div>
                             ${abstract}
-                            <div class="text-xs text-base-content/60">
-                                ${createdDate} at ${createdTime}
+                            <div class="text-xs text-base-content/60 flex items-center gap-3 flex-wrap">
+                                <span>${createdDate} at ${createdTime}</span>
+                                ${pageCount ? `<span class="text-base-content/70">${pageCount}</span>` : ''}
                             </div>
                         </div>
                     </div>

@@ -16,10 +16,51 @@
         .btn-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
         .btn-primary:hover { background-color: #004d8f; }
         .btn-primary:disabled { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .badge-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .link-primary { color: #0068b4; }
+        
+        /* Dark mode specific styles for better readability */
+        html[data-theme="dark"] .input,
+        html[data-theme="dark"] .input:focus {
+            background-color: #2a2a2a;
+            border-color: #444;
+            color: #e0e0e0;
+        }
+        
+        html[data-theme="dark"] .input::placeholder {
+            color: #999;
+        }
+        
+        html[data-theme="dark"] .label-text {
+            color: #e0e0e0;
+        }
+        
+        html[data-theme="dark"] .divider {
+            background-color: #444;
+            color: #999;
+        }
+        
+        html[data-theme="dark"] .link {
+            color: #0068b4;
+        }
+        
+        html[data-theme="dark"] .link:hover {
+            color: #0080d4;
+        }
+        
+        /* Theme toggle button */
+        .theme-toggle-btn {
+            @apply btn btn-sm btn-ghost gap-2;
+        }
     </style>
 </head>
 <body class="bg-base-100">
-    <div class="min-h-screen flex items-center justify-center px-4">
+    <!-- Theme Toggle Button (Top Right) -->
+    <button class="theme-toggle-btn fixed top-4 right-4 z-50" onclick="toggleTheme()" title="Toggle dark/light mode">
+        <span id="themeIcon">🌙</span>
+    </button>
+
+    <div class="min-h-screen flex items-center justify-center px-4 pt-20">
         <div class="card bg-base-100 shadow-lg max-w-md w-full">
             <div class="card-body">
                 <h1 class="card-title text-2xl gap-2">
@@ -63,6 +104,22 @@
     </div>
     
     <script>
+        // Theme Toggle Function
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+        
+        // Load saved theme on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        });
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             

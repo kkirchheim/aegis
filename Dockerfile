@@ -2,11 +2,13 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install git and build essentials (needed for some pip packages)
+# Install dependencies
 RUN apt-get update && apt-get install -y \
     git \
     build-essential \
     curl \
+    imagemagick \
+    ghostscript \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements

@@ -14,6 +14,7 @@ import time
 import docker
 import hashlib
 import secrets
+import subprocess
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -55,10 +56,15 @@ except Exception as e:
 # Configuration
 UPLOAD_FOLDER = Path("uploads")
 UPLOAD_FOLDER.mkdir(exist_ok=True)
+THUMBNAILS_FOLDER = UPLOAD_FOLDER / "thumbnails"
+THUMBNAILS_FOLDER.mkdir(exist_ok=True)
 DATABASE = "reproducibility.db"
 MAX_PDF_SIZE = 100 * 1024 * 1024  # 100MB
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000")
 AGENT_CONTEXT_LIMIT = int(os.getenv("AGENT_CONTEXT_LIMIT", "10000"))
+
+# Caching Configuration
+ENABLE_CACHING = os.getenv('ENABLE_CACHING', 'false').lower() == 'true'
 
 # In-memory event queues for SSE connections
 # {job_id: [events]}
@@ -94,6 +100,20 @@ def require_auth(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def require_admin(f):
+    """Decorator to require admin authentication on routes."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({"error": "Unauthorized"}), 401
+        
+        username = session.get('username')
+        if username != 'admin':
+            return jsonify({"error": "Forbidden - admin access required"}), 403
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
 # ============================================================================
 # Database Initialization
 # ============================================================================
@@ -103,6 +123,34 @@ def get_db():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def create_default_admin_user():
+    """Create default admin user if it doesn't exist."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Check if admin user exists
+        c.execute("SELECT id FROM users WHERE username = ?", ("admin",))
+        admin_user = c.fetchone()
+        
+        if admin_user:
+            app.logger.info("✓ Admin user already exists")
+        else:
+            # Create admin user with default password
+            password_hash = hash_password("admin")
+            c.execute(
+                "INSERT INTO users (username, email, password_hash, is_active) VALUES (?, ?, ?, 1)",
+                ("admin", "admin@example.com", password_hash)
+            )
+            conn.commit()
+            app.logger.info("✓ Default admin user created (username: admin, password: admin)")
+            app.logger.warning("⚠️  Please change the admin password on first login!")
+        
+        conn.close()
+    except Exception as e:
+        app.logger.error(f"Failed to create default admin user: {e}")
 
 
 def init_db():
@@ -117,9 +165,17 @@ def init_db():
             username TEXT UNIQUE NOT NULL,
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
+            is_active BOOLEAN DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    
+    # Migration: Add is_active column to existing users table
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 0")
+        app.logger.info("Added is_active column to users table")
+    except:
+        pass  # Column already exists
     
     c.execute("""
         CREATE TABLE IF NOT EXISTS jobs (
@@ -290,6 +346,20 @@ def init_db():
     except:
         pass
     
+    # Add thumbnail_path to jobs table (migration for PDF thumbnails)
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN thumbnail_path TEXT")
+        app.logger.info("Added thumbnail_path column to jobs table")
+    except:
+        pass
+    
+    # Add num_pages to jobs table (migration for PDF page count)
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN num_pages INTEGER")
+        app.logger.info("Added num_pages column to jobs table")
+    except:
+        pass
+    
     c.execute("""
         CREATE TABLE IF NOT EXISTS cache_code_execution (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -400,13 +470,28 @@ def build_agent_image():
         return False
 
 
-def spawn_agent_container(job_id, repo_url):
+def spawn_agent_container(job_id, repo_url, config=None):
     """
     Spawn Docker container to run agent on repository.
+    
+    Args:
+        job_id: Unique job identifier
+        repo_url: Repository URL to analyze
+        config: Optional configuration dict with limits:
+            - storage_limit: Storage limit in GB (1-100, default 10)
+            - memory_limit: Memory in MB
+            - cpu_limit: CPU cores
     
     Agent will clone repo, analyze it, and call backend API.
     Caches results by repo URL to skip redundant executions.
     """
+    # Use defaults if config not provided
+    if config is None:
+        config = {
+            "storage_limit": 10,
+            "memory_limit": 2048,
+            "cpu_limit": 2
+        }
     # Check cache: if we've analyzed this repo before, reuse results
     cache_key = hashlib.md5(repo_url.encode()).hexdigest()
     conn = get_db()
@@ -477,10 +562,24 @@ def spawn_agent_container(job_id, repo_url):
             app.logger.warning(f"[{job_id}] Agent image not found, attempting build: {e}")
             build_agent_image()
         
+        # Validate and extract storage limit
+        storage_limit = config.get("storage_limit", 10)
+        try:
+            storage_limit = int(storage_limit)
+            if storage_limit < 1 or storage_limit > 100:
+                app.logger.warning(f"[{job_id}] Storage limit {storage_limit}GB out of range (1-100), using default 10GB")
+                storage_limit = 10
+        except (ValueError, TypeError):
+            app.logger.warning(f"[{job_id}] Invalid storage limit value, using default 10GB")
+            storage_limit = 10
+        
+        storage_limit_str = f"{storage_limit}g"
+        
         # Run agent container
         app.logger.info(f"[{job_id}] Starting container with:")
         app.logger.info(f"[{job_id}]   Memory: 2GB")
         app.logger.info(f"[{job_id}]   CPU: 2 cores (nano_cpus={int(2 * 1e9)})")
+        app.logger.info(f"[{job_id}]   Storage Limit: {storage_limit}GB")
         app.logger.info(f"[{job_id}]   Network: workspace_traefik (shared with Flask app)")
         
         # Note: nano_cpus = CPU count * 1e9 (1 CPU = 1e9 nano_cpus)
@@ -493,11 +592,13 @@ def spawn_agent_container(job_id, repo_url):
                 "REPO_URL": repo_url,
                 "JOB_ID": job_id,
                 "BACKEND_URL": backend_url,
-                "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", "")
+                "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
+                "STORAGE_LIMIT": storage_limit_str
             },
             mem_limit="2g",
             memswap_limit="2g",
             nano_cpus=int(2 * 1e9),  # 2 CPU cores
+            tmpfs={"/tmp": f"size={storage_limit_str}"},  # Limit /tmp storage
             # Add agent to workspace_traefik network (same as Flask app)
             # This allows agent to reach Flask app by container name
             network="workspace_traefik",
@@ -600,6 +701,62 @@ def extract_pdf_text(pdf_path, max_chars=50000):
         raise Exception(f"Failed to extract PDF: {str(e)}")
 
 
+def generate_pdf_thumbnail(pdf_path, job_id):
+    """Generate thumbnail from first page of PDF using ImageMagick.
+    
+    Args:
+        pdf_path: Path to PDF file
+        job_id: Job ID for naming and logging
+        
+    Returns:
+        Relative path to thumbnail file, or None if generation failed
+    """
+    try:
+        app.logger.info(f"[{job_id}] Generating thumbnail from PDF: {pdf_path}")
+        
+        # Generate output filename
+        thumbnail_filename = f"{job_id}.png"
+        thumbnail_path = THUMBNAILS_FOLDER / thumbnail_filename
+        
+        # Use ImageMagick to extract first page with proper PDF rendering
+        cmd = [
+            "magick",
+            "-density", "200",  # High density for quality
+            f"{pdf_path}[0]",  # First page only
+            "-colorspace", "sRGB",
+            "-alpha", "remove",
+            "-background", "white",  # White background instead of black
+            "-thumbnail", "512x512",  # Thumbnail size
+            "-strip",
+            "-quality", "85",
+            str(thumbnail_path)
+        ]
+        
+        app.logger.info(f"[{job_id}] Running ImageMagick: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode != 0:
+            app.logger.error(f"[{job_id}] ImageMagick failed: {result.stderr}")
+            return None
+        
+        if not thumbnail_path.exists():
+            app.logger.error(f"[{job_id}] Thumbnail file was not created: {thumbnail_path}")
+            return None
+        
+        # Return relative path for storage in database
+        relative_path = f"uploads/thumbnails/{thumbnail_filename}"
+        app.logger.info(f"[{job_id}] Thumbnail generated successfully: {relative_path} ({thumbnail_path.stat().st_size} bytes)")
+        
+        return relative_path
+    
+    except subprocess.TimeoutExpired:
+        app.logger.error(f"[{job_id}] Thumbnail generation timed out after 30 seconds")
+        return None
+    except Exception as e:
+        app.logger.error(f"[{job_id}] Failed to generate thumbnail: {str(e)}", exc_info=True)
+        return None
+
+
 def store_paper_analysis(job_id: str, paper_info: dict, pdf_text: str):
     """Store paper analysis for later evaluation."""
     try:
@@ -634,6 +791,10 @@ def get_cached_paper_analysis(pdf_hash: str):
     Check if we've analyzed this PDF before (by hash).
     Returns paper_info dict if cached, None otherwise.
     """
+    if not ENABLE_CACHING:
+        app.logger.debug(f"Cache read skipped: ENABLE_CACHING=false for PDF hash {pdf_hash[:8]}")
+        return None
+    
     try:
         conn = get_db()
         c = conn.cursor()
@@ -663,6 +824,10 @@ def store_paper_analysis_cache(pdf_hash: str, pdf_text: str, paper_info: dict):
     """
     Store paper analysis in cache for future reuse.
     """
+    if not ENABLE_CACHING:
+        app.logger.debug(f"Cache write skipped: ENABLE_CACHING=false for PDF hash {pdf_hash[:8]}")
+        return
+    
     try:
         conn = get_db()
         c = conn.cursor()
@@ -693,6 +858,10 @@ def get_cached_evaluation(paper_hash: str, code_hash: str):
     Check if we've evaluated this paper+code combination before.
     Returns evaluation dict if cached, None otherwise.
     """
+    if not ENABLE_CACHING:
+        app.logger.debug(f"Cache read skipped: ENABLE_CACHING=false for paper {paper_hash[:8]} + code {code_hash[:8]}")
+        return None
+    
     try:
         conn = get_db()
         c = conn.cursor()
@@ -713,6 +882,10 @@ def store_evaluation_cache(paper_hash: str, code_hash: str, evaluations: dict):
     """
     Store evaluation results in cache for future reuse.
     """
+    if not ENABLE_CACHING:
+        app.logger.debug(f"Cache write skipped: ENABLE_CACHING=false for paper {paper_hash[:8]} + code {code_hash[:8]}")
+        return
+    
     try:
         conn = get_db()
         c = conn.cursor()
@@ -994,6 +1167,31 @@ Paper text:
 # Flask Routes - Core API
 # ============================================================================
 
+@app.route("/uploads/thumbnails/<filename>")
+def serve_thumbnail(filename):
+    """Serve thumbnail image files."""
+    from flask import send_file, abort
+    
+    # Security: only allow thumbnail filenames (UUIDs.jpg or .png)
+    if not (filename.endswith('.jpg') or filename.endswith('.png')):
+        abort(404)
+    
+    thumbnail_path = THUMBNAILS_FOLDER / filename
+    
+    # Check if file exists
+    if not thumbnail_path.exists():
+        abort(404)
+    
+    # Verify it's actually a UUID filename
+    import re
+    if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png)$', filename):
+        abort(404)
+    
+    # Determine MIME type based on extension
+    mimetype = 'image/png' if filename.endswith('.png') else 'image/jpeg'
+    return send_file(str(thumbnail_path), mimetype=mimetype)
+
+
 @app.after_request
 def set_cache_headers(response):
     """Disable caching for static files (especially JS/CSS)."""
@@ -1034,21 +1232,20 @@ def register():
             conn.close()
             return jsonify({"error": "Username or email already exists"}), 400
         
-        # Create user
+        # Create user (inactive by default)
         password_hash = hash_password(password)
         c.execute(
-            "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+            "INSERT INTO users (username, email, password_hash, is_active) VALUES (?, ?, ?, 0)",
             (username, email, password_hash)
         )
         conn.commit()
         user_id = c.lastrowid
         conn.close()
         
-        # Log them in
-        session['user_id'] = user_id
-        session['username'] = username
-        
-        return jsonify({"message": "Registration successful", "redirect": "/"}), 201
+        return jsonify({
+            "message": "Account created. Awaiting activation by admin.",
+            "redirect": "/login"
+        }), 201
     
     return render_template("register.html")
 
@@ -1064,12 +1261,16 @@ def login():
         
         conn = get_db()
         c = conn.cursor()
-        c.execute("SELECT id, password_hash, username FROM users WHERE username = ?", (username,))
+        c.execute("SELECT id, password_hash, username, is_active FROM users WHERE username = ?", (username,))
         user = c.fetchone()
         conn.close()
         
         if not user or not verify_password(password, user[1]):
             return jsonify({"error": "Invalid username or password"}), 401
+        
+        # Check if user is active
+        if not user[3]:  # is_active is the 4th column (index 3)
+            return jsonify({"error": "Account not activated yet"}), 403
         
         # Log them in
         session['user_id'] = user[0]
@@ -1079,11 +1280,257 @@ def login():
     
     return render_template("login.html")
 
-@app.route("/logout", methods=["POST"])
+@app.route("/logout", methods=["POST", "GET"])
+@require_auth
 def logout():
-    """User logout."""
+    """User logout - clears session and redirects to login."""
     session.clear()
-    return jsonify({"message": "Logged out", "redirect": "/login"}), 200
+    return redirect("/login")
+
+# ============================================================================
+# Admin Routes
+# ============================================================================
+
+@app.route("/admin")
+@require_admin
+def admin_panel():
+    """Admin panel page - list all users."""
+    return render_template("admin.html")
+
+
+@app.route("/api/admin/users", methods=["GET"])
+@require_admin
+def get_all_users():
+    """Get list of all users (JSON) - admin only."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            SELECT id, username, email, is_active, created_at
+            FROM users
+            ORDER BY created_at DESC
+        """)
+        users = c.fetchall()
+        conn.close()
+        
+        return jsonify([dict(user) for user in users])
+    except Exception as e:
+        app.logger.error(f"Failed to get users: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/users/<int:user_id>/activate", methods=["POST"])
+@require_admin
+def activate_user(user_id):
+    """Activate a user - admin only."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Verify user exists
+        c.execute("SELECT id, username FROM users WHERE id = ?", (user_id,))
+        user = c.fetchone()
+        
+        if not user:
+            conn.close()
+            return jsonify({"error": "User not found"}), 404
+        
+        # Prevent deactivating admin (but allow re-activating)
+        # Admin is always active
+        c.execute("UPDATE users SET is_active = 1 WHERE id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        
+        app.logger.info(f"Admin activated user: {user['username']} (id: {user_id})")
+        return jsonify({"ok": True, "message": f"User {user['username']} activated"})
+    except Exception as e:
+        app.logger.error(f"Failed to activate user: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/users/<int:user_id>/deactivate", methods=["POST"])
+@require_admin
+def deactivate_user(user_id):
+    """Deactivate a user - admin only."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Verify user exists
+        c.execute("SELECT id, username FROM users WHERE id = ?", (user_id,))
+        user = c.fetchone()
+        
+        if not user:
+            conn.close()
+            return jsonify({"error": "User not found"}), 404
+        
+        # Prevent deactivating admin
+        if user['username'] == 'admin':
+            conn.close()
+            return jsonify({"error": "Cannot deactivate admin user"}), 400
+        
+        c.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        
+        app.logger.info(f"Admin deactivated user: {user['username']} (id: {user_id})")
+        return jsonify({"ok": True, "message": f"User {user['username']} deactivated"})
+    except Exception as e:
+        app.logger.error(f"Failed to deactivate user: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/users/<int:user_id>/delete", methods=["POST"])
+@require_admin
+def delete_user_admin(user_id):
+    """Delete a user - admin only."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Verify user exists
+        c.execute("SELECT id, username FROM users WHERE id = ?", (user_id,))
+        user = c.fetchone()
+        
+        if not user:
+            conn.close()
+            return jsonify({"error": "User not found"}), 404
+        
+        # Prevent deleting admin
+        if user['username'] == 'admin':
+            conn.close()
+            return jsonify({"error": "Cannot delete admin user"}), 400
+        
+        # Delete user's jobs and related data
+        c.execute("SELECT id FROM jobs WHERE user_id = ?", (user_id,))
+        jobs = c.fetchall()
+        
+        for job in jobs:
+            job_id = job[0]
+            # Delete PDF file
+            c.execute("SELECT pdf_path FROM jobs WHERE id = ?", (job_id,))
+            pdf_row = c.fetchone()
+            if pdf_row and pdf_row[0]:
+                pdf_file = Path(pdf_row[0])
+                if pdf_file.exists():
+                    pdf_file.unlink()
+            
+            # Delete job data
+            c.execute("DELETE FROM events WHERE job_id = ?", (job_id,))
+            c.execute("DELETE FROM artifacts WHERE job_id = ?", (job_id,))
+            c.execute("DELETE FROM aspect_evaluations WHERE job_id = ?", (job_id,))
+            c.execute("DELETE FROM execution_details WHERE job_id = ?", (job_id,))
+            c.execute("DELETE FROM paper_analysis WHERE job_id = ?", (job_id,))
+        
+        # Delete user
+        c.execute("DELETE FROM jobs WHERE user_id = ?", (user_id,))
+        c.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        
+        app.logger.info(f"Admin deleted user: {user['username']} (id: {user_id})")
+        return jsonify({"ok": True, "message": f"User {user['username']} deleted"})
+    except Exception as e:
+        app.logger.error(f"Failed to delete user: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/change-password")
+@require_auth
+def change_password_page():
+    """Change password page."""
+    if 'user_id' not in session:
+        return redirect("/login")
+    return render_template("change-password.html")
+
+
+@app.route("/api/change-password", methods=["POST"])
+@require_auth
+def api_change_password():
+    """Change password endpoint."""
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json()
+        
+        old_password = data.get("old_password", "").strip()
+        new_password = data.get("new_password", "").strip()
+        confirm_password = data.get("confirm_password", "").strip()
+        
+        # Validation
+        if not old_password or not new_password or not confirm_password:
+            return jsonify({"error": "All fields are required"}), 400
+        
+        if len(new_password) < 8:
+            return jsonify({"error": "New password must be at least 8 characters"}), 400
+        
+        if new_password != confirm_password:
+            return jsonify({"error": "New passwords don't match"}), 400
+        
+        # Get user from database
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+        user = c.fetchone()
+        
+        if not user:
+            conn.close()
+            return jsonify({"error": "User not found"}), 404
+        
+        # Verify old password
+        if not verify_password(old_password, user[0]):
+            conn.close()
+            return jsonify({"error": "Current password is incorrect"}), 400
+        
+        # Update password
+        new_hash = hash_password(new_password)
+        c.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
+        conn.commit()
+        conn.close()
+        
+        app.logger.info(f"User {user_id} changed password")
+        return jsonify({"ok": True, "message": "Password changed successfully"})
+    except Exception as e:
+        app.logger.error(f"Failed to change password: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/profile")
+@require_auth
+def profile():
+    """User profile page with account information."""
+    try:
+        user_id = session.get('user_id')
+        username = session.get('username')
+        
+        # Get user details from database
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT email, created_at FROM users WHERE id = ?", (user_id,))
+        user = c.fetchone()
+        conn.close()
+        
+        if not user:
+            return redirect("/login")
+        
+        email = user['email'] if user else None
+        created_at = user['created_at'] if user else None
+        
+        # Format created_at for display
+        if created_at:
+            # Parse ISO format and display in readable format
+            from datetime import datetime
+            try:
+                dt = datetime.fromisoformat(created_at)
+                created_at = dt.strftime('%B %d, %Y at %I:%M %p')
+            except:
+                pass  # Keep original if parsing fails
+        
+        return render_template("profile.html", 
+                             username=username, 
+                             email=email,
+                             created_at=created_at)
+    except Exception as e:
+        app.logger.error(f"Failed to load profile: {e}")
+        return redirect("/")
 
 @app.route("/")
 def index():
@@ -1108,6 +1555,7 @@ def about():
 
 
 @app.route("/upload", methods=["POST"])
+@require_auth
 def upload_pdf():
     """
     Upload PDF for analysis.
@@ -1115,10 +1563,6 @@ def upload_pdf():
     Returns:
         {"job_id": "...", "message": "..."}
     """
-    
-    # Check authentication
-    if 'user_id' not in session:
-        return jsonify({"error": "Unauthorized"}), 401
     
     user_id = session['user_id']
     
@@ -1148,12 +1592,25 @@ def upload_pdf():
     
     file.save(pdf_path)
     
+    # Extract page count from PDF
+    num_pages = None
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            num_pages = len(pdf.pages)
+        app.logger.info(f"[{job_id}] Extracted page count: {num_pages}")
+    except Exception as e:
+        app.logger.warning(f"[{job_id}] Failed to extract page count: {e}")
+        num_pages = None  # Store NULL if extraction fails
+    
+    # Generate thumbnail from PDF
+    thumbnail_path = generate_pdf_thumbnail(str(pdf_path), job_id)
+    
     # Store in DB
     conn = get_db()
     c = conn.cursor()
     c.execute(
-        "INSERT INTO jobs (id, status, pdf_path, pdf_filename, user_id) VALUES (?, ?, ?, ?, ?)",
-        (job_id, "pending", str(pdf_path), file.filename, user_id)
+        "INSERT INTO jobs (id, status, pdf_path, pdf_filename, user_id, thumbnail_path, num_pages) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (job_id, "pending", str(pdf_path), file.filename, user_id, thumbnail_path, num_pages)
     )
     conn.commit()
     conn.close()
@@ -1165,7 +1622,8 @@ def upload_pdf():
         "cpu_limit": int(request.form.get("cpu_limit", 4)),
         "memory_limit": int(request.form.get("memory_limit", 2048)),
         "runtime_limit": int(request.form.get("runtime_limit", 30)),
-        "max_iterations": int(request.form.get("max_iterations", 3))
+        "max_iterations": int(request.form.get("max_iterations", 3)),
+        "storage_limit": int(request.form.get("storage_limit", 10))
     }
     
     # Start background analysis thread
@@ -1183,12 +1641,25 @@ def upload_pdf():
 
 
 @app.route("/events/<job_id>")
+@require_auth
 def events(job_id):
     """
     Server-Sent Events endpoint for streaming job progress.
     
     Frontend opens EventSource connection here to receive live updates.
     """
+    
+    user_id = session.get('user_id')
+    
+    # Verify user has access to this job
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM jobs WHERE id = ?", (job_id,))
+    job = c.fetchone()
+    conn.close()
+    
+    if not job or job["user_id"] != user_id:
+        return jsonify({"error": "Access denied"}), 403
     
     def generate():
         # Create queue for this SSE connection
@@ -1228,8 +1699,11 @@ def events(job_id):
 
 
 @app.route("/job/<job_id>")
+@require_auth
 def get_job(job_id):
-    """Get job status and report."""
+    """Get job status and report - only for the job owner."""
+    
+    user_id = session.get('user_id')
     
     conn = get_db()
     c = conn.cursor()
@@ -1239,6 +1713,10 @@ def get_job(job_id):
     
     if not job:
         return jsonify({"error": "Job not found"}), 404
+    
+    # Verify user ownership
+    if job["user_id"] != user_id:
+        return jsonify({"error": "Access denied"}), 403
     
     response = {
         "id": job["id"],
@@ -1257,20 +1735,24 @@ def get_job(job_id):
 
 
 @app.route("/jobs")
+@require_auth
 def list_jobs():
-    """List all jobs (with summary)."""
+    """List all jobs for current user (with summary)."""
+    
+    user_id = session.get('user_id')
     
     conn = get_db()
     c = conn.cursor()
     c.execute("""
         SELECT 
-            j.id, j.status, j.pdf_filename, j.created_at, j.completed_at,
+            j.id, j.status, j.pdf_filename, j.created_at, j.completed_at, j.thumbnail_path, j.num_pages,
             p.title, p.abstract
         FROM jobs j
         LEFT JOIN paper_analysis p ON j.id = p.job_id
+        WHERE j.user_id = ?
         ORDER BY j.created_at DESC
         LIMIT 50
-    """)
+    """, (user_id,))
     jobs = c.fetchall()
     conn.close()
     
@@ -1278,8 +1760,11 @@ def list_jobs():
 
 
 @app.route("/api/job/<job_id>/full", methods=["GET"])
+@require_auth
 def get_job_full(job_id):
     """Get full job data including events, artifacts, and reproducibility aspects."""
+    
+    user_id = session.get('user_id')
     
     conn = get_db()
     c = conn.cursor()
@@ -1291,6 +1776,11 @@ def get_job_full(job_id):
     if not job:
         conn.close()
         return jsonify({"error": "Job not found"}), 404
+    
+    # Verify user ownership
+    if job["user_id"] != user_id:
+        conn.close()
+        return jsonify({"error": "Access denied"}), 403
     
     # Fetch all events
     c.execute("""
@@ -1348,32 +1838,64 @@ def get_job_full(job_id):
 
 
 @app.route("/reports/<job_id>")
+@require_auth
 def detail_page(job_id):
-    """Serve detail page for a job."""
+    """Serve detail page for a job - only for the job owner."""
+    user_id = session.get('user_id')
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM jobs WHERE id = ?", (job_id,))
+    job = c.fetchone()
+    conn.close()
+    
+    if not job or job["user_id"] != user_id:
+        return jsonify({"error": "Access denied"}), 403
+    
     return render_template("detail.html", job_id=job_id)
 
 
 @app.route("/results/<job_id>")
+@require_auth
 def results_page(job_id):
-    """Serve results page for a job (alias for detail)."""
+    """Serve results page for a job (alias for detail) - only for the job owner."""
+    user_id = session.get('user_id')
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM jobs WHERE id = ?", (job_id,))
+    job = c.fetchone()
+    conn.close()
+    
+    if not job or job["user_id"] != user_id:
+        return jsonify({"error": "Access denied"}), 403
+    
     return render_template("detail.html", job_id=job_id)
 
 
 @app.route("/job/<job_id>", methods=["DELETE"])
+@require_auth
 def delete_job(job_id):
-    """Delete a job and all related data."""
+    """Delete a job and all related data - only for the job owner."""
     
     try:
+        user_id = session.get('user_id')
+        
         conn = get_db()
         c = conn.cursor()
         
-        # Get job to find PDF path
-        c.execute("SELECT pdf_path FROM jobs WHERE id = ?", (job_id,))
+        # Get job to find PDF path and verify ownership
+        c.execute("SELECT pdf_path, user_id FROM jobs WHERE id = ?", (job_id,))
         job = c.fetchone()
         
         if not job:
             conn.close()
             return jsonify({"error": "Job not found"}), 404
+        
+        # Verify user ownership
+        if job["user_id"] != user_id:
+            conn.close()
+            return jsonify({"error": "Access denied"}), 403
         
         # Delete PDF file
         if job["pdf_path"]:
@@ -1403,6 +1925,7 @@ def delete_job(job_id):
 # ============================================================================
 
 @app.route("/api/cache/stats", methods=["GET"])
+@require_admin
 def cache_stats():
     """Get cache statistics from execution_details and paper_analysis."""
     try:
@@ -1441,6 +1964,7 @@ def cache_stats():
 
 
 @app.route("/api/cache/clear", methods=["DELETE"])
+@require_admin
 def cache_clear():
     """Clear all cached analysis data (jobs, execution details, evaluations)."""
     try:
@@ -1488,6 +2012,7 @@ def cache_clear():
 # ============================================================================
 
 @app.route("/api/job/<job_id>/chat", methods=["POST"])
+@require_auth
 def chat_with_paper(job_id):
     """
     User asks a question about the analyzed paper.
@@ -1499,6 +2024,7 @@ def chat_with_paper(job_id):
         {"ok": true}  (response streams via SSE)
     """
     
+    user_id = session.get('user_id')
     data = request.json
     user_message = data.get("message", "").strip()
     
@@ -1506,15 +2032,19 @@ def chat_with_paper(job_id):
         return jsonify({"error": "Empty message"}), 400
     
     try:
-        # Verify job exists and is complete
+        # Verify job exists, is complete, and user owns it
         conn = get_db()
         c = conn.cursor()
-        c.execute("SELECT status FROM jobs WHERE id = ?", (job_id,))
+        c.execute("SELECT status, user_id FROM jobs WHERE id = ?", (job_id,))
         job = c.fetchone()
         conn.close()
         
         if not job:
             return jsonify({"error": "Job not found"}), 404
+        
+        # Verify user ownership
+        if job["user_id"] != user_id:
+            return jsonify({"error": "Access denied"}), 403
         
         if job["status"] not in ["completed", "processing"]:
             return jsonify({"error": "Job analysis not complete"}), 400
@@ -1609,12 +2139,23 @@ def generate_chat_response(job_id: str, session_id: int, system_prompt: str, mes
 
 
 @app.route("/api/job/<job_id>/chat/history", methods=["GET"])
+@require_auth
 def get_chat_history_endpoint(job_id):
-    """Get chat history for a job."""
+    """Get chat history for a job - only for the job owner."""
+    
+    user_id = session.get('user_id')
     
     try:
         conn = get_db()
         c = conn.cursor()
+        
+        # Verify user owns this job
+        c.execute("SELECT user_id FROM jobs WHERE id = ?", (job_id,))
+        job = c.fetchone()
+        
+        if not job or job["user_id"] != user_id:
+            conn.close()
+            return jsonify({"error": "Access denied"}), 403
         
         # Get session
         c.execute("SELECT id FROM chat_sessions WHERE job_id = ?", (job_id,))
@@ -1636,12 +2177,23 @@ def get_chat_history_endpoint(job_id):
 
 
 @app.route("/api/job/<job_id>/chat/history", methods=["DELETE"])
+@require_auth
 def delete_chat_history(job_id):
-    """Delete all chat messages for a job."""
+    """Delete all chat messages for a job - only for the job owner."""
+    
+    user_id = session.get('user_id')
     
     try:
         conn = get_db()
         c = conn.cursor()
+        
+        # Verify user owns this job
+        c.execute("SELECT user_id FROM jobs WHERE id = ?", (job_id,))
+        job = c.fetchone()
+        
+        if not job or job["user_id"] != user_id:
+            conn.close()
+            return jsonify({"error": "Access denied"}), 403
         
         # Get session
         c.execute("SELECT id FROM chat_sessions WHERE job_id = ?", (job_id,))
@@ -2266,6 +2818,7 @@ Return ONLY valid JSON (no markdown, no explanation, just JSON):
             app.logger.info(f"[{job_id}] Cache hit for evaluation (paper: {paper_hash[:8]}, code: {code_hash[:8]})")
             emit_event(job_id, {
                 "step": "cache_hit_evaluation",
+                "stage": "reproducibility_evaluation",
                 "message": "Using cached evaluation results",
                 "progress": 85
             })
@@ -2455,6 +3008,7 @@ def analyze_paper_background(job_id, pdf_path, config=None):
         app.logger.info(f"[{job_id}] Step 1: Extracting PDF text from {pdf_path}")
         emit_event(job_id, {
             "step": "extracting_pdf",
+            "stage": "paper_analysis",
             "message": "Extracting text from PDF...",
             "progress": 10
         })
@@ -2463,6 +3017,7 @@ def analyze_paper_background(job_id, pdf_path, config=None):
         app.logger.info(f"[{job_id}] Successfully extracted {len(pdf_text)} characters from PDF")
         emit_event(job_id, {
             "step": "pdf_extracted",
+            "stage": "paper_analysis",
             "message": f"Extracted {len(pdf_text)} characters from PDF",
             "progress": 20
         })
@@ -2476,6 +3031,7 @@ def analyze_paper_background(job_id, pdf_path, config=None):
             app.logger.info(f"[{job_id}] Cache hit for PDF analysis")
             emit_event(job_id, {
                 "step": "cache_hit_paper",
+                "stage": "paper_analysis",
                 "message": "Using cached paper analysis",
                 "progress": 30
             })
@@ -2485,6 +3041,7 @@ def analyze_paper_background(job_id, pdf_path, config=None):
             app.logger.info(f"[{job_id}] Step 2: Parsing paper with {llm_provider.get_name()} (model: {llm_provider.get_model()})")
             emit_event(job_id, {
                 "step": "parsing_paper",
+                "stage": "paper_analysis",
                 "message": "Analyzing paper with Claude...",
                 "progress": 25
             })
@@ -2551,6 +3108,7 @@ def analyze_paper_background(job_id, pdf_path, config=None):
         if github_artifacts:
             emit_event(job_id, {
                 "step": "preparing_agents",
+                "stage": "code_execution",
                 "message": f"Preparing to analyze {len(github_artifacts)} GitHub repositories..."
             })
             
@@ -2567,12 +3125,13 @@ def analyze_paper_background(job_id, pdf_path, config=None):
                 app.logger.info(f"[{job_id}] [{i}/{len(github_artifacts)}] Spawning agent for {repo_url}")
                 emit_event(job_id, {
                     "step": "running_agent",
+                    "stage": "code_execution",
                     "message": f"[{i}/{len(github_artifacts)}] Running agent on {repo_url}",
                     "progress": 40 + int(50 * i / len(github_artifacts))
                 })
                 
                 try:
-                    spawn_agent_container(job_id, repo_url)
+                    spawn_agent_container(job_id, repo_url, config)
                     app.logger.info(f"[{job_id}] Agent container completed for {repo_url}")
                     agent_results.append({
                         "url": repo_url,
@@ -2590,6 +3149,7 @@ def analyze_paper_background(job_id, pdf_path, config=None):
             app.logger.info(f"[{job_id}] No GitHub artifacts to analyze")
             emit_event(job_id, {
                 "step": "no_agents_needed",
+                "stage": "code_execution",
                 "message": "No code artifacts to execute"
             })
         
@@ -2655,4 +3215,5 @@ def analyze_paper_background(job_id, pdf_path, config=None):
 
 if __name__ == "__main__":
     init_db()
+    create_default_admin_user()
     app.run(host="0.0.0.0", port=5000, debug=True)

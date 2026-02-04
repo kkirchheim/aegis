@@ -91,13 +91,14 @@ async function handleAnalyzeClick() {
     formData.append("memory_limit", document.getElementById("memoryLimit").value);
     formData.append("runtime_limit", document.getElementById("runtimeLimit").value);
     formData.append("max_iterations", document.getElementById("maxIterations").value);
+    formData.append("storage_limit", document.getElementById("storageLimit").value);
     
     try {
         analyzeBtn.disabled = true;
         progressSection.style.display = "block";
         reportSection.style.display = "none";
         progressLog.innerHTML = "";
-        progressFill.style.width = "0%";
+        progressFill.value = 0;
         progressText.textContent = "Uploading...";
         
         // Reset stages
@@ -170,10 +171,29 @@ function handleProgressEvent(event) {
         updateStagesUI();
     }
     
-    // Update progress bar
-    if (progress !== undefined) {
-        progressFill.value = Math.min(progress, 100);
-        progressText.textContent = `${Math.round(progress)}%`;
+    // Update progress bar based on completion events (3 stages = 33%, 66%, 100%)
+    let displayProgress = 0;
+    
+    // Use stage-based progress only for "complete" events
+    if (step.includes("_complete")) {
+        if (stage === "paper_analysis") {
+            displayProgress = 33;
+        } else if (stage === "code_execution") {
+            displayProgress = 66;
+        } else if (stage === "reproducibility_evaluation") {
+            displayProgress = 100;
+        }
+    } else if (progress === 100) {
+        // Final completion
+        displayProgress = 100;
+    } else if (progress !== undefined) {
+        // For intermediate events, use raw progress but cap at 32% for stage 1, 65% for stage 2
+        displayProgress = Math.min(progress, 100);
+    }
+    
+    if (displayProgress > 0) {
+        progressFill.value = displayProgress;
+        progressText.textContent = `${displayProgress}%`;
     }
     
     // Add to log (skip stage starting/complete events)

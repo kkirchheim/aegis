@@ -49,12 +49,12 @@ Result: Comprehensive reproducibility report scoring 15 key aspects.
 
 ## Documentation
 
-- **[Setup & Deployment](./docs/PROJECT_SETUP.md)** — Installation, Docker, production deployment
 - **[API Reference](./docs/API.md)** — Full API documentation and examples
 - **[Architecture](./docs/ARCHITECTURE.md)** — Technical design, database schema, caching strategy
+- **[Development](./docs/DEVELOPMENT.md)** — Local setup, environment variables, contribution workflow
 - **[Testing](./docs/TESTING.md)** — Running tests, test suite overview
-- **[Troubleshooting](./docs/DEBUGGING.md)** — Common issues and solutions
-- **[Development](./docs/DEVELOPMENT.md)** — Environment variables, local setup
+- **[Troubleshooting](./docs/TROUBLESHOOTING.md)** — Common issues and solutions
+- **[LLM Providers](./docs/LLM_PROVIDERS.md)** — Supported LLM providers and configuration
 
 ## Performance
 
@@ -63,6 +63,22 @@ Result: Comprehensive reproducibility report scoring 15 key aspects.
 - Evaluation: 10-15s
 - **Total: ~3-5 min per paper**
 - With caching: 1-2s on cache hit
+
+### Caching Configuration
+
+By default, **caching is disabled** to ensure fresh analyses. To enable caching:
+
+```bash
+export ENABLE_CACHING=true
+```
+
+**Cache behavior:**
+- **Disabled (default):** Each analysis computes fresh results, no cache reads/writes — useful for development and testing
+- **Enabled:** Results cached for identical PDFs and code combinations — 3x speedup on repeated analyses
+
+The cache stores:
+- Paper analyses (title, abstract, citations, methodology, datasets)
+- Evaluation results (reproducibility scores and metrics)
 
 ## License
 

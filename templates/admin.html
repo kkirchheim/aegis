@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Reproducibility Checker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.0.0/dist/full.min.css" rel="stylesheet" type="text/css" />
+</head>
+<body class="bg-base-100">
+    {% include "navbar.html" %}
+
+    <div class="container mx-auto p-4 mt-6">
+        <div class="flex items-center gap-2 mb-6">
+            <span class="text-3xl">👥</span>
+            <h1 class="text-3xl font-bold">Admin Panel</h1>
+        </div>
+
+        <!-- Users Table -->
+        <div class="bg-base-200 rounded-lg shadow-md overflow-x-auto">
+            <table class="table w-full">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-base-content/50">
+                            <span class="loading loading-spinner"></span> Loading users...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="emptyState" class="text-center py-8" style="display: none;">
+            <p class="text-base-content/50">No users found</p>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <dialog id="confirmDialog" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4" id="confirmTitle">Confirm Action</h3>
+            <p class="mb-6" id="confirmMessage">Are you sure?</p>
+            <div class="modal-action">
+                <button class="btn btn-error" onclick="confirmAction()">Yes, Proceed</button>
+                <button class="btn" onclick="document.getElementById('confirmDialog').close()">Cancel</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button></button>
+        </form>
+    </dialog>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="toast toast-top toast-end" style="display: none;">
+        <div class="alert alert-info">
+            <span id="notificationText">Operation successful</span>
+        </div>
+    </div>
+
+    <script>
+        let pendingAction = null;
+
+        // Load users on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            await loadUsers();
+        });
+
+        // Theme toggle from navbar
+        function toggleTheme() {
+            const html = document.querySelector('html');
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+
+        // Load theme from localStorage
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.querySelector('html').setAttribute('data-theme', savedTheme);
+
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/admin/users');
+                if (!response.ok) {
+                    showNotification('Failed to load users', 'error');
+                    return;
+                }
+
+                const users = await response.json();
+                renderUsers(users);
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showNotification('Error loading users', 'error');
+            }
+        }
+
+        function renderUsers(users) {
+            const tbody = document.getElementById('usersTableBody');
+            const emptyState = document.getElementById('emptyState');
+
+            if (users.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            tbody.innerHTML = users.map(user => `
+                <tr>
+                    <td>
+                        <div class="font-bold">${escapeHtml(user.username)}</div>
+                        ${user.username === 'admin' ? '<div class="text-xs text-warning">Admin</div>' : ''}
+                    </td>
+                    <td>${escapeHtml(user.email)}</td>
+                    <td>
+                        <span class="badge ${user.is_active ? 'badge-success' : 'badge-error'}">
+                            ${user.is_active ? '✓ Active' : '✗ Inactive'}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="text-sm text-base-content/60">
+                            ${new Date(user.created_at).toLocaleDateString()}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="flex gap-2">
+                            ${user.is_active 
+                                ? `<button class="btn btn-sm btn-warning" onclick="promptDeactivate(${user.id}, '${escapeHtml(user.username)}')">
+                                    Deactivate
+                                  </button>`
+                                : user.username !== 'admin'
+                                  ? `<button class="btn btn-sm btn-success" onclick="activateUser(${user.id}, '${escapeHtml(user.username)}')">
+                                    Activate
+                                    </button>`
+                                  : ''
+                            }
+                            ${user.username !== 'admin' 
+                                ? `<button class="btn btn-sm btn-error" onclick="promptDelete(${user.id}, '${escapeHtml(user.username)}')">
+                                    Delete
+                                  </button>`
+                                : ''
+                            }
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function promptDeactivate(userId, username) {
+            pendingAction = {
+                type: 'deactivate',
+                userId: userId,
+                username: username
+            };
+            document.getElementById('confirmTitle').textContent = 'Deactivate User?';
+            document.getElementById('confirmMessage').textContent = `Are you sure you want to deactivate ${username}?`;
+            document.getElementById('confirmDialog').showModal();
+        }
+
+        function promptDelete(userId, username) {
+            pendingAction = {
+                type: 'delete',
+                userId: userId,
+                username: username
+            };
+            document.getElementById('confirmTitle').textContent = 'Delete User?';
+            document.getElementById('confirmMessage').textContent = `Are you sure you want to permanently delete ${username}? This will also delete all their analysis jobs.`;
+            document.getElementById('confirmDialog').showModal();
+        }
+
+        async function confirmAction() {
+            if (!pendingAction) return;
+
+            const { type, userId, username } = pendingAction;
+            let endpoint = '';
+            let method = 'POST';
+
+            if (type === 'deactivate') {
+                endpoint = `/api/admin/users/${userId}/deactivate`;
+            } else if (type === 'delete') {
+                endpoint = `/api/admin/users/${userId}/delete`;
+            }
+
+            try {
+                const response = await fetch(endpoint, { method });
+                if (!response.ok) {
+                    const data = await response.json();
+                    showNotification(data.error || 'Operation failed', 'error');
+                } else {
+                    const action = type === 'deactivate' ? 'deactivated' : 'deleted';
+                    showNotification(`User ${username} ${action}`, 'success');
+                    await loadUsers();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showNotification('Error performing action', 'error');
+            }
+
+            document.getElementById('confirmDialog').close();
+            pendingAction = null;
+        }
+
+        async function activateUser(userId, username) {
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/activate`, { method: 'POST' });
+                if (!response.ok) {
+                    const data = await response.json();
+                    showNotification(data.error || 'Operation failed', 'error');
+                } else {
+                    showNotification(`User ${username} activated`, 'success');
+                    await loadUsers();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showNotification('Error activating user', 'error');
+            }
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            const text = document.getElementById('notificationText');
+            const alert = notification.querySelector('.alert');
+            
+            text.textContent = message;
+            alert.className = `alert alert-${type === 'error' ? 'error' : 'success'}`;
+            notification.style.display = 'block';
+            
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+
+        function openCacheModal() {
+            // Delegate to navbar cache modal
+            document.getElementById('cacheModal').showModal();
+        }
+    </script>
+</body>
+</html>
