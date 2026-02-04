@@ -593,7 +593,6 @@ def get_job_events_since(job_id):
                 "message": e.message,
                 "severity": e.severity,
                 "timestamp": e.timestamp.isoformat() + 'Z',
-                "progress": e.progress,
                 "duration_ms": e.stage_duration_ms
             }
             for e in events
