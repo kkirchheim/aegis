@@ -781,9 +781,27 @@ function updateStagesFromStage(currentStage) {
 }
 
 function handleLogEvent(event) {
-    const { step, message, severity } = event;
+    const { step, message, severity, stage_duration_ms } = event;
     
-    // Skip chat-related events and stage events (those are handled by polling)
+    // Capture stage durations for UI update
+    if (step && step.includes('stage_') && step.includes('complete')) {
+        if (stage_duration_ms) {
+            // Update stage time display
+            if (step.includes('stage_1')) {
+                const el = document.getElementById('stage1Time');
+                if (el) el.textContent = `${(stage_duration_ms / 1000).toFixed(1)}s`;
+            } else if (step.includes('stage_2')) {
+                const el = document.getElementById('stage2Time');
+                if (el) el.textContent = `${(stage_duration_ms / 1000).toFixed(1)}s`;
+            } else if (step.includes('stage_3')) {
+                const el = document.getElementById('stage3Time');
+                if (el) el.textContent = `${(stage_duration_ms / 1000).toFixed(1)}s`;
+            }
+        }
+        return;  // Skip logging stage events
+    }
+    
+    // Skip other stage events and chat events (those are handled by polling)
     if (step && (step.startsWith('chat_') || step === 'chat_error' || step.includes('stage_'))) {
         return;
     }

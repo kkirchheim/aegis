@@ -218,9 +218,25 @@ function updateProgressFromJob(job) {
 
 function handleLogEvent(event) {
     // SSE now only handles logs/events, not progress
-    const { step, message, error } = event;
+    const { step, message, error, stage_duration_ms } = event;
     
-    // Skip stage events (progress is handled by polling)
+    // Capture stage durations before skipping stage events
+    if (step && step.includes('stage_') && step.includes('complete')) {
+        if (stage_duration_ms) {
+            // Map stage number to internal stage key
+            if (step.includes('stage_1')) {
+                stages['paper_analysis'].duration = stage_duration_ms;
+            } else if (step.includes('stage_2')) {
+                stages['code_execution'].duration = stage_duration_ms;
+            } else if (step.includes('stage_3')) {
+                stages['reproducibility_evaluation'].duration = stage_duration_ms;
+            }
+            updateStagesUI();
+        }
+        return;  // Skip logging stage events
+    }
+    
+    // Skip other stage events (progress is handled by polling)
     if (step && step.includes('stage_')) {
         return;
     }
@@ -299,11 +315,17 @@ function updateStagesUI() {
         const iconEl = document.getElementById(map.icon);
         const timeEl = document.getElementById(map.time);
         
+        if (!iconEl || !timeEl) return;  // Skip if elements don't exist
+        
         if (stage.status === 'complete') {
             iconEl.textContent = '✓';
             iconEl.className = 'text-2xl mb-1 text-green-500';
-            const seconds = (stage.duration / 1000).toFixed(1);
-            timeEl.textContent = `${seconds}s`;
+            if (stage.duration) {
+                const seconds = (stage.duration / 1000).toFixed(1);
+                timeEl.textContent = `${seconds}s`;
+            } else {
+                timeEl.textContent = 'done';
+            }
         } else if (stage.status === 'active') {
             iconEl.textContent = '▶';
             iconEl.className = 'text-2xl mb-1 text-orange-500 animate-pulse';
