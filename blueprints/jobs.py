@@ -129,12 +129,13 @@ def upload_pdf():
 
 
 @jobs_bp.route("/events/<job_id>")
-@require_auth
 def events(job_id):
     """Server-Sent Events endpoint for streaming job progress."""
     import time
     
     user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Not authenticated"}), 401
     
     # Verify user has access
     job = get_job(job_id)

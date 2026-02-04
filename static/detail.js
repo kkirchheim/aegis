@@ -695,7 +695,7 @@ function setupSSEConnection() {
     
     // Connect to SSE only for live logs (not for progress)
     console.log(`[SSE] Connecting to /events/${JOB_ID}`);
-    eventSource = new EventSource(`/events/${JOB_ID}`);
+    eventSource = new EventSource(`/events/${JOB_ID}`, { withCredentials: true });
     
     let eventCount = 0;
     
@@ -1011,7 +1011,7 @@ async function sendChatMessage() {
 
 function streamChatResponse() {
     // Listen for chat response events from server
-    const eventSource = new EventSource(`/events/${JOB_ID}`);
+    const eventSource = new EventSource(`/events/${JOB_ID}`, { withCredentials: true });
     let assistantMessage = '';
     let messageDiv = null;
     
