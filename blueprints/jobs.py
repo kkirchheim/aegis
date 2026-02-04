@@ -166,22 +166,18 @@ def events(job_id):
         try:
             print(f"[{job_id}] Starting to listen for new events")
             sent_complete = False
-            timeout_count = 0
-            sse_timeout_seconds = int(os.environ.get('SSE_TIMEOUT_SECONDS', '5'))
-            timeout_count_max = sse_timeout_seconds * 10  # 0.1s sleep per iteration
             
-            while not sent_complete and timeout_count < timeout_count_max:
+            # Keep stream open indefinitely until job completes
+            while not sent_complete:
                 if q:
                     event = q.pop(0)
                     print(f"[{job_id}] Sending new event: {event.get('step')}")
                     yield f"data: {json.dumps(event)}\n\n"
-                    timeout_count = 0  # Reset timeout on event
                     
                     if event.get("step") == "complete" or event.get("step") == "error":
                         sent_complete = True
                 else:
                     time.sleep(0.1)
-                    timeout_count += 1
         
         finally:
             with event_queues_lock:
