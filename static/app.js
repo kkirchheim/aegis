@@ -34,17 +34,24 @@ const jobsList = document.getElementById("jobsList");
 // Upload Handling
 // ============================================================================
 
-pdfInput.addEventListener("change", updateUploadUI);
-uploadArea.addEventListener("dragover", handleDragOver);
-uploadArea.addEventListener("dragleave", handleDragLeave);
-uploadArea.addEventListener("drop", handleDrop);
-analyzeBtn.addEventListener("click", handleAnalyzeClick);
+// Only set up upload handlers if elements exist (only on index.html)
+if (pdfInput) pdfInput.addEventListener("change", updateUploadUI);
+if (uploadArea) {
+    uploadArea.addEventListener("dragover", handleDragOver);
+    uploadArea.addEventListener("dragleave", handleDragLeave);
+    uploadArea.addEventListener("drop", handleDrop);
+}
+if (analyzeBtn) analyzeBtn.addEventListener("click", handleAnalyzeClick);
 
 function updateUploadUI() {
+    if (!pdfInput) return;
     const file = pdfInput.files[0];
     if (file) {
         analyzeBtn.disabled = false;
-        uploadArea.querySelector(".text-lg").textContent = `✓ Selected: ${file.name}`;
+        const textEl = uploadArea?.querySelector(".text-lg");
+        if (textEl) {
+            textEl.textContent = `✓ Selected: ${file.name}`;
+        }
     }
 }
 
@@ -158,17 +165,19 @@ function connectToEventStream(jobId) {
 function handleProgressEvent(event) {
     const { step, message, progress, error, report, artifacts, status, stage, stage_duration_ms } = event;
     
-    // Handle stage events
-    if (step.includes('stage_') && step.includes('starting')) {
-        stages[stage].status = 'active';
-        stages[stage].start = Date.now();
-        updateStagesUI();
-    }
-    
-    if (step.includes('stage_') && step.includes('complete')) {
-        stages[stage].status = 'complete';
-        stages[stage].duration = stage_duration_ms;
-        updateStagesUI();
+    // Handle stage events (only if stage exists in our stages object)
+    if (stage && stages[stage]) {
+        if (step && step.includes('stage_') && step.includes('starting')) {
+            stages[stage].status = 'active';
+            stages[stage].start = Date.now();
+            updateStagesUI();
+        }
+        
+        if (step && step.includes('stage_') && step.includes('complete')) {
+            stages[stage].status = 'complete';
+            stages[stage].duration = stage_duration_ms;
+            updateStagesUI();
+        }
     }
     
     // Update progress bar based on completion events (3 stages = 33%, 66%, 100%)
@@ -191,7 +200,7 @@ function handleProgressEvent(event) {
         displayProgress = Math.min(progress, 100);
     }
     
-    if (displayProgress > 0) {
+    if (displayProgress > 0 && progressFill && progressText) {
         progressFill.value = displayProgress;
         progressText.textContent = `${displayProgress}%`;
     }
@@ -550,6 +559,9 @@ function escapeHtml(text) {
 // ============================================================================
 
 async function loadJobsHistory() {
+    // Only load if jobsList element exists (only on history page)
+    if (!jobsList) return;
+    
     try {
         const response = await fetch("/jobs");
         const jobs = await response.json();
