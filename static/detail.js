@@ -367,15 +367,20 @@ function renderChecklist() {
             // TIER 1 (CRITICAL) - 5 aspects
             "dependencies_pinned": 1,
             "results_reproducible": 1,
+            "result_reproducibility": 1,  // Alternate name
             "hyperparameters_documented": 1,
+            "parameter_documentation": 1,  // Alternate name
             "dataset_available": 1,
+            "dataset_availability": 1,  // Alternate name
             "environment_documented": 1,
             // TIER 2 (HIGH VALUE) - 4 aspects
             "test_suite_present": 2,
             "config_file_present": 2,
             "documentation_quality": 2,
             "randomness_controlled": 2,
+            "random_seed_control": 2,  // Alternate name
             // TIER 3 (NICE-TO-HAVE) - 6 aspects
+            "code_availability": 3,
             "license_specified": 3,
             "continuous_integration": 3,
             "data_versioning": 3,
