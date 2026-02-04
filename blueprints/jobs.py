@@ -20,12 +20,8 @@ from database import get_db
 
 jobs_bp = Blueprint('jobs', __name__)
 
-# Event queues for SSE
-event_queues = {}
-event_queues_lock = threading.Lock()
-
-# Event dispatcher
-_dispatcher = EventDispatcher(event_queues=event_queues, event_queues_lock=event_queues_lock)
+# Event dispatcher (no longer uses event_queues - all data via /api/job/<id>/full)
+_dispatcher = EventDispatcher()
 
 # Pipeline orchestrator
 _orchestrator = PipelineOrchestrator(dispatcher=_dispatcher)
@@ -99,12 +95,6 @@ def upload_pdf():
     # Create job in database
     create_job(job_id, str(pdf_path), file.filename, user_id, thumbnail_path, num_pages)
     
-    # Pre-create queue BEFORE background thread starts
-    # This ensures all events get captured from the start
-    with event_queues_lock:
-        event_queues[job_id] = []
-    print(f"[{job_id}] Queue pre-created for new job")
-    
     # Get configuration
     config = {
         "container": request.form.get("container", "python"),
@@ -132,75 +122,6 @@ def upload_pdf():
         "job_id": job_id,
         "message": "Paper uploaded successfully. Analysis starting..."
     }), 202
-
-
-@jobs_bp.route("/events/<job_id>")
-def events(job_id):
-    """Server-Sent Events endpoint for streaming job progress."""
-    import time
-    
-    user_id = session.get('user_id')
-    if not user_id:
-        return jsonify({"error": "Not authenticated"}), 401
-    
-    # Verify user has access
-    job = get_job(job_id)
-    if not job or job.user_id != user_id:
-        return jsonify({"error": "Access denied"}), 403
-    
-    def generate():
-        # Get or create queue (pre-created at job upload time)
-        with event_queues_lock:
-            if job_id not in event_queues:
-                event_queues[job_id] = []
-            q = event_queues[job_id]
-        print(f"[{job_id}] Using queue (exists: {len(q)} pending events)")
-        
-        # Then send all historical events from database
-        from services.job_service import get_job_events
-        try:
-            print(f"[{job_id}] Loading historical events from DB...")
-            historical_events = get_job_events(job_id)
-            print(f"[{job_id}] Found {len(historical_events)} historical events")
-            for event in historical_events:
-                print(f"[{job_id}] Sending historical event: {event.get('step')}")
-                yield f"data: {json.dumps(event)}\n\n"
-                time.sleep(0.01)
-        except Exception as e:
-            print(f"[{job_id}] Error loading historical events: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        try:
-            print(f"[{job_id}] Starting to listen for new events")
-            sent_complete = False
-            
-            # Keep stream open indefinitely until job completes
-            while not sent_complete:
-                if q:
-                    event = q.pop(0)
-                    print(f"[{job_id}] Sending new event: {event.get('step')}")
-                    yield f"data: {json.dumps(event)}\n\n"
-                    
-                    if event.get("step") == "complete" or event.get("step") == "error":
-                        sent_complete = True
-                else:
-                    time.sleep(0.1)
-        
-        finally:
-            with event_queues_lock:
-                if job_id in event_queues:
-                    del event_queues[job_id]
-    
-    return Response(
-        generate(),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive"
-        }
-    )
 
 
 @jobs_bp.route("/")
@@ -296,6 +217,9 @@ def get_job_full(job_id):
         "artifacts": artifacts,
         "paper_analysis": paper_analysis
     }
+    
+    # Log response for debugging
+    print(f"[{job_id}] API /full response: status={response['status']}, progress={response['progress']}, stage={response['current_stage']}, events={len(response['events'])}")
     
     return jsonify(response)
 
