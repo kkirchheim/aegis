@@ -695,7 +695,7 @@ function setupSSEConnection() {
 }
 
 function startProgressPolling() {
-    // Poll every 1.5 seconds for job progress
+    // Poll every 100ms for job progress
     pollInterval = setInterval(async () => {
         try {
             const response = await fetch(`/api/job/${JOB_ID}/full`, {
@@ -729,7 +729,7 @@ function startProgressPolling() {
         } catch (error) {
             console.error("Polling error:", error);
         }
-    }, 1500);
+    }, 100);
 }
 
 function stopProgressPolling() {

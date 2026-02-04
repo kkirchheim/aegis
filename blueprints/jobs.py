@@ -156,13 +156,15 @@ def analyze_paper_background(job_id, pdf_path, config, llm_provider):
             "progress": 80
         })
         
-        # Run evaluation in background thread
-        threading.Thread(
-            target=evaluate_reproducibility_aspects,
-            args=(job_id, llm_provider),
-            kwargs={"emit_event": emit_event},
-            daemon=True
-        ).start()
+        # Run evaluation and WAIT for it to complete before proceeding
+        evaluation_result = evaluate_reproducibility_aspects(
+            job_id, 
+            llm_provider,
+            emit_event=emit_event
+        )
+        
+        if not evaluation_result:
+            raise Exception("Evaluation failed")
     
     except Exception as e:
         emit_event(job_id, {

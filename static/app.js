@@ -169,7 +169,7 @@ function connectToEventStream(jobId) {
 }
 
 function startProgressPolling(jobId) {
-    // Poll every 1.5 seconds for job progress
+    // Poll every 100ms for job progress
     pollInterval = setInterval(async () => {
         try {
             const response = await fetch(`/api/job/${jobId}/full`, {
@@ -191,7 +191,7 @@ function startProgressPolling(jobId) {
         } catch (error) {
             console.error("Polling error:", error);
         }
-    }, 1500);
+    }, 100);
 }
 
 function stopProgressPolling() {
