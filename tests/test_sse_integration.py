@@ -45,7 +45,8 @@ class TestHistoricalEventsOnSSEConnect:
         3. Verify all historical events are received
         """
         # Create job
-        job = create_test_job(job_id="test_job_hist", status="processing")
+        job = create_test_job(job_id=None, status="processing")
+        job_id = job.id
         
         # Create historical events in database
         events_data = [
@@ -57,12 +58,12 @@ class TestHistoricalEventsOnSSEConnect:
         
         created_events = []
         for step, message in events_data:
-            event = create_test_event("test_job_hist", step, message)
+            event = create_test_event(job_id, step, message)
             if event:
                 created_events.append(event)
         
         # Connect to SSE and collect events
-        response = authenticated_user.get(f'/events/test_job_hist')
+        response = authenticated_user.get(f'/events/{job_id}')
         
         assert response.status_code == 200
         assert response.content_type.startswith('text/event-stream')
@@ -92,9 +93,10 @@ class TestHistoricalEventsOnSSEConnect:
         
         Should return 200 OK and immediately start listening for new events.
         """
-        job = create_test_job(job_id="test_job_empty", status="processing")
+        job = create_test_job(job_id=None, status="processing")
+        job_id = job.id
         
-        response = authenticated_user.get(f'/events/test_job_empty', follow_redirects=False)
+        response = authenticated_user.get(f'/events/{job_id}', follow_redirects=False)
         
         assert response.status_code == 200
         assert response.content_type.startswith('text/event-stream')
