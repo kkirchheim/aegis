@@ -116,7 +116,56 @@
                         </label>
                     </div>
                     
-                    <div class="card-actions justify-end mt-4">
+                    <!-- Configuration Options -->
+                    <div class="divider my-4"></div>
+                    <h3 class="font-semibold mb-3">Analysis Configuration</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <!-- Model Selection -->
+                        <div>
+                            <label class="label">
+                                <span class="label-text">Model</span>
+                            </label>
+                            <select id="modelSelect" class="select select-bordered w-full">
+                                <option value="haiku">Haiku (Fast, 80% cheaper)</option>
+                                <option value="opus">Opus (Better quality)</option>
+                            </select>
+                        </div>
+                        
+                        <!-- CPU Limit -->
+                        <div>
+                            <label class="label">
+                                <span class="label-text">CPU Limit (cores)</span>
+                            </label>
+                            <input type="number" id="cpuLimit" class="input input-bordered w-full" value="4" min="1" max="16" step="1" />
+                        </div>
+                        
+                        <!-- Memory Limit -->
+                        <div>
+                            <label class="label">
+                                <span class="label-text">Memory Limit (MB)</span>
+                            </label>
+                            <input type="number" id="memoryLimit" class="input input-bordered w-full" value="2048" min="512" max="8192" step="512" />
+                        </div>
+                        
+                        <!-- Runtime Limit -->
+                        <div>
+                            <label class="label">
+                                <span class="label-text">Runtime Limit (minutes)</span>
+                            </label>
+                            <input type="number" id="runtimeLimit" class="input input-bordered w-full" value="30" min="5" max="180" step="5" />
+                        </div>
+                        
+                        <!-- Iterations -->
+                        <div>
+                            <label class="label">
+                                <span class="label-text">Max Iterations</span>
+                            </label>
+                            <input type="number" id="maxIterations" class="input input-bordered w-full" value="3" min="1" max="10" step="1" />
+                        </div>
+                    </div>
+                    
+                    <div class="card-actions justify-end mt-6">
                         <button id="analyzeBtn" class="btn btn-primary gap-2" disabled>
                             <span>🔍</span>
                             <span>Analyze Paper</span>

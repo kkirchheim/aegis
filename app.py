@@ -1012,10 +1012,19 @@ def upload_pdf():
     conn.commit()
     conn.close()
     
+    # Get configuration parameters
+    config = {
+        "model": request.form.get("model", "haiku"),
+        "cpu_limit": int(request.form.get("cpu_limit", 4)),
+        "memory_limit": int(request.form.get("memory_limit", 2048)),
+        "runtime_limit": int(request.form.get("runtime_limit", 30)),
+        "max_iterations": int(request.form.get("max_iterations", 3))
+    }
+    
     # Start background analysis thread
     thread = threading.Thread(
         target=analyze_paper_background,
-        args=(job_id, str(pdf_path)),
+        args=(job_id, str(pdf_path), config),
         daemon=True
     )
     thread.start()
@@ -2242,8 +2251,31 @@ Return ONLY valid JSON (no markdown, no explanation, just JSON):
 # Background Job Processing
 # ============================================================================
 
-def analyze_paper_background(job_id, pdf_path):
-    """Main background job: analyze paper for reproducibility."""
+def analyze_paper_background(job_id, pdf_path, config=None):
+    """Main background job: analyze paper for reproducibility.
+    
+    Args:
+        job_id: Unique job identifier
+        pdf_path: Path to PDF file
+        config: Dictionary with analysis config:
+            - model: "haiku" or "opus"
+            - cpu_limit: CPU cores
+            - memory_limit: Memory in MB
+            - runtime_limit: Timeout in minutes
+            - max_iterations: Max agent iterations
+    """
+    
+    # Use defaults if config not provided
+    if config is None:
+        config = {
+            "model": "haiku",
+            "cpu_limit": 4,
+            "memory_limit": 2048,
+            "runtime_limit": 30,
+            "max_iterations": 3
+        }
+    
+    app.logger.info(f"[{job_id}] Analysis config: {config}")
     
     try:
         app.logger.info(f"[{job_id}] === ANALYSIS START ===")

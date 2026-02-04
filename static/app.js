@@ -84,6 +84,13 @@ async function handleAnalyzeClick() {
     const formData = new FormData();
     formData.append("pdf", file);
     
+    // Add configuration options
+    formData.append("model", document.getElementById("modelSelect").value);
+    formData.append("cpu_limit", document.getElementById("cpuLimit").value);
+    formData.append("memory_limit", document.getElementById("memoryLimit").value);
+    formData.append("runtime_limit", document.getElementById("runtimeLimit").value);
+    formData.append("max_iterations", document.getElementById("maxIterations").value);
+    
     try {
         analyzeBtn.disabled = true;
         progressSection.style.display = "block";
