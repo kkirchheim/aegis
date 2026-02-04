@@ -13,6 +13,7 @@ let currentJobId = null;
 let eventSource = null;
 let pollInterval = null;
 let lastStage = null;
+let finalCompleteReceived = false;  // Track if we've seen SSE "complete" event
 let stages = {
   paper_analysis: { name: '📄 Paper Analysis', status: 'pending', start: null, duration: null },
   code_execution: { name: '⚙️ Code Execution', status: 'pending', start: null, duration: null },
@@ -110,6 +111,10 @@ async function handleAnalyzeClick() {
         progressFill.value = 0;
         progressText.textContent = "Uploading...";
         
+        // Reset state
+        finalCompleteReceived = false;
+        lastStage = null;
+        
         // Reset stages
         Object.keys(stages).forEach(key => {
             stages[key] = { name: stages[key].name, status: 'pending', start: null, duration: null };
@@ -183,8 +188,8 @@ function startProgressPolling(jobId) {
             const job = await response.json();
             updateProgressFromJob(job);
             
-            // Stop polling if job is complete
-            if (job.status === "completed" || job.status === "failed") {
+            // Stop polling only after final "complete" event has arrived via SSE
+            if (finalCompleteReceived) {
                 stopProgressPolling();
                 handleJobComplete(job);
             }
@@ -236,6 +241,18 @@ function handleLogEvent(event) {
         return;  // Skip logging stage events
     }
     
+    // Handle final completion - mark all stages as done
+    if (step === "complete") {
+        finalCompleteReceived = true;  // Signal polling to stop after next cycle
+        Object.keys(stages).forEach(key => {
+            stages[key].status = 'complete';
+        });
+        updateStagesUI();
+        // Log the completion
+        addLog(`[${step}] ${message}`);
+        return;
+    }
+    
     // Skip other stage events (progress is handled by polling)
     if (step && step.includes('stage_')) {
         return;
@@ -260,23 +277,24 @@ function updateStagesFromStage(currentStage) {
     const stageOrder = ['paper_analysis', 'code_execution', 'reproducibility_evaluation'];
     let currentIndex = -1;
     
-    // If job is completed, mark all stages as complete
+    // NOTE: Don't transition to "completed" based on polling alone
+    // Only SSE's "complete" event should trigger final completion
+    // This prevents stages from closing before durations arrive
     if (currentStage === 'completed' || currentStage === 'failed') {
-        currentIndex = 999;  // Mark all as done
-    } else {
-        const stageKey = stageMap[currentStage];
-        currentIndex = stageOrder.indexOf(stageKey);
+        // Stay in current stage - wait for SSE event to handle final completion
+        return;
     }
+    
+    const stageKey = stageMap[currentStage];
+    currentIndex = stageOrder.indexOf(stageKey);
     
     // Update stages in the object
     stageOrder.forEach((key, index) => {
         if (index < currentIndex) {
             stages[key].status = 'complete';
-        } else if (index === currentIndex && currentIndex !== 999) {
+        } else if (index === currentIndex) {
             stages[key].status = 'active';
             stages[key].start = Date.now();
-        } else if (currentIndex === 999) {
-            stages[key].status = 'complete';
         } else {
             stages[key].status = 'pending';
         }
@@ -286,21 +304,10 @@ function updateStagesFromStage(currentStage) {
 }
 
 function handleJobComplete(job) {
-    // Stop polling and SSE
+    // Stop polling - SSE will handle final "complete" event
     stopProgressPolling();
-    if (eventSource) {
-        eventSource.close();
-    }
-    
-    // Mark all stages as complete
-    Object.keys(stages).forEach(key => {
-        stages[key].status = 'complete';
-    });
-    updateStagesUI();
-    
-    // Show completion UI
-    handleAnalysisComplete(job.report || { status: job.status, message: "Analysis complete" });
-    analyzeBtn.disabled = false;
+    // Keep SSE open to receive stage completion events and final "complete"
+    // Polling will just keep the progress bar updated while SSE handles UI transitions
 }
 
 function updateStagesUI() {
