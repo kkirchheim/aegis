@@ -40,13 +40,22 @@ def reset_config():
     original_db = Config.DATABASE
     Config.DATABASE = temp_db_path
     
+    # Set SSE timeout to 2 seconds for tests (instead of default 30s)
+    original_sse_timeout = os.environ.get('SSE_TIMEOUT_SECONDS')
+    os.environ['SSE_TIMEOUT_SECONDS'] = '2'
+    
     yield
     
     Config.DATABASE = original_db
     
+    # Restore original SSE timeout
+    if original_sse_timeout is not None:
+        os.environ['SSE_TIMEOUT_SECONDS'] = original_sse_timeout
+    else:
+        os.environ.pop('SSE_TIMEOUT_SECONDS', None)
+    
     # Cleanup temp database file
     try:
-        import os
         os.unlink(temp_db_path)
     except:
         pass
@@ -205,3 +214,281 @@ def multiple_users(client, app, create_test_user):
         })
     
     return users
+
+
+# ============================================================================
+# NEW: Test Database and ORM Fixtures
+# ============================================================================
+
+@pytest.fixture
+def peewee_test_db(app):
+    """Provide in-memory Peewee database for testing.
+    
+    This fixture sets up a test database using Peewee ORM,
+    with all models created and ready for use.
+    """
+    from models.database import init_db, db, User, Job, Event
+    from models.database import PaperAnalysis, ExecutionDetails, AspectEvaluation
+    
+    with app.app_context():
+        # Initialize database with all tables
+        init_db()
+        
+        yield db
+        
+        # Cleanup: close database after test
+        try:
+            db.close()
+        except:
+            pass
+
+
+@pytest.fixture
+def authenticated_user_id(authenticated_user):
+    """Extract user_id from authenticated_user session."""
+    with authenticated_user.session_transaction() as sess:
+        return sess.get('user_id')
+
+
+@pytest.fixture
+def create_test_job(app, peewee_test_db, authenticated_user_id):
+    """Factory fixture to create test jobs in Peewee database."""
+    from models.database import Job, User
+    import uuid
+    
+    created_job_ids = []
+    
+    def _create_job(job_id=None, user_id=None, status="pending", current_stage="pending"):
+        with app.app_context():
+            # Generate unique job ID if not provided
+            if job_id is None:
+                job_id = str(uuid.uuid4())
+            
+            # Use authenticated user's ID by default
+            if user_id is None:
+                user_id = authenticated_user_id
+            
+            # Clean up any existing job with this ID
+            try:
+                Job.delete().where(Job.id == job_id).execute()
+            except:
+                pass
+            
+            created_job_ids.append(job_id)
+            
+            job = Job.create(
+                id=job_id,
+                user_id=user_id,
+                status=status,
+                current_stage=current_stage,
+                pdf_path="/test/path/paper.pdf",
+                pdf_filename="paper.pdf",
+                progress=0.0,
+            )
+            return job
+    
+    yield _create_job
+    
+    # Cleanup after test
+    with app.app_context():
+        for job_id in created_job_ids:
+            try:
+                Job.delete().where(Job.id == job_id).execute()
+            except:
+                pass
+
+
+@pytest.fixture(autouse=True)
+def cleanup_sse_queues():
+    """Clean up SSE event queues before each test."""
+    from blueprints.jobs import event_queues, event_queues_lock
+    
+    # Clear before test
+    with event_queues_lock:
+        event_queues.clear()
+    
+    yield
+    
+    # Clear after test
+    with event_queues_lock:
+        event_queues.clear()
+
+
+@pytest.fixture
+def mock_llm_provider():
+    """Mock LLM provider for testing.
+    
+    Provides a mock Anthropic API client that can be injected into services.
+    """
+    from unittest.mock import MagicMock
+    
+    mock_llm = MagicMock()
+    
+    # Configure common responses
+    mock_llm.extract.return_value = {
+        "title": "Test Paper Title",
+        "abstract": "Test abstract",
+        "methodology": "Test methodology",
+    }
+    
+    mock_llm.analyze.return_value = {
+        "key_findings": ["Finding 1", "Finding 2"],
+        "reproducibility_score": 0.75,
+    }
+    
+    mock_llm.think.return_value = "Agent thinking about the problem..."
+    
+    return mock_llm
+
+
+@pytest.fixture
+def mock_docker_service():
+    """Mock Docker service for testing.
+    
+    Provides a mock Docker client for container operations.
+    """
+    from unittest.mock import MagicMock
+    
+    mock_docker = MagicMock()
+    
+    # Configure common responses
+    mock_docker.spawn_agent.return_value = "container_abc123"
+    mock_docker.wait_for_completion.return_value = 0  # Success exit code
+    mock_docker.get_logs.return_value = "Container execution logs"
+    mock_docker.cleanup.return_value = True
+    
+    return mock_docker
+
+
+@pytest.fixture
+def authenticated_client_with_fixtures(client, app, create_test_user, peewee_test_db):
+    """Create authenticated test client with database fixtures ready.
+    
+    Combines authentication with database fixtures for integration testing.
+    """
+    user_id = create_test_user(
+        "testuser",
+        "testuser@example.com",
+        "TestPassword123!",
+        is_active=True
+    )
+    
+    with client.session_transaction() as sess:
+        sess['user_id'] = user_id
+        sess['username'] = "testuser"
+    
+    return client
+
+
+@pytest.fixture
+def flask_app_with_mocks(app, mock_llm_provider, mock_docker_service):
+    """Flask app with mocked services injected.
+    
+    Provides a Flask app with all external dependencies mocked,
+    ready for API endpoint testing.
+    """
+    # Inject mocks into app context if needed
+    app.llm_provider = mock_llm_provider
+    app.docker_service = mock_docker_service
+    
+    return app
+
+
+# ============================================================================
+# NEW: Event and Message Fixtures
+# ============================================================================
+
+@pytest.fixture
+def mock_event_queues():
+    """Provide mock SSE event queues for testing."""
+    return {
+        "job123": [],
+        "job456": [],
+    }
+
+
+@pytest.fixture
+def create_test_event(app, peewee_test_db):
+    """Factory fixture to create test events."""
+    from models.database import Event, Job
+    
+    def _create_event(job_id, step, message="Test", severity="info"):
+        with app.app_context():
+            job = Job.get_by_id(job_id) if job_id else None
+            if job:
+                event = Event.create(
+                    job=job,
+                    step=step,
+                    message=message,
+                    severity=severity,
+                )
+                return event
+            return None
+    
+    return _create_event
+
+
+# ============================================================================
+# NEW: Service Fixtures
+# ============================================================================
+
+@pytest.fixture
+def mock_analysis_service(mock_llm_provider):
+    """Mock analysis service for testing."""
+    from unittest.mock import MagicMock
+    
+    mock_service = MagicMock()
+    mock_service.analyze.return_value = {
+        "title": "Test Paper",
+        "abstract": "Test abstract",
+        "citations": [{"title": "Ref 1"}, {"title": "Ref 2"}],
+    }
+    
+    return mock_service
+
+
+@pytest.fixture
+def mock_evaluation_service():
+    """Mock evaluation service for testing."""
+    from unittest.mock import MagicMock
+    
+    mock_service = MagicMock()
+    mock_service.evaluate.return_value = {
+        "score": 0.85,
+        "aspects": [
+            {"name": "Code Availability", "status": "yes"},
+            {"name": "Reproducible Results", "status": "partial"},
+        ],
+    }
+    
+    return mock_service
+
+
+@pytest.fixture
+def mock_job_service(peewee_test_db):
+    """Mock job service for testing."""
+    from unittest.mock import MagicMock
+    
+    mock_service = MagicMock()
+    mock_service.update_job_status.return_value = True
+    mock_service.get_job.return_value = {
+        "id": "job123",
+        "status": "processing",
+        "progress": 0.5,
+    }
+    
+    return mock_service
+
+
+@pytest.fixture
+def mock_event_dispatcher(mock_event_queues, mock_job_service):
+    """Mock event dispatcher for testing."""
+    from unittest.mock import MagicMock
+    from services.event_dispatcher import EventDispatcher
+    
+    dispatcher = EventDispatcher(
+        event_queues=mock_event_queues,
+        job_service=mock_job_service,
+    )
+    
+    return dispatcher

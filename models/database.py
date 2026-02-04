@@ -89,6 +89,7 @@ class Event(BaseModel):
     message = TextField(null=True)
     severity = CharField(default='info')  # info, warning, error
     timestamp = DateTimeField(default=datetime.now)
+    stage_duration_ms = IntegerField(null=True)  # Duration in milliseconds for stage events
 
     class Meta:
         table_name = 'events'

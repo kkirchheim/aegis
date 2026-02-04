@@ -144,7 +144,8 @@ def get_job_events(job_id):
                 "timestamp": e.timestamp,
                 "step": e.step,
                 "message": e.message,
-                "severity": e.severity
+                "severity": e.severity,
+                "stage_duration_ms": getattr(e, 'stage_duration_ms', None)  # Include if present
             }
             for e in events
         ]

@@ -2,7 +2,8 @@
 
 import json
 from config import Config
-from database import get_db
+from models.database import CachePaperAnalysis, CacheCodeExecution, CacheEvaluation, ExecutionDetails, PaperAnalysis, AspectEvaluation, Job
+from repositories import CachePaperAnalysisRepository, CacheCodeExecutionRepository, CacheEvaluationRepository
 
 
 def get_cached_paper_analysis(pdf_hash):
@@ -14,25 +15,17 @@ def get_cached_paper_analysis(pdf_hash):
         return None
     
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(
-            "SELECT title, abstract, citations, extracted_text, claimed_results, methodology, dependencies, dataset_description FROM cache_paper_analysis WHERE pdf_hash = ?",
-            (pdf_hash,)
-        )
-        row = c.fetchone()
-        conn.close()
-        
-        if row:
+        cache = CachePaperAnalysisRepository.get_by_hash(pdf_hash)
+        if cache:
             return {
-                "title": row["title"] or "",
-                "abstract": row["abstract"] or "",
-                "citations": json.loads(row["citations"] or "[]"),
-                "extracted_text": row["extracted_text"],
-                "claimed_results": json.loads(row["claimed_results"]),
-                "methodology": row["methodology"],
-                "dependencies": row["dependencies"],
-                "dataset_description": row["dataset_description"]
+                "title": cache.title or "",
+                "abstract": cache.abstract or "",
+                "citations": json.loads(cache.citations or "[]"),
+                "extracted_text": cache.extracted_text,
+                "claimed_results": json.loads(cache.claimed_results or "{}"),
+                "methodology": cache.methodology,
+                "dependencies": cache.dependencies,
+                "dataset_description": cache.dataset_description
             }
     except Exception as e:
         pass
@@ -46,25 +39,32 @@ def store_paper_analysis_cache(pdf_hash, pdf_text, paper_info):
         return
     
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("""
-            INSERT OR REPLACE INTO cache_paper_analysis 
-            (pdf_hash, title, abstract, citations, extracted_text, claimed_results, methodology, dependencies, dataset_description)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            pdf_hash,
-            paper_info.get("title", ""),
-            paper_info.get("abstract", ""),
-            json.dumps(paper_info.get("citations", [])),
-            pdf_text[:50000],
-            json.dumps(paper_info.get("claimed_results", {})),
-            paper_info.get("methodology", ""),
-            paper_info.get("dependencies", ""),
-            paper_info.get("dataset_description", "")
-        ))
-        conn.commit()
-        conn.close()
+        # Try to get existing cache entry, otherwise create new one
+        try:
+            cache = CachePaperAnalysis.get(CachePaperAnalysis.pdf_hash == pdf_hash)
+            # Update existing
+            cache.title = paper_info.get("title", "")
+            cache.abstract = paper_info.get("abstract", "")
+            cache.citations = json.dumps(paper_info.get("citations", []))
+            cache.extracted_text = pdf_text[:50000]
+            cache.claimed_results = json.dumps(paper_info.get("claimed_results", {}))
+            cache.methodology = paper_info.get("methodology", "")
+            cache.dependencies = paper_info.get("dependencies", "")
+            cache.dataset_description = paper_info.get("dataset_description", "")
+            cache.save()
+        except CachePaperAnalysis.DoesNotExist:
+            # Create new
+            cache = CachePaperAnalysis.create(
+                pdf_hash=pdf_hash,
+                title=paper_info.get("title", ""),
+                abstract=paper_info.get("abstract", ""),
+                citations=json.dumps(paper_info.get("citations", [])),
+                extracted_text=pdf_text[:50000],
+                claimed_results=json.dumps(paper_info.get("claimed_results", {})),
+                methodology=paper_info.get("methodology", ""),
+                dependencies=paper_info.get("dependencies", ""),
+                dataset_description=paper_info.get("dataset_description", "")
+            )
     except Exception as e:
         pass
 
@@ -78,17 +78,9 @@ def get_cached_evaluation(paper_hash, code_hash):
         return None
     
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(
-            "SELECT evaluations FROM cache_evaluation WHERE paper_hash = ? AND code_hash = ?",
-            (paper_hash, code_hash)
-        )
-        row = c.fetchone()
-        conn.close()
-        
-        if row:
-            return json.loads(row["evaluations"])
+        cache = CacheEvaluationRepository.get(paper_hash, code_hash)
+        if cache:
+            return json.loads(cache.evaluations)
     except Exception as e:
         pass
     
@@ -101,19 +93,22 @@ def store_evaluation_cache(paper_hash, code_hash, evaluations):
         return
     
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("""
-            INSERT OR REPLACE INTO cache_evaluation 
-            (paper_hash, code_hash, evaluations)
-            VALUES (?, ?, ?)
-        """, (
-            paper_hash,
-            code_hash,
-            json.dumps(evaluations)
-        ))
-        conn.commit()
-        conn.close()
+        # Try to get existing cache entry, otherwise create new one
+        try:
+            cache = CacheEvaluation.get(
+                (CacheEvaluation.paper_hash == paper_hash) &
+                (CacheEvaluation.code_hash == code_hash)
+            )
+            # Update existing
+            cache.evaluations = json.dumps(evaluations)
+            cache.save()
+        except CacheEvaluation.DoesNotExist:
+            # Create new
+            cache = CacheEvaluation.create(
+                paper_hash=paper_hash,
+                code_hash=code_hash,
+                evaluations=json.dumps(evaluations)
+            )
     except Exception as e:
         pass
 
@@ -121,25 +116,14 @@ def store_evaluation_cache(paper_hash, code_hash, evaluations):
 def get_cache_stats():
     """Get cache statistics."""
     try:
-        conn = get_db()
-        c = conn.cursor()
-        
         # Count jobs with cached execution results
-        c.execute("SELECT COUNT(*) as count FROM execution_details WHERE commands_run IS NOT NULL")
-        code_row = c.fetchone()
-        code_count = code_row["count"] if code_row else 0
+        code_count = ExecutionDetails.select().where(ExecutionDetails.commands_run.is_null(False)).count()
         
         # Count jobs with cached paper analysis
-        c.execute("SELECT COUNT(*) as count FROM paper_analysis WHERE extracted_text IS NOT NULL")
-        paper_row = c.fetchone()
-        paper_count = paper_row["count"] if paper_row else 0
+        paper_count = PaperAnalysis.select().where(PaperAnalysis.extracted_text.is_null(False)).count()
         
-        # Count jobs with cached aspect evaluations
-        c.execute("SELECT COUNT(DISTINCT job_id) as count FROM aspect_evaluations")
-        eval_row = c.fetchone()
-        eval_count = eval_row["count"] if eval_row else 0
-        
-        conn.close()
+        # Count distinct jobs with cached aspect evaluations
+        eval_count = AspectEvaluation.select(AspectEvaluation.job).distinct().count()
         
         return {
             "paper_analysis": paper_count,
@@ -160,38 +144,32 @@ def get_cache_stats():
 def clear_cache():
     """Clear all cached analysis data."""
     try:
-        conn = get_db()
-        c = conn.cursor()
+        from pathlib import Path
         
-        # Get all job IDs to delete associated files
-        c.execute("SELECT id, pdf_path FROM jobs")
-        jobs = c.fetchall()
+        # Get all jobs with their PDF paths
+        jobs = Job.select()
+        deleted_count = 0
         
         # Delete PDF files
-        from pathlib import Path
-        deleted_count = 0
         for job in jobs:
-            if job["pdf_path"]:
-                pdf_file = Path(job["pdf_path"])
+            if job.pdf_path:
+                pdf_file = Path(job.pdf_path)
                 if pdf_file.exists():
                     pdf_file.unlink()
                     deleted_count += 1
         
-        # Clear all job-related data
-        c.execute("DELETE FROM aspect_evaluations")
-        c.execute("DELETE FROM execution_details")
-        c.execute("DELETE FROM paper_analysis")
-        c.execute("DELETE FROM artifacts")
-        c.execute("DELETE FROM events")
-        c.execute("DELETE FROM jobs")
+        # Clear all job-related data (cascade should handle this, but be explicit)
+        AspectEvaluation.delete().execute()
+        ExecutionDetails.delete().execute()
+        PaperAnalysis.delete().execute()
         
-        # Clear all cache data
-        c.execute("DELETE FROM cache_evaluation")
-        c.execute("DELETE FROM cache_code_execution")
-        c.execute("DELETE FROM cache_paper_analysis")
+        # Clear cache data
+        CacheEvaluation.delete().execute()
+        CacheCodeExecution.delete().execute()
+        CachePaperAnalysis.delete().execute()
         
-        conn.commit()
-        conn.close()
+        # Clear jobs (this should cascade to other tables)
+        Job.delete().execute()
         
         return True, deleted_count
     except Exception as e:

@@ -142,23 +142,45 @@ def events(job_id):
         return jsonify({"error": "Access denied"}), 403
     
     def generate():
+        # First, send all historical events from database
+        from services.job_service import get_job_events
+        try:
+            print(f"[{job_id}] Loading historical events from DB...")
+            historical_events = get_job_events(job_id)
+            print(f"[{job_id}] Found {len(historical_events)} historical events")
+            for event in historical_events:
+                print(f"[{job_id}] Sending historical event: {event.get('step')}")
+                yield f"data: {json.dumps(event)}\n\n"
+                time.sleep(0.01)
+        except Exception as e:
+            print(f"[{job_id}] Error loading historical events: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Then create queue for new events
         q = []
         with event_queues_lock:
             event_queues[job_id] = q
         
         try:
+            print(f"[{job_id}] Starting to listen for new events")
             sent_complete = False
-            while not sent_complete:
+            timeout_count = 0
+            sse_timeout_seconds = int(os.environ.get('SSE_TIMEOUT_SECONDS', '5'))
+            timeout_count_max = sse_timeout_seconds * 10  # 0.1s sleep per iteration
+            
+            while not sent_complete and timeout_count < timeout_count_max:
                 if q:
                     event = q.pop(0)
+                    print(f"[{job_id}] Sending new event: {event.get('step')}")
                     yield f"data: {json.dumps(event)}\n\n"
+                    timeout_count = 0  # Reset timeout on event
                     
                     if event.get("step") == "complete" or event.get("step") == "error":
                         sent_complete = True
                 else:
                     time.sleep(0.1)
-            
-            time.sleep(2)
+                    timeout_count += 1
         
         finally:
             with event_queues_lock:

@@ -38,6 +38,19 @@ class TestJobEvent:
         assert d['progress'] == 0.33
         assert 'timestamp' in d
     
+    def test_event_with_stage_duration(self):
+        """Test that JobEvent accepts and serializes stage_duration_ms."""
+        event = JobEvent(
+            job_id="job123",
+            step="stage_1_complete",
+            message="Done",
+            stage_duration_ms=1234,
+        )
+        assert event.stage_duration_ms == 1234
+        
+        d = event.to_dict()
+        assert d['stage_duration_ms'] == 1234
+    
     def test_chat_event_detection(self):
         """Test detecting chat events."""
         chat_event = JobEvent(
@@ -148,41 +161,69 @@ class TestEventDispatcher:
         # Should not raise error
         dispatcher.emit(event)
     
+    def test_emit_event_with_stage_duration(self):
+        """Test that emit_event properly passes stage_duration_ms to JobEvent."""
+        queues = {"job123": []}
+        dispatcher = EventDispatcherFactory.create_test_dispatcher(event_queues=queues)
+        
+        event = JobEvent(
+            job_id="job123",
+            step="stage_1_complete",
+            message="Done",
+            stage_duration_ms=5000,
+        )
+        dispatcher.emit(event)
+        
+        # Check that the event in the queue has stage_duration_ms
+        assert len(queues["job123"]) == 1
+        queued_event = queues["job123"][0]
+        assert queued_event['stage_duration_ms'] == 5000
+        assert queued_event['step'] == "stage_1_complete"
+    
     def test_persist_non_chat_event(self):
-        """Test that non-chat events are persisted."""
+        """Test that non-chat events are persisted using Peewee models."""
         queues = {"job123": []}
         
-        with patch('services.event_dispatcher.get_db') as mock_get_db:
-            mock_conn = MagicMock()
-            mock_cursor = MagicMock()
-            mock_get_db.return_value = mock_conn
-            mock_conn.cursor.return_value = mock_cursor
+        # Mock Peewee models
+        with patch('services.event_dispatcher.Job') as mock_job_class, \
+             patch('services.event_dispatcher.Event') as mock_event_class:
+            
+            # Setup mock Job
+            mock_job = MagicMock()
+            mock_job_class.get_by_id.return_value = mock_job
+            
+            # Setup mock Event.create
+            mock_event = MagicMock()
+            mock_event_class.create.return_value = mock_event
             
             dispatcher = EventDispatcherFactory.create_test_dispatcher(event_queues=queues)
             event = JobEvent(job_id="job123", step="stage_1_starting", message="Starting")
             dispatcher.emit(event)
             
-            # Should call INSERT
-            mock_cursor.execute.assert_called_once()
-            call_args = mock_cursor.execute.call_args
-            assert "INSERT INTO events" in call_args[0][0]
+            # Should call Job.get_by_id
+            mock_job_class.get_by_id.assert_called_once_with("job123")
+            
+            # Should call Event.create with correct arguments
+            mock_event_class.create.assert_called_once()
+            call_kwargs = mock_event_class.create.call_args.kwargs
+            assert call_kwargs['step'] == "stage_1_starting"
+            assert call_kwargs['message'] == "Starting"
     
     def test_no_persist_chat_event(self):
-        """Test that chat events are NOT persisted to database."""
+        """Test that chat events are NOT persisted to database using Peewee models."""
         queues = {"job123": []}
         
-        with patch('services.event_dispatcher.get_db') as mock_get_db:
-            mock_conn = MagicMock()
-            mock_cursor = MagicMock()
-            mock_get_db.return_value = mock_conn
-            mock_conn.cursor.return_value = mock_cursor
+        # Mock Peewee models
+        with patch('services.event_dispatcher.Job') as mock_job_class, \
+             patch('services.event_dispatcher.Event') as mock_event_class:
             
             dispatcher = EventDispatcherFactory.create_test_dispatcher(event_queues=queues)
             event = JobEvent(job_id="job123", step="chat_response", content="Hello")
             dispatcher.emit(event)
             
-            # Should NOT call INSERT
-            mock_cursor.execute.assert_not_called()
+            # Chat events should NOT persist, so Job.get_by_id and Event.create should NOT be called
+            mock_job_class.get_by_id.assert_not_called()
+            mock_event_class.create.assert_not_called()
     
     def test_stage_transition_logging(self):
         """Test that stage transitions are logged."""
@@ -192,11 +233,14 @@ class TestEventDispatcher:
         def mock_logger(msg):
             logged_messages.append(msg)
         
-        with patch('services.event_dispatcher.get_db'):
+        # Mock Peewee models
+        with patch('services.event_dispatcher.Job'), \
+             patch('services.event_dispatcher.Event'):
             dispatcher = EventDispatcher(
                 event_queues=queues,
                 event_queues_lock=threading.Lock(),
                 logger=mock_logger,
+                job_service=None,  # Skip job_service for this test
             )
             
             event = JobEvent(job_id="job123", step="stage_1_starting")
@@ -212,11 +256,14 @@ class TestEventDispatcher:
         queues = {"job123": []}
         logged = []
         
-        with patch('services.event_dispatcher.get_db'):
+        # Mock Peewee models
+        with patch('services.event_dispatcher.Job'), \
+             patch('services.event_dispatcher.Event'):
             dispatcher = EventDispatcher(
                 event_queues=queues,
                 event_queues_lock=threading.Lock(),
                 logger=lambda msg: logged.append(msg),
+                job_service=None,  # Skip job_service for this test
             )
             
             for step in STAGE_TRANSITIONS.keys():
@@ -258,7 +305,9 @@ class TestEventDispatcherFactory:
         def test_logger(msg):
             logged.append(msg)
         
-        with patch('services.event_dispatcher.get_db'):
+        # Mock Peewee models
+        with patch('services.event_dispatcher.Job'), \
+             patch('services.event_dispatcher.Event'):
             dispatcher = EventDispatcherFactory.create_test_dispatcher(
                 mock_logger=test_logger
             )

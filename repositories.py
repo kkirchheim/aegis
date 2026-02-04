@@ -359,7 +359,7 @@ class EventRepository:
         try:
             return list(
                 Event.select()
-                .where(Event.job == job_id)
+                .where(Event.job_id == job_id)
                 .order_by(Event.timestamp.asc())
             )
         except Exception:

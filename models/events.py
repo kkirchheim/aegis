@@ -15,6 +15,7 @@ class JobEvent:
     progress: Optional[float] = None
     content: Optional[str] = None  # For streaming responses
     timestamp: Optional[str] = None
+    stage_duration_ms: Optional[int] = None  # Duration in milliseconds
     
     def __post_init__(self):
         """Auto-set timestamp if not provided."""
@@ -31,6 +32,7 @@ class JobEvent:
             'progress': self.progress,
             'content': self.content,
             'timestamp': self.timestamp,
+            'stage_duration_ms': self.stage_duration_ms,
         }
     
     def is_chat_event(self) -> bool:

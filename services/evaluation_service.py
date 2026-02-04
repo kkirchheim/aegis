@@ -3,7 +3,8 @@
 import json
 import time
 import hashlib
-from database import get_db
+from models.database import PaperAnalysis, ExecutionDetails, Artifact, Job, AspectEvaluation
+from repositories import PaperAnalysisRepository, ExecutionDetailsRepository, AspectEvaluationRepository, JobRepository
 from services.cache_service import get_cached_evaluation, store_evaluation_cache
 
 
@@ -18,44 +19,59 @@ def evaluate_reproducibility_aspects(job_id, llm_provider, app_logger=None, emit
         if app_logger:
             app_logger.info(f"[{job_id}] === STAGE 3: Aspect Evaluation Starting ===")
         
-        # Fetch all data
-        conn = get_db()
-        c = conn.cursor()
+        # Fetch all data using Peewee ORM
+        paper_analysis_model = PaperAnalysisRepository.get(job_id)
+        execution_details_model = ExecutionDetailsRepository.get(job_id)
         
-        c.execute("SELECT * FROM paper_analysis WHERE job_id = ?", (job_id,))
-        paper_analysis_row = c.fetchone()
+        # Fetch artifacts
+        artifacts_models = list(Artifact.select().where(Artifact.job == job_id))
+        artifacts = [
+            {
+                "url": a.url,
+                "artifact_type": a.artifact_type,
+                "description": a.description
+            }
+            for a in artifacts_models
+        ]
         
-        c.execute("SELECT * FROM execution_details WHERE job_id = ?", (job_id,))
-        execution_details_row = c.fetchone()
-        
-        c.execute("SELECT url, artifact_type, description FROM artifacts WHERE job_id = ?", (job_id,))
-        artifacts = [dict(row) for row in c.fetchall()]
-        
-        conn.close()
-        
-        if not paper_analysis_row or not execution_details_row:
+        if not paper_analysis_model or not execution_details_model:
+            missing = []
+            if not paper_analysis_model:
+                missing.append("paper_analysis")
+            if not execution_details_model:
+                missing.append("execution_details")
+            
             if app_logger:
-                app_logger.warning(f"[{job_id}] Missing data for evaluation")
+                app_logger.warning(f"[{job_id}] Missing data for evaluation: {', '.join(missing)}")
             if emit_event:
                 emit_event(job_id, {
                     "step": "evaluation_skipped",
-                    "message": "Skipped: Missing required data for evaluation"
+                    "message": f"Skipped: Missing {', '.join(missing)}"
                 })
             return False
         
-        # Convert rows to dicts
-        paper_analysis = dict(paper_analysis_row)
-        execution_details = dict(execution_details_row)
+        # Convert models to dicts for prompt building
+        paper_analysis = {
+            "pdf_hash": paper_analysis_model.pdf_hash,
+            "title": paper_analysis_model.title,
+            "abstract": paper_analysis_model.abstract,
+            "extracted_text": paper_analysis_model.extracted_text,
+            "methodology": paper_analysis_model.methodology,
+            "dependencies": paper_analysis_model.dependencies,
+            "dataset_description": paper_analysis_model.dataset_description,
+            "claimed_results": paper_analysis_model.get_claimed_results() if hasattr(paper_analysis_model, 'get_claimed_results') else json.loads(paper_analysis_model.claimed_results or "{}")
+        }
         
-        # Parse JSON fields
-        paper_analysis["claimed_results"] = json.loads(paper_analysis.get("claimed_results", "{}"))
-        execution_details["actual_results"] = json.loads(execution_details.get("actual_results", "{}"))
-        
-        try:
-            discovered_files_json = execution_details.get("discovered_files", "[]")
-            execution_details["discovered_files"] = json.loads(discovered_files_json) if isinstance(discovered_files_json, str) else (discovered_files_json or [])
-        except:
-            execution_details["discovered_files"] = []
+        execution_details = {
+            "stdout_combined": execution_details_model.stdout_combined,
+            "commands_run": execution_details_model.commands_run,
+            "dependencies_used": execution_details_model.dependencies_used,
+            "errors_summary": execution_details_model.errors_summary,
+            "test_info": execution_details_model.test_info,
+            "randomness_info": execution_details_model.randomness_info,
+            "discovered_files": execution_details_model.get_discovered_files() if hasattr(execution_details_model, 'get_discovered_files') else json.loads(execution_details_model.discovered_files or "[]"),
+            "actual_results": execution_details_model.get_actual_results() if hasattr(execution_details_model, 'get_actual_results') else json.loads(execution_details_model.actual_results or "{}")
+        }
         
         # Build evaluation prompt
         prompt = _build_evaluation_prompt(paper_analysis, execution_details, artifacts)
@@ -104,48 +120,29 @@ def evaluate_reproducibility_aspects(job_id, llm_provider, app_logger=None, emit
             # Cache the results
             store_evaluation_cache(paper_hash, code_hash, evaluation_results)
         
-        # Store evaluation results
-        conn = get_db()
-        c = conn.cursor()
-        
+        # Store evaluation results using Peewee ORM
         for eval_item in evaluation_results.get("evaluations", []):
-            c.execute("""
-                INSERT INTO aspect_evaluations
-                (job_id, aspect_id, name, status, evidence, paper_supports, code_supports, conclusion)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                job_id,
-                eval_item.get("aspect_id"),
-                eval_item.get("name"),
-                eval_item.get("status"),
-                eval_item.get("evidence"),
-                eval_item.get("paper_supports"),
-                eval_item.get("code_supports"),
-                eval_item.get("conclusion")
-            ))
-        
-        conn.commit()
-        conn.close()
+            AspectEvaluation.create(
+                job_id=job_id,
+                aspect_id=eval_item.get("aspect_id"),
+                name=eval_item.get("name"),
+                status=eval_item.get("status"),
+                evidence=eval_item.get("evidence"),
+                paper_supports=eval_item.get("paper_supports"),
+                code_supports=eval_item.get("code_supports"),
+                conclusion=eval_item.get("conclusion")
+            )
         
         # Update job report
-        job_conn = get_db()
-        job_c = job_conn.cursor()
-        job_c.execute("SELECT report FROM jobs WHERE id = ?", (job_id,))
-        job_row = job_c.fetchone()
-        job_conn.close()
-        
-        if job_row:
-            report = json.loads(job_row["report"]) if job_row["report"] else {}
-            report["aspect_evaluations"] = evaluation_results.get("evaluations", [])
-            
-            job_conn = get_db()
-            job_c = job_conn.cursor()
-            job_c.execute(
-                "UPDATE jobs SET report = ? WHERE id = ?",
-                (json.dumps(report), job_id)
-            )
-            job_conn.commit()
-            job_conn.close()
+        try:
+            job = Job.get_by_id(job_id)
+            if job:
+                report = job.get_report()
+                report["aspect_evaluations"] = evaluation_results.get("evaluations", [])
+                job.set_report(report)
+                job.save()
+        except:
+            pass
         
         # Emit completion
         stage3_duration = int((time.time() - stage3_start) * 1000)

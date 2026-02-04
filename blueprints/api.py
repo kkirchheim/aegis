@@ -7,7 +7,8 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify, session
 from utils.decorators import require_auth, require_admin
 from services.cache_service import get_cache_stats, clear_cache
-from models.database import User, db
+from models.database import User, db, Job, ChatSession, ChatMessage
+from repositories import JobRepository, ChatRepository
 from config import Config
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -116,22 +117,9 @@ def cache_clear():
 def get_or_create_chat_session(job_id):
     """Get or create chat session."""
     try:
-        conn = get_db()
-        c = conn.cursor()
-        
-        c.execute("SELECT id FROM chat_sessions WHERE job_id = ?", (job_id,))
-        row = c.fetchone()
-        
-        if row:
-            session_id = row["id"]
-        else:
-            c.execute("INSERT INTO chat_sessions (job_id) VALUES (?)", (job_id,))
-            conn.commit()
-            session_id = c.lastrowid
-        
-        conn.close()
-        return {"id": session_id, "job_id": job_id}
-    
+        session_id = ChatRepository.get_or_create_session(job_id)
+        if session_id:
+            return {"id": session_id, "job_id": job_id}
     except Exception as e:
         raise
 
@@ -139,14 +127,7 @@ def get_or_create_chat_session(job_id):
 def store_chat_message(session_id, role, content):
     """Store chat message."""
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(
-            "INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)",
-            (session_id, role, content)
-        )
-        conn.commit()
-        conn.close()
+        ChatRepository.save_message(session_id, role, content)
     except Exception as e:
         pass
 
@@ -154,17 +135,15 @@ def store_chat_message(session_id, role, content):
 def get_chat_history(session_id, limit=20):
     """Get chat history."""
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("""
-            SELECT role, content, created_at FROM chat_messages
-            WHERE session_id = ?
-            ORDER BY created_at ASC
-            LIMIT ?
-        """, (session_id, limit))
-        messages = c.fetchall()
-        conn.close()
-        return [dict(m) for m in messages]
+        messages = ChatRepository.get_history(session_id, limit=limit)
+        return [
+            {
+                "role": msg.role,
+                "content": msg.content,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None
+            }
+            for msg in messages
+        ]
     except Exception as e:
         return []
 
@@ -185,19 +164,15 @@ def chat_with_paper(job_id):
     
     try:
         # Verify job exists and user owns it
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT status, user_id FROM jobs WHERE id = ?", (job_id,))
-        job = c.fetchone()
-        conn.close()
+        job = JobRepository.get(job_id)
         
         if not job:
             return jsonify({"error": "Job not found"}), 404
         
-        if job["user_id"] != user_id:
+        if job.user_id != user_id:
             return jsonify({"error": "Access denied"}), 403
         
-        if job["status"] not in ["completed", "processing"]:
+        if job.status not in ["completed", "processing"]:
             return jsonify({"error": "Job analysis not complete"}), 400
         
         # Get or create session
@@ -271,24 +246,17 @@ def get_chat_history_endpoint(job_id):
     user_id = session.get('user_id')
     
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT user_id FROM jobs WHERE id = ?", (job_id,))
-        job = c.fetchone()
+        job = JobRepository.get(job_id)
         
-        if not job or job["user_id"] != user_id:
-            conn.close()
+        if not job or job.user_id != user_id:
             return jsonify({"error": "Access denied"}), 403
         
-        c.execute("SELECT id FROM chat_sessions WHERE job_id = ?", (job_id,))
-        row = c.fetchone()
-        conn.close()
-        
-        if not row:
+        try:
+            chat_session = ChatSession.get(ChatSession.job == job_id)
+            history = get_chat_history(chat_session.id, limit=100)
+            return jsonify(history)
+        except ChatSession.DoesNotExist:
             return jsonify([])
-        
-        history = get_chat_history(row["id"], limit=100)
-        return jsonify(history)
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -301,24 +269,17 @@ def delete_chat_history_endpoint(job_id):
     user_id = session.get('user_id')
     
     try:
-        conn = get_db()
-        c = conn.cursor()
+        job = JobRepository.get(job_id)
         
-        c.execute("SELECT user_id FROM jobs WHERE id = ?", (job_id,))
-        job = c.fetchone()
-        
-        if not job or job["user_id"] != user_id:
-            conn.close()
+        if not job or job.user_id != user_id:
             return jsonify({"error": "Access denied"}), 403
         
-        c.execute("SELECT id FROM chat_sessions WHERE job_id = ?", (job_id,))
-        row = c.fetchone()
+        try:
+            chat_session = ChatSession.get(ChatSession.job == job_id)
+            ChatRepository.clear_history(chat_session.id)
+        except ChatSession.DoesNotExist:
+            pass
         
-        if row:
-            c.execute("DELETE FROM chat_messages WHERE session_id = ?", (row["id"],))
-            conn.commit()
-        
-        conn.close()
         return jsonify({"ok": True, "message": "Chat history cleared"})
     
     except Exception as e:
@@ -350,15 +311,13 @@ def agent_think():
     # SECURITY: Validate that job_id actually exists in database
     # This prevents agents from making up job IDs or accessing arbitrary jobs
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
-        job = c.fetchone()
-        conn.close()
-        
+        from models.database import Job
+        job = Job.get_by_id(job_id)
         if not job:
             return jsonify({"error": "Invalid job_id"}), 404
     except Exception as e:
+        from flask import current_app
+        current_app.logger.error(f"[{job_id}] Job validation failed: {str(e)}")
         return jsonify({"error": "Failed to validate job"}), 500
     
     try:
@@ -439,6 +398,8 @@ RESPONSE FORMAT (JSON only):
         return jsonify(action)
     
     except Exception as e:
+        from flask import current_app
+        current_app.logger.exception(f"[{job_id}] Agent decision failed: {str(e)}")
         return jsonify({"error": str(e), "action": "done"}), 500
 
 
@@ -459,12 +420,7 @@ def agent_log():
     
     # SECURITY: Validate that job_id actually exists
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
-        job = c.fetchone()
-        conn.close()
-        
+        job = JobRepository.get(job_id)
         if not job:
             return jsonify({"error": "Invalid job_id"}), 404
     except Exception as e:
@@ -485,6 +441,8 @@ def agent_execution():
     
     Security: Validates job_id exists before storing execution details.
     """
+    from models.database import ExecutionDetails
+    
     data = request.json
     job_id = data.get("job_id")
     
@@ -493,38 +451,24 @@ def agent_execution():
     
     # SECURITY: Validate that job_id actually exists
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
-        job = c.fetchone()
-        
+        job = JobRepository.get(job_id)
         if not job:
-            conn.close()
             return jsonify({"error": "Invalid job_id"}), 404
-        conn.close()
     except Exception as e:
         return jsonify({"error": "Failed to validate job"}), 500
     
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("""
-            INSERT INTO execution_details 
-            (job_id, commands_run, stdout_combined, actual_results, dependencies_used, errors_summary, discovered_files, test_info, randomness_info)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            job_id,
-            data.get("commands_run", ""),
-            data.get("stdout_combined", ""),
-            json.dumps(data.get("actual_results", {})),
-            data.get("dependencies_used", ""),
-            data.get("errors_summary", ""),
-            json.dumps(data.get("discovered_files", [])),
-            data.get("test_info", ""),
-            data.get("randomness_info", "")
-        ))
-        conn.commit()
-        conn.close()
+        ExecutionDetails.create(
+            job_id=job_id,
+            commands_run=data.get("commands_run", ""),
+            stdout_combined=data.get("stdout_combined", ""),
+            actual_results=json.dumps(data.get("actual_results", {})),
+            dependencies_used=data.get("dependencies_used", ""),
+            errors_summary=data.get("errors_summary", ""),
+            discovered_files=json.dumps(data.get("discovered_files", [])),
+            test_info=data.get("test_info", ""),
+            randomness_info=data.get("randomness_info", "")
+        )
         
         return jsonify({"ok": True})
     
@@ -552,15 +496,9 @@ def agent_complete():
     
     # SECURITY: Validate that job_id actually exists
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
-        job = c.fetchone()
-        
+        job = JobRepository.get(job_id)
         if not job:
-            conn.close()
             return jsonify({"error": "Invalid job_id"}), 404
-        conn.close()
     except Exception as e:
         return jsonify({"error": "Failed to validate job"}), 500
     

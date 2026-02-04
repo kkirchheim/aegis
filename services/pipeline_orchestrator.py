@@ -42,7 +42,7 @@ class PipelineOrchestrator:
         print(msg, file=sys.stderr)
     
     def emit_event(self, job_id: str, step: str, message: str = None, 
-                   progress: float = None) -> None:
+                   progress: float = None, stage_duration_ms: int = None) -> None:
         """Emit event through dispatcher if available."""
         if self.dispatcher:
             event = JobEvent(
@@ -50,6 +50,7 @@ class PipelineOrchestrator:
                 step=step,
                 message=message,
                 progress=progress,
+                stage_duration_ms=stage_duration_ms,
             )
             self.dispatcher.emit(event)
     

@@ -47,6 +47,10 @@ const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
 // ============================================================================
 
 document.addEventListener("DOMContentLoaded", () => {
+    console.log(`[init] DOMContentLoaded, JOB_ID=${JOB_ID}`);
+    console.log(`[init] eventLog element:`, eventLog);
+    console.log(`[init] logSection element:`, logSection);
+    
     if (!JOB_ID) {
         statusContent.innerHTML = "<div class='alert alert-error'>No job ID provided</div>";
         return;
@@ -107,6 +111,10 @@ async function loadJobData() {
         }
         
         currentJob = JSON.parse(text);
+        console.log(`Job ${currentJob.id}: status=${currentJob.status}, events=${currentJob.events ? currentJob.events.length : 0}`);
+        if (currentJob.events && currentJob.events.length > 0) {
+            console.log(`First event: ${currentJob.events[0].step} - ${currentJob.events[0].message}`);
+        }
         renderPage();
         
     } catch (error) {
@@ -197,6 +205,7 @@ function renderPage() {
     
     // Progress section - show if processing OR if we have events
     if (currentJob.status === "processing") {
+        console.log("Status is processing, showing live log section");
         progressSection.style.display = "block";
         logSection.style.display = "block";  // Show log section for live updates
         
@@ -217,8 +226,16 @@ function renderPage() {
         setupSSEConnection();
     } else if (currentJob.events && currentJob.events.length > 0) {
         // Show progress section with historical events for completed jobs
+        console.log("Status is not processing but has events, showing historical log");
+        console.log("progressSection before:", progressSection.style.display);
+        console.log("logSection before:", logSection.style.display);
+        
         progressSection.style.display = "block";
         logSection.style.display = "block";  // Show log section
+        
+        console.log("progressSection after:", progressSection.style.display);
+        console.log("logSection after:", logSection.style.display);
+        
         renderProgressHistory();
         
         // For completed jobs, mark all stages as complete
@@ -677,19 +694,31 @@ function setupSSEConnection() {
     startProgressPolling();
     
     // Connect to SSE only for live logs (not for progress)
+    console.log(`[SSE] Connecting to /events/${JOB_ID}`);
     eventSource = new EventSource(`/events/${JOB_ID}`);
     
+    let eventCount = 0;
+    
+    eventSource.onopen = () => {
+        console.log(`[SSE] Connection opened`);
+    };
+    
     eventSource.onmessage = (event) => {
+        eventCount++;
+        console.log(`[SSE] Event #${eventCount} received:`, event.data.substring(0, 100));
         try {
             const data = JSON.parse(event.data);
+            console.log(`[SSE] Parsed event: step=${data.step}, message=${data.message}`);
             handleLogEvent(data);
+            console.log(`[SSE] Event #${eventCount} handled`);
         } catch (e) {
-            console.error("Failed to parse event:", e);
+            console.error(`[SSE] Failed to parse event #${eventCount}:`, e);
         }
     };
     
     eventSource.onerror = (error) => {
-        console.error("SSE connection error:", error);
+        console.error(`[SSE] Connection error after ${eventCount} events:`, error);
+        console.error(`[SSE] readyState: ${eventSource.readyState}`);
         // Don't close, let polling continue
     };
 }
@@ -783,6 +812,25 @@ function updateStagesFromStage(currentStage) {
 function handleLogEvent(event) {
     const { step, message, severity, stage_duration_ms } = event;
     
+    console.log(`[handleLogEvent] Processing: step=${step}, message=${message}`);
+    
+    // Skip chat events (handled separately) and error events (logged below)
+    if (step && (step.startsWith('chat_') || step === 'chat_error')) {
+        console.log(`[handleLogEvent] Skipping chat event: ${step}`);
+        return;
+    }
+    
+    // Add ALL events to the execution log
+    const time = new Date().toLocaleTimeString();
+    const stepLabel = step ? `[${step}]` : "";
+    const severityClass = severity === 'error' ? 'text-error' : severity === 'success' ? 'text-success' : severity === 'warning' ? 'text-warning' : 'text-base-content/70';
+    const logEntry = `<div class="${severityClass}">${time} ${stepLabel} ${escapeHtml(message)}</div>`;
+    
+    console.log(`[handleLogEvent] Adding to log, current children: ${eventLog.children.length}`);
+    eventLog.innerHTML += logEntry;
+    console.log(`[handleLogEvent] After add, children: ${eventLog.children.length}`);
+    eventLog.scrollTop = eventLog.scrollHeight;
+    
     // Capture stage durations for UI update
     if (step && step.includes('stage_') && step.includes('complete')) {
         if (stage_duration_ms) {
@@ -798,26 +846,14 @@ function handleLogEvent(event) {
                 if (el) el.textContent = `${(stage_duration_ms / 1000).toFixed(1)}s`;
             }
         }
-        return;  // Skip logging stage events
     }
-    
-    // Skip other stage events and chat events (those are handled by polling)
-    if (step && (step.startsWith('chat_') || step === 'chat_error' || step.includes('stage_'))) {
-        return;
-    }
-    
-    // Add to event log
-    const time = new Date().toLocaleTimeString();
-    const stepLabel = step ? `[${step}]` : "";
-    const severityClass = severity === 'error' ? 'text-error' : severity === 'success' ? 'text-success' : severity === 'warning' ? 'text-warning' : 'text-base-content/70';
-    const logEntry = `<div class="${severityClass}">${time} ${stepLabel} ${escapeHtml(message)}</div>`;
-    eventLog.innerHTML += logEntry;
-    eventLog.scrollTop = eventLog.scrollHeight;
 }
 
 function renderProgressHistory() {
-    // Show historical events for completed jobs (skip chat events)
+    // Show historical events for completed jobs (all events except chat)
     const events = currentJob.events || [];
+    console.log(`renderProgressHistory called with ${events.length} events`);
+    
     let html = "";
     
     for (const event of events) {
@@ -826,34 +862,30 @@ function renderProgressHistory() {
             continue;
         }
         
+        // Include ALL other events (stage, error, progress, etc.)
         const time = new Date(event.timestamp).toLocaleTimeString();
         const stepLabel = event.step ? `[${event.step}]` : "";
         const severityClass = event.severity === 'error' ? 'text-error' : event.severity === 'success' ? 'text-success' : event.severity === 'warning' ? 'text-warning' : 'text-base-content/70';
         const logEntry = `<div class="${severityClass}">${time} ${stepLabel} ${escapeHtml(event.message)}</div>`;
         html += logEntry;
-        
-        // Try to extract stage info from events
-        if (event.message && event.message.includes("COMPLETE")) {
-            if (event.message.includes("STAGE 1")) {
-                const icon = document.getElementById("stage1Icon");
-                icon.textContent = "✓";
-                icon.style.color = "#22c55e";
-                icon.className = "text-2xl mb-1";
-            } else if (event.message.includes("STAGE 2")) {
-                const icon = document.getElementById("stage2Icon");
-                icon.textContent = "✓";
-                icon.style.color = "#22c55e";
-                icon.className = "text-2xl mb-1";
-            } else if (event.message.includes("STAGE 3")) {
-                const icon = document.getElementById("stage3Icon");
-                icon.textContent = "✓";
-                icon.style.color = "#22c55e";
-                icon.className = "text-2xl mb-1";
-            }
-        }
     }
     
-    eventLog.innerHTML = html;
+    console.log(`renderProgressHistory generated ${html.length} chars of HTML`);
+    console.log(`eventLog element:`, eventLog);
+    
+    if (eventLog) {
+        eventLog.innerHTML = html;
+        console.log(`Set eventLog.innerHTML, now has ${eventLog.children.length} children`);
+        
+        // Scroll the log section into view
+        if (logSection && logSection.style.display === "block") {
+            logSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            console.log("Scrolled logSection into view");
+        }
+    } else {
+        console.error("eventLog element not found!");
+    }
+    
     progressFill.value = 100;
     progressText.textContent = "100%";
 }

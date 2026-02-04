@@ -4,7 +4,8 @@ import os
 import hashlib
 import docker
 import json
-from database import get_db
+from models.database import Job, ExecutionDetails
+from repositories import JobRepository, ExecutionDetailsRepository
 from config import Config
 
 
@@ -120,44 +121,55 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
         }
     
     # Check cache: if we've analyzed this repo before, reuse results
-    cache_key = hashlib.md5(repo_url.encode()).hexdigest()
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        "SELECT * FROM execution_details WHERE job_id IN (SELECT id FROM jobs WHERE report LIKE ?)",
-        (f'%"url": "{repo_url}"%',)
-    )
-    cached = c.fetchone()
-    conn.close()
-    
-    if cached:
-        if app_logger:
-            app_logger.info(f"[{job_id}] Cache hit for {repo_url} - reusing execution results")
-        if emit_event:
-            emit_event(job_id, {
-                "step": "cache_hit",
-                "message": f"Using cached results for {repo_url}"
-            })
+    # Using a simple heuristic: look for execution_details with similar repo_url in past jobs
+    try:
+        # Find previous jobs with artifacts matching this repo URL
+        jobs_with_repo = list(
+            Job.select().where(Job.report.contains(repo_url))
+        )
         
-        # Copy cached results to new job
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("""
-            INSERT INTO execution_details 
-            (job_id, commands_run, stdout_combined, actual_results, dependencies_used, errors_summary, discovered_files, test_info, randomness_info)
-            SELECT ?, commands_run, stdout_combined, actual_results, dependencies_used, errors_summary, discovered_files, test_info, randomness_info
-            FROM execution_details WHERE id = ?
-        """, (job_id, cached['id']))
-        conn.commit()
-        conn.close()
-        
-        if emit_event:
-            emit_event(job_id, {
-                "step": "agent_completed",
-                "message": "Cached agent results applied"
-            })
-        
-        return True
+        if jobs_with_repo:
+            # Find first job with execution details
+            cached_details = None
+            for prev_job in jobs_with_repo:
+                try:
+                    cached_details = ExecutionDetailsRepository.get(prev_job.id)
+                    if cached_details:
+                        break
+                except:
+                    continue
+            
+            if cached_details:
+                if app_logger:
+                    app_logger.info(f"[{job_id}] Cache hit for {repo_url} - reusing execution results")
+                if emit_event:
+                    emit_event(job_id, {
+                        "step": "cache_hit",
+                        "message": f"Using cached results for {repo_url}"
+                    })
+                
+                # Copy cached results to new job
+                ExecutionDetails.create(
+                    job_id=job_id,
+                    commands_run=cached_details.commands_run,
+                    stdout_combined=cached_details.stdout_combined,
+                    actual_results=cached_details.actual_results,
+                    dependencies_used=cached_details.dependencies_used,
+                    errors_summary=cached_details.errors_summary,
+                    discovered_files=cached_details.discovered_files,
+                    test_info=cached_details.test_info,
+                    randomness_info=cached_details.randomness_info
+                )
+                
+                if emit_event:
+                    emit_event(job_id, {
+                        "step": "agent_completed",
+                        "message": "Cached agent results applied"
+                    })
+                
+                return True
+    except:
+        pass  # Continue with normal flow if cache lookup fails
     
     try:
         container_name = f"agent-{job_id[:8]}"

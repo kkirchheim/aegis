@@ -3,8 +3,8 @@
 import sys
 from typing import Optional, Dict, List, Callable
 from threading import Lock
-from database import get_db
 from models.events import JobEvent, STAGE_TRANSITIONS
+from models.database import Event, Job
 
 
 class EventDispatcher:
@@ -62,22 +62,25 @@ class EventDispatcher:
     def _persist_event(self, event: JobEvent) -> None:
         """Store event in database (non-chat events only)."""
         try:
-            conn = get_db()
-            c = conn.cursor()
-            c.execute("""
-                INSERT INTO events (job_id, timestamp, step, message, severity)
-                VALUES (?, ?, ?, ?, ?)
-            """, (
-                event.job_id,
-                event.timestamp,
-                event.step,
-                event.message or "",
-                event.severity,
-            ))
-            conn.commit()
-            conn.close()
+            # Get job by ID
+            try:
+                job = Job.get_by_id(event.job_id)
+            except Job.DoesNotExist:
+                self.logger(f"[{event.job_id}] Job not found, cannot persist event: {event.step}")
+                return
+            
+            # Create event using Peewee model
+            Event.create(
+                job=job,
+                step=event.step,
+                message=event.message or "",
+                severity=event.severity,
+                timestamp=event.timestamp,
+                stage_duration_ms=event.stage_duration_ms,
+            )
+            self.logger(f"[{event.job_id}] Event persisted: {event.step}")
         except Exception as e:
-            self.logger(f"Failed to persist event: {e}")
+            self.logger(f"[{event.job_id}] Failed to persist event {event.step}: {type(e).__name__}: {e}")
     
     def _handle_stage_transition(self, event: JobEvent) -> None:
         """Update job status for stage transition events."""
@@ -106,6 +109,9 @@ class EventDispatcher:
         with self.event_queues_lock:
             if event.job_id in self.event_queues:
                 self.event_queues[event.job_id].append(event.to_dict())
+                self.logger(f"[{event.job_id}] Event queued: {event.step} (queue size: {len(self.event_queues[event.job_id])})")
+            else:
+                self.logger(f"[{event.job_id}] Queue not found for event: {event.step} (available: {list(self.event_queues.keys())})")
 
 
 class EventDispatcherFactory:

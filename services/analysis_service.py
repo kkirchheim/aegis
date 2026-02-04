@@ -3,7 +3,8 @@
 import json
 from utils.pdf_utils import extract_pdf_text
 from services.cache_service import get_cached_paper_analysis, store_paper_analysis_cache
-from database import get_db
+from models.database import PaperAnalysis
+from repositories import PaperAnalysisRepository
 
 
 def extract_and_analyze_pdf(pdf_path, job_id, llm_provider, app_logger=None):
@@ -144,26 +145,19 @@ def store_paper_analysis(job_id, paper_info, pdf_text):
         import hashlib
         pdf_hash = hashlib.md5(pdf_text.encode()).hexdigest()
         
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("""
-            INSERT INTO paper_analysis 
-            (job_id, pdf_hash, title, abstract, citations, extracted_text, claimed_results, methodology, dependencies, dataset_description)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            job_id,
-            pdf_hash,
-            paper_info.get("title", ""),
-            paper_info.get("abstract", ""),
-            json.dumps(paper_info.get("citations", [])),
-            pdf_text[:50000],
-            json.dumps(paper_info.get("claimed_results", {})),
-            paper_info.get("methodology", ""),
-            paper_info.get("dependencies", ""),
-            paper_info.get("dataset_description", "")
-        ))
-        conn.commit()
-        conn.close()
+        analysis = PaperAnalysis.create(
+            job_id=job_id,
+            pdf_hash=pdf_hash,
+            title=paper_info.get("title", ""),
+            abstract=paper_info.get("abstract", ""),
+            citations=json.dumps(paper_info.get("citations", [])),
+            extracted_text=pdf_text[:50000],
+            claimed_results=json.dumps(paper_info.get("claimed_results", {})),
+            methodology=paper_info.get("methodology", ""),
+            dependencies=paper_info.get("dependencies", ""),
+            dataset_description=paper_info.get("dataset_description", "")
+        )
+        analysis.save()
     except Exception as e:
         pass
 
@@ -171,24 +165,16 @@ def store_paper_analysis(job_id, paper_info, pdf_text):
 def get_paper_analysis(job_id):
     """Get paper analysis for a job."""
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(
-            "SELECT title, abstract, citations, extracted_text, methodology, dependencies, dataset_description FROM paper_analysis WHERE job_id = ?",
-            (job_id,)
-        )
-        row = c.fetchone()
-        conn.close()
-        
-        if row:
+        analysis = PaperAnalysisRepository.get(job_id)
+        if analysis:
             return {
-                "title": row["title"],
-                "abstract": row["abstract"],
-                "citations": json.loads(row["citations"] or "[]"),
-                "extracted_text": row["extracted_text"],
-                "methodology": row["methodology"],
-                "dependencies": row["dependencies"],
-                "dataset_description": row["dataset_description"]
+                "title": analysis.title,
+                "abstract": analysis.abstract,
+                "citations": analysis.get_citations(),
+                "extracted_text": analysis.extracted_text,
+                "methodology": analysis.methodology,
+                "dependencies": analysis.dependencies,
+                "dataset_description": analysis.dataset_description
             }
     except Exception as e:
         pass
