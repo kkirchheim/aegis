@@ -99,6 +99,12 @@ def upload_pdf():
     # Create job in database
     create_job(job_id, str(pdf_path), file.filename, user_id, thumbnail_path, num_pages)
     
+    # Pre-create queue BEFORE background thread starts
+    # This ensures all events get captured from the start
+    with event_queues_lock:
+        event_queues[job_id] = []
+    print(f"[{job_id}] Queue pre-created for new job")
+    
     # Get configuration
     config = {
         "container": request.form.get("container", "python"),
@@ -143,12 +149,12 @@ def events(job_id):
         return jsonify({"error": "Access denied"}), 403
     
     def generate():
-        # CREATE QUEUE FIRST - before any events are sent
-        # This captures events emitted during historical event sending
-        q = []
+        # Get or create queue (pre-created at job upload time)
         with event_queues_lock:
-            event_queues[job_id] = q
-        print(f"[{job_id}] Queue registered immediately")
+            if job_id not in event_queues:
+                event_queues[job_id] = []
+            q = event_queues[job_id]
+        print(f"[{job_id}] Using queue (exists: {len(q)} pending events)")
         
         # Then send all historical events from database
         from services.job_service import get_job_events
