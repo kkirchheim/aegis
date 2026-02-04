@@ -172,7 +172,9 @@ function startProgressPolling(jobId) {
     // Poll every 1.5 seconds for job progress
     pollInterval = setInterval(async () => {
         try {
-            const response = await fetch(`/api/job/${jobId}/full`);
+            const response = await fetch(`/api/job/${jobId}/full`, {
+                credentials: 'include'  // Send session cookie with request
+            });
             if (!response.ok) {
                 console.error(`Poll failed: HTTP ${response.status}`);
                 return;
