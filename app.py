@@ -13,11 +13,12 @@ import threading
 import time
 import docker
 import hashlib
+import secrets
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, request, jsonify, Response, render_template
+from flask import Flask, request, jsonify, Response, render_template, session, redirect
 import pdfplumber
 from dotenv import load_dotenv
 
@@ -27,6 +28,13 @@ from llm import get_provider
 load_dotenv()
 
 app = Flask(__name__)
+
+# Session configuration
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', secrets.token_hex(32))
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
 # Initialize LLM provider (supports Anthropic, Ollama, etc.)
 try:
     llm_provider = get_provider()
@@ -59,6 +67,34 @@ event_queues_lock = threading.Lock()
 
 
 # ============================================================================
+# Password & Auth Utilities
+# ============================================================================
+
+def hash_password(password):
+    """Hash password using PBKDF2."""
+    salt = secrets.token_hex(32)
+    pwdhash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+    return f"{salt}${pwdhash.hex()}"
+
+def verify_password(password, password_hash):
+    """Verify password against stored hash."""
+    try:
+        salt, pwdhash = password_hash.split('$')
+        new_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+        return new_hash.hex() == pwdhash
+    except:
+        return False
+
+def require_auth(f):
+    """Decorator to require authentication on routes."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ============================================================================
 # Database Initialization
 # ============================================================================
 
@@ -73,6 +109,17 @@ def init_db():
     """Initialize database schema."""
     conn = get_db()
     c = conn.cursor()
+    
+    # Create users table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     
     c.execute("""
         CREATE TABLE IF NOT EXISTS jobs (
@@ -233,6 +280,13 @@ def init_db():
     try:
         c.execute("ALTER TABLE cache_paper_analysis ADD COLUMN citations JSON")
         app.logger.info("Added citations column to cache_paper_analysis table")
+    except:
+        pass
+    
+    # Add user_id to jobs table (migration for multi-user support)
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN user_id INTEGER")
+        app.logger.info("Added user_id column to jobs table")
     except:
         pass
     
@@ -949,15 +1003,101 @@ def set_cache_headers(response):
         response.headers['Expires'] = '0'
     return response
 
+# ============================================================================
+# Authentication Routes
+# ============================================================================
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    """User registration page."""
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        email = request.form.get("email", "").strip()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        
+        # Validation
+        if not username or len(username) < 3:
+            return jsonify({"error": "Username must be at least 3 characters"}), 400
+        if not email or "@" not in email:
+            return jsonify({"error": "Invalid email"}), 400
+        if not password or len(password) < 8:
+            return jsonify({"error": "Password must be at least 8 characters"}), 400
+        if password != confirm_password:
+            return jsonify({"error": "Passwords don't match"}), 400
+        
+        # Check if user exists
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT id FROM users WHERE username = ? OR email = ?", (username, email))
+        if c.fetchone():
+            conn.close()
+            return jsonify({"error": "Username or email already exists"}), 400
+        
+        # Create user
+        password_hash = hash_password(password)
+        c.execute(
+            "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+            (username, email, password_hash)
+        )
+        conn.commit()
+        user_id = c.lastrowid
+        conn.close()
+        
+        # Log them in
+        session['user_id'] = user_id
+        session['username'] = username
+        
+        return jsonify({"message": "Registration successful", "redirect": "/"}), 201
+    
+    return render_template("register.html")
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """User login page."""
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        
+        if not username or not password:
+            return jsonify({"error": "Username and password required"}), 400
+        
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT id, password_hash, username FROM users WHERE username = ?", (username,))
+        user = c.fetchone()
+        conn.close()
+        
+        if not user or not verify_password(password, user[1]):
+            return jsonify({"error": "Invalid username or password"}), 401
+        
+        # Log them in
+        session['user_id'] = user[0]
+        session['username'] = user[2]
+        
+        return jsonify({"message": "Login successful", "redirect": "/"}), 200
+    
+    return render_template("login.html")
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    """User logout."""
+    session.clear()
+    return jsonify({"message": "Logged out", "redirect": "/login"}), 200
+
 @app.route("/")
 def index():
     """Home page - upload form."""
+    if 'user_id' not in session:
+        return redirect("/login")
     return render_template("index.html")
 
 
 @app.route("/history")
 def history():
     """History page - browse past analyses."""
+    if 'user_id' not in session:
+        return redirect("/login")
     return render_template("history.html")
 
 
@@ -975,6 +1115,12 @@ def upload_pdf():
     Returns:
         {"job_id": "...", "message": "..."}
     """
+    
+    # Check authentication
+    if 'user_id' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    user_id = session['user_id']
     
     # Validate file
     if "pdf" not in request.files:
@@ -1006,8 +1152,8 @@ def upload_pdf():
     conn = get_db()
     c = conn.cursor()
     c.execute(
-        "INSERT INTO jobs (id, status, pdf_path, pdf_filename) VALUES (?, ?, ?, ?)",
-        (job_id, "pending", str(pdf_path), file.filename)
+        "INSERT INTO jobs (id, status, pdf_path, pdf_filename, user_id) VALUES (?, ?, ?, ?, ?)",
+        (job_id, "pending", str(pdf_path), file.filename, user_id)
     )
     conn.commit()
     conn.close()
