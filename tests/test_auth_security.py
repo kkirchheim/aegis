@@ -20,7 +20,11 @@ import json
 import tempfile
 import os
 import pytest
-from app import app, init_db, get_db, hash_password, DATABASE
+from app import app
+from database import init_db, get_db
+from services.auth_service import hash_password
+from config import Config
+DATABASE = Config.DATABASE
 
 
 @pytest.fixture
