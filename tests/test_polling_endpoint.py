@@ -133,7 +133,7 @@ class TestPollingEndpoint:
         assert "message" in event
         assert "severity" in event
         assert "timestamp" in event
-        assert "duration_ms" in event
+        assert "stage_duration_ms" in event
         
         # Check field types
         assert isinstance(event["id"], str)
@@ -142,7 +142,7 @@ class TestPollingEndpoint:
         assert isinstance(event["message"], str)
         assert isinstance(event["severity"], str)
         assert isinstance(event["timestamp"], str)
-        assert isinstance(event["duration_ms"], (int, type(None)))
+        assert isinstance(event["stage_duration_ms"], (int, type(None)))
         
         # Timestamp should be ISO format with Z
         assert event["timestamp"].endswith("Z")
@@ -157,7 +157,7 @@ class TestPollingEndpoint:
         # Event 2 (stage_1_complete) has duration
         event2 = data["events"][1]
         assert event2["step"] == "stage_1_complete"
-        assert event2["duration_ms"] == 5000
+        assert event2["stage_duration_ms"] == 5000
     
     def test_polling_job_completion_status(self, app, auth_user):
         """Test that 'completed' flag reflects job status."""

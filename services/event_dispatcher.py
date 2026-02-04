@@ -56,8 +56,9 @@ class EventDispatcher:
         if event.is_stage_transition():
             self._handle_stage_transition(event)
         
-        # Emit to SSE clients
-        self._emit_to_queues(event)
+        # NOTE: SSE queues disabled - now using polling for frontend
+        # Events are retrieved via /api/job/<id>/events endpoint
+        # self._emit_to_queues(event)
     
     def _persist_event(self, event: JobEvent) -> None:
         """Store event in database (non-chat events only)."""

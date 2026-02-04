@@ -762,45 +762,8 @@ async function pollForEvents() {
 }
 
 function startProgressPolling() {
-    // DEPRECATED: Poll every 100ms for job progress
-    // Now handled by pollForEvents() instead
-    console.log(`[Polling] startProgressPolling called but polling already started`);
-    return;
-    
-    pollInterval = setInterval(async () => {
-        try {
-            const response = await fetch(`/api/job/${JOB_ID}/full`, {
-                credentials: 'include'  // Send session cookie with request
-            });
-            if (!response.ok) {
-                console.error(`Poll failed: HTTP ${response.status}`);
-                return;
-            }
-            
-            const job = await response.json();
-            currentJob = job;
-            
-            // Update progress bar from backend field
-            const progressPercentage = Math.round((job.progress || 0) * 100);
-            progressFill.value = progressPercentage;
-            progressText.textContent = `${progressPercentage}%`;
-            
-            // Update stages based on current_stage field
-            if (job.current_stage && job.current_stage !== lastStage) {
-                lastStage = job.current_stage;
-                updateStagesFromStage(job.current_stage);
-            }
-            
-            // Stop polling if complete
-            if (job.status === "completed" || job.status === "failed") {
-                stopProgressPolling();
-                if (eventSource) eventSource.close();
-                // Don't reload - user can see the full results
-            }
-        } catch (error) {
-            console.error("Polling error:", error);
-        }
-    }, 100);
+    // DEPRECATED: Polling now handled by startEventPolling() which calls pollForEvents()
+    // This function kept for backward compatibility but does nothing
 }
 
 function stopProgressPolling() {
