@@ -180,29 +180,21 @@ function handleProgressEvent(event) {
         }
     }
     
-    // Update progress bar based on completion events (3 stages = 33%, 66%, 100%)
-    let displayProgress = 0;
-    
-    // Use stage-based progress only for "complete" events
-    if (step.includes("_complete")) {
-        if (stage === "paper_analysis") {
-            displayProgress = 33;
-        } else if (stage === "code_execution") {
-            displayProgress = 66;
-        } else if (stage === "reproducibility_evaluation") {
-            displayProgress = 100;
-        }
-    } else if (progress === 100) {
-        // Final completion
-        displayProgress = 100;
-    } else if (progress !== undefined) {
-        // For intermediate events, use raw progress but cap at 32% for stage 1, 65% for stage 2
-        displayProgress = Math.min(progress, 100);
-    }
-    
-    if (displayProgress > 0 && progressFill && progressText) {
-        progressFill.value = displayProgress;
-        progressText.textContent = `${displayProgress}%`;
+    // Refresh job data from backend on stage completion to get accurate progress
+    if (step && (step === "stage_1_complete" || step === "stage_2_complete" || step === "stage_3_complete")) {
+        // Fetch latest job data to get backend-tracked progress
+        fetch(`/api/job/${currentJobId}/full`)
+            .then(r => r.json())
+            .then(job => {
+                if (job && typeof job.progress === 'number') {
+                    const progressPercentage = Math.round(job.progress * 100);
+                    if (progressFill && progressText) {
+                        progressFill.value = progressPercentage;
+                        progressText.textContent = `${progressPercentage}%`;
+                    }
+                }
+            })
+            .catch(e => console.error("Failed to fetch progress:", e));
     }
     
     // Add to log (skip stage starting/complete events)
