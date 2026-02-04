@@ -2,75 +2,71 @@
 
 import json
 from pathlib import Path
+from repositories import JobRepository
+from models import Job
 from database import get_db
 
 
-def create_job(job_id, pdf_path, pdf_filename, user_id, thumbnail_path=None, num_pages=None):
+def create_job(job_id, pdf_path, pdf_filename, user_id, thumbnail_path=None, num_pages=None) -> bool:
     """Create a new job in the database."""
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(
-            "INSERT INTO jobs (id, status, pdf_path, pdf_filename, user_id, thumbnail_path, num_pages) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (job_id, "pending", str(pdf_path), pdf_filename, user_id, thumbnail_path, num_pages)
-        )
-        conn.commit()
-        conn.close()
-        return True
-    except Exception as e:
-        return False
+    # Use repository to create job
+    success = JobRepository.create(job_id, str(pdf_path), user_id)
+    
+    # Update additional fields
+    if success:
+        try:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute(
+                "UPDATE jobs SET pdf_filename = ?, thumbnail_path = ?, num_pages = ? WHERE id = ?",
+                (pdf_filename, thumbnail_path, num_pages, job_id)
+            )
+            conn.commit()
+            conn.close()
+        except:
+            pass
+    
+    return success
 
 
-def get_job(job_id):
+def get_job(job_id) -> Job:
     """Get job by ID."""
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
-        job = c.fetchone()
-        conn.close()
-        return job
-    except Exception as e:
-        return None
+    return JobRepository.get(job_id)
 
 
 def get_user_jobs(user_id):
     """Get all jobs for a user."""
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("""
-            SELECT 
-                j.id, j.status, j.pdf_filename, j.created_at, j.completed_at, j.thumbnail_path, j.num_pages,
-                p.title, p.abstract
-            FROM jobs j
-            LEFT JOIN paper_analysis p ON j.id = p.job_id
-            WHERE j.user_id = ?
-            ORDER BY j.created_at DESC
-            LIMIT 50
-        """, (user_id,))
-        jobs = c.fetchall()
-        conn.close()
-        return [dict(job) for job in jobs]
-    except Exception as e:
-        return []
-
-
-def update_job_status(job_id, status, error_message=None, progress=None, current_stage=None):
-    """Update job status, progress, and optionally stage.
+    jobs = JobRepository.list_all(user_id=user_id, limit=50)
     
-    Args:
-        job_id: Job ID
-        status: New status ('pending', 'processing', 'completed', 'failed')
-        error_message: Optional error message if status='failed'
-        progress: Optional progress (0.0 to 1.0)
-        current_stage: Optional pipeline stage ('paper_analysis', 'code_execution', 'evaluation', 'completed')
-    """
+    # Fetch paper analysis for each job
     try:
         conn = get_db()
         c = conn.cursor()
         
-        # Build dynamic UPDATE query based on provided parameters
+        result = []
+        for job in jobs:
+            c.execute("SELECT title, abstract FROM paper_analysis WHERE job_id = ?", (job.id,))
+            paper_row = c.fetchone()
+            
+            job_dict = job.to_dict()
+            if paper_row:
+                job_dict['title'] = paper_row['title']
+                job_dict['abstract'] = paper_row['abstract']
+            
+            result.append(job_dict)
+        
+        conn.close()
+        return result
+    except:
+        return [job.to_dict() for job in jobs]
+
+
+def update_job_status(job_id, status, error_message=None, progress=None, current_stage=None) -> bool:
+    """Update job status, progress, and optionally stage."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
         updates = ["status = ?"]
         params = [status]
         
@@ -93,19 +89,20 @@ def update_job_status(job_id, status, error_message=None, progress=None, current
         conn.commit()
         conn.close()
         return True
-    except Exception as e:
+    except:
         return False
 
 
-def update_job_completion(job_id, report=None):
+def update_job_completion(job_id, report=None) -> bool:
     """Mark job as completed."""
     try:
         conn = get_db()
         c = conn.cursor()
         if report:
+            report_json = json.dumps(report) if not isinstance(report, str) else report
             c.execute(
                 "UPDATE jobs SET status = ?, completed_at = CURRENT_TIMESTAMP, report = ? WHERE id = ?",
-                ("completed", json.dumps(report) if not isinstance(report, str) else report, job_id)
+                ("completed", report_json, job_id)
             )
         else:
             c.execute(
@@ -115,38 +112,30 @@ def update_job_completion(job_id, report=None):
         conn.commit()
         conn.close()
         return True
-    except Exception as e:
+    except:
         return False
 
 
-def delete_job(job_id):
+def delete_job(job_id) -> bool:
     """Delete a job and all related data."""
     try:
-        conn = get_db()
-        c = conn.cursor()
-        
-        # Get PDF path for deletion
-        c.execute("SELECT pdf_path FROM jobs WHERE id = ?", (job_id,))
-        job = c.fetchone()
-        
-        if job and job["pdf_path"]:
-            pdf_file = Path(job["pdf_path"])
+        # Get PDF path first
+        job = JobRepository.get(job_id)
+        if job and job.pdf_path:
+            pdf_file = Path(job.pdf_path)
             if pdf_file.exists():
-                pdf_file.unlink()
+                try:
+                    pdf_file.unlink()
+                except:
+                    pass
         
-        # Delete related data
-        c.execute("DELETE FROM events WHERE job_id = ?", (job_id,))
-        c.execute("DELETE FROM artifacts WHERE job_id = ?", (job_id,))
-        c.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
-        
-        conn.commit()
-        conn.close()
-        return True
-    except Exception as e:
+        # Delete using repository
+        return JobRepository.delete(job_id)
+    except:
         return False
 
 
-def store_artifacts(job_id, artifacts):
+def store_artifacts(job_id, artifacts) -> bool:
     """Store artifacts for a job."""
     try:
         conn = get_db()
@@ -161,7 +150,7 @@ def store_artifacts(job_id, artifacts):
         conn.commit()
         conn.close()
         return True
-    except Exception as e:
+    except:
         return False
 
 
@@ -174,7 +163,7 @@ def get_job_artifacts(job_id):
         artifacts = c.fetchall()
         conn.close()
         return [dict(a) for a in artifacts]
-    except Exception as e:
+    except:
         return []
 
 
@@ -190,11 +179,11 @@ def get_job_events(job_id):
         events = c.fetchall()
         conn.close()
         return [dict(e) for e in events]
-    except Exception as e:
+    except:
         return []
 
 
-def store_event(job_id, timestamp, step, message, severity="info"):
+def store_event(job_id, timestamp, step, message, severity="info") -> bool:
     """Store an event for a job."""
     try:
         conn = get_db()
@@ -206,5 +195,5 @@ def store_event(job_id, timestamp, step, message, severity="info"):
         conn.commit()
         conn.close()
         return True
-    except Exception as e:
+    except:
         return False
