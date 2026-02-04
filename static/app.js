@@ -236,23 +236,29 @@ function updateStagesFromStage(currentStage) {
     const stageMap = {
         'paper_analysis': 'paper_analysis',
         'code_execution': 'code_execution',
-        'evaluation': 'reproducibility_evaluation',
-        'completed': null  // All stages complete
+        'evaluation': 'reproducibility_evaluation'
     };
     
-    const stageKey = stageMap[currentStage];
-    
-    // Mark all stages based on current position
-    const stageKeys = Object.keys(stages);
     const stageOrder = ['paper_analysis', 'code_execution', 'reproducibility_evaluation'];
-    const currentIndex = stageOrder.indexOf(stageKey);
+    let currentIndex = -1;
     
+    // If job is completed, mark all stages as complete
+    if (currentStage === 'completed' || currentStage === 'failed') {
+        currentIndex = 999;  // Mark all as done
+    } else {
+        const stageKey = stageMap[currentStage];
+        currentIndex = stageOrder.indexOf(stageKey);
+    }
+    
+    // Update stages in the object
     stageOrder.forEach((key, index) => {
         if (index < currentIndex) {
             stages[key].status = 'complete';
-        } else if (index === currentIndex) {
+        } else if (index === currentIndex && currentIndex !== 999) {
             stages[key].status = 'active';
             stages[key].start = Date.now();
+        } else if (currentIndex === 999) {
+            stages[key].status = 'complete';
         } else {
             stages[key].status = 'pending';
         }

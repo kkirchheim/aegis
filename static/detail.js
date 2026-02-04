@@ -745,13 +745,18 @@ function updateStagesFromStage(currentStage) {
         'evaluation': 'stage3'
     };
     
+    const stages = ['stage1', 'stage2', 'stage3'];
     const stageKey = stageMap[currentStage];
-    if (!stageKey) return;
+    let currentIndex = -1;
+    
+    // If job is completed/failed, mark all stages as complete
+    if (currentStage === 'completed' || currentStage === 'failed') {
+        currentIndex = 999;
+    } else {
+        currentIndex = stages.indexOf(stageKey);
+    }
     
     // Update the stage icons - mark all previous as complete, current as active
-    const stages = ['stage1', 'stage2', 'stage3'];
-    const currentIndex = stages.indexOf(stageKey);
-    
     stages.forEach((stage, index) => {
         const icon = document.getElementById(`${stage}Icon`);
         if (icon) {
@@ -759,10 +764,15 @@ function updateStagesFromStage(currentStage) {
                 icon.textContent = "✓";
                 icon.style.color = "#22c55e";
                 icon.className = "text-2xl mb-1";
-            } else if (index === currentIndex) {
+            } else if (index === currentIndex && currentIndex !== 999) {
                 icon.textContent = "▶";
                 icon.style.color = "#ffa500";
                 icon.className = "text-2xl mb-1 animate-pulse";
+            } else if (currentIndex === 999) {
+                // All complete
+                icon.textContent = "✓";
+                icon.style.color = "#22c55e";
+                icon.className = "text-2xl mb-1";
             }
         }
     });
