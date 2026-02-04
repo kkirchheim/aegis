@@ -34,6 +34,36 @@ def get_docker_client():
     return DOCKER_CLIENT
 
 
+def validate_network(network_name, app_logger=None):
+    """
+    Validate that a Docker network exists.
+    
+    Returns: (exists: bool, error_message: str)
+    """
+    if not DOCKER_AVAILABLE:
+        return False, "Docker not available"
+    
+    try:
+        networks = DOCKER_CLIENT.networks.list()
+        network_names = [n.name for n in networks]
+        
+        if network_name in network_names:
+            return True, None
+        else:
+            msg = (
+                f"Docker network '{network_name}' not found. Available networks: {', '.join(network_names)}. "
+                f"Create it with: docker network create {network_name}"
+            )
+            if app_logger:
+                app_logger.error(msg)
+            return False, msg
+    except Exception as e:
+        msg = f"Failed to validate Docker network: {e}"
+        if app_logger:
+            app_logger.error(msg)
+        return False, msg
+
+
 def build_agent_image(app_logger=None):
     """Build Docker image for agent sandbox."""
     if not DOCKER_AVAILABLE:
@@ -173,6 +203,18 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
             storage_limit = 10
         
         storage_limit_str = f"{storage_limit}g"
+        
+        # Validate Docker network exists
+        network_valid, network_error = validate_network(Config.DOCKER_NETWORK, app_logger)
+        if not network_valid:
+            if app_logger:
+                app_logger.error(f"[{job_id}] {network_error}")
+            if emit_event:
+                emit_event(job_id, {
+                    "step": "error",
+                    "message": f"Docker network validation failed: {network_error}"
+                })
+            return False
         
         if app_logger:
             app_logger.info(f"[{job_id}] Starting container with storage limit: {storage_limit}GB")
