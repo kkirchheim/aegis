@@ -181,10 +181,19 @@ function renderPage() {
     // Progress section - show if processing OR if we have events
     if (currentJob.status === "processing") {
         progressSection.style.display = "block";
-        eventLog.innerHTML = "";
-        progressFill.value = 0;
-        progressText.textContent = "0%";
         logSection.style.display = "block";  // Show log section for live updates
+        
+        // First, render historical events if any exist
+        if (currentJob.events && currentJob.events.length > 0) {
+            renderProgressHistory();
+        } else {
+            // No historical events, show empty state
+            eventLog.innerHTML = "";
+            progressFill.value = 0;
+            progressText.textContent = "0%";
+        }
+        
+        // Then connect to SSE for live updates (new events will be appended)
         setupSSEConnection();
     } else if (currentJob.events && currentJob.events.length > 0) {
         // Show progress section with historical events for completed jobs
