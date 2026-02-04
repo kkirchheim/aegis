@@ -12,10 +12,8 @@ from services.job_service import (
     create_job, get_job, get_user_jobs, update_job_status, delete_job,
     store_artifacts, get_job_artifacts, get_job_events
 )
-from services.analysis_service import extract_and_analyze_pdf
-from services.docker_service import spawn_agent_container
-from services.evaluation_service import evaluate_reproducibility_aspects
 from services.event_dispatcher import EventDispatcher
+from services.pipeline_orchestrator import PipelineOrchestrator
 from models.events import JobEvent
 from utils.pdf_utils import extract_page_count, generate_pdf_thumbnail
 from database import get_db
@@ -28,6 +26,9 @@ event_queues_lock = threading.Lock()
 
 # Event dispatcher
 _dispatcher = EventDispatcher(event_queues=event_queues, event_queues_lock=event_queues_lock)
+
+# Pipeline orchestrator
+_orchestrator = PipelineOrchestrator(dispatcher=_dispatcher)
 
 
 def emit_event(job_id, event_dict):
@@ -50,127 +51,11 @@ def emit_event(job_id, event_dict):
 
 
 def analyze_paper_background(job_id, pdf_path, config, llm_provider):
-    """Background job for paper analysis."""
-    import sys
-    try:
-        print(f"[{job_id}] ===== ANALYSIS STARTED =====", file=sys.stderr)
-        emit_event(job_id, {
-            "step": "starting",
-            "message": "Analysis starting...",
-            "progress": 0
-        })
-        
-        # Update status
-        update_job_status(job_id, "processing")
-        
-        # STAGE 1: Paper analysis
-        print(f"[{job_id}] >>> STAGE 1 STARTING", file=sys.stderr)
-        emit_event(job_id, {
-            "step": "stage_1_starting",
-            "message": "Stage 1: Analyzing Paper...",
-            "progress": 5
-        })
-        
-        emit_event(job_id, {
-            "step": "extracting_pdf",
-            "message": "Extracting text from PDF..."
-        })
-        
-        pdf_text, paper_info = extract_and_analyze_pdf(pdf_path, job_id, llm_provider)
-        
-        emit_event(job_id, {
-            "step": "pdf_extracted",
-            "message": f"Extracted {len(pdf_text)} characters from PDF",
-            "progress": 40
-        })
-        
-        # Store artifacts
-        artifacts = paper_info.get("artifacts", [])
-        store_artifacts(job_id, artifacts)
-        
-        print(f"[{job_id}] >>> STAGE 1 COMPLETE", file=sys.stderr)
-        emit_event(job_id, {
-            "step": "stage_1_complete",
-            "message": f"Found {len(artifacts)} artifacts",
-            "progress": 40
-        })
-        
-        # STAGE 2: Code execution
-        print(f"[{job_id}] >>> STAGE 2 STARTING", file=sys.stderr)
-        emit_event(job_id, {
-            "step": "stage_2_starting",
-            "message": "Stage 2: Executing Code...",
-            "progress": 45
-        })
-        
-        github_artifacts = [a for a in artifacts if a.get("type") == "github_repo" and a.get("url")]
-        
-        if github_artifacts:
-            for i, artifact in enumerate(github_artifacts, 1):
-                repo_url = artifact.get("url")
-                emit_event(job_id, {
-                    "step": "running_agent",
-                    "message": f"[{i}/{len(github_artifacts)}] Running agent on {repo_url}",
-                    "progress": 45 + int(30 * i / len(github_artifacts))
-                })
-                
-                try:
-                    spawn_agent_container(job_id, repo_url, config, emit_event=emit_event)
-                except Exception as e:
-                    emit_event(job_id, {
-                        "step": "agent_error",
-                        "message": f"Agent failed for {repo_url}: {str(e)}"
-                    })
-        
-        print(f"[{job_id}] >>> STAGE 2 COMPLETE", file=sys.stderr)
-        emit_event(job_id, {
-            "step": "stage_2_complete",
-            "message": "Code execution complete",
-            "progress": 75
-        })
-        
-        # STAGE 3: Evaluation
-        print(f"[{job_id}] >>> STAGE 3 STARTING", file=sys.stderr)
-        emit_event(job_id, {
-            "step": "stage_3_starting",
-            "message": "Stage 3: Evaluating Reproducibility...",
-            "progress": 80
-        })
-        
-        # Run evaluation and WAIT for it to complete before proceeding
-        print(f"[{job_id}] === Calling evaluate_reproducibility_aspects ===", file=sys.stderr)
-        evaluation_result = evaluate_reproducibility_aspects(
-            job_id, 
-            llm_provider,
-            emit_event=emit_event
-        )
-        print(f"[{job_id}] === evaluate_reproducibility_aspects returned: {evaluation_result} ===", file=sys.stderr)
-        
-        if not evaluation_result:
-            raise Exception("Evaluation failed")
-        
-        # Emit final completion event
-        print(f"[{job_id}] >>> EMITTING FINAL COMPLETE EVENT", file=sys.stderr)
-        emit_event(job_id, {
-            "step": "complete",
-            "message": "Analysis complete",
-            "progress": 100,
-            "status": "success"
-        })
-        
-        # Mark job as completed
-        print(f"[{job_id}] >>> MARKING JOB AS COMPLETED", file=sys.stderr)
-        update_job_status(job_id, "completed", progress=1.0, current_stage="completed")
-        print(f"[{job_id}] ===== ANALYSIS COMPLETE =====", file=sys.stderr)
+    """Background job for paper analysis.
     
-    except Exception as e:
-        emit_event(job_id, {
-            "step": "error",
-            "message": f"Error: {str(e)}",
-            "progress": 100
-        })
-        
-        update_job_status(job_id, "failed", error_message=str(e), progress=0.0, current_stage="failed")
+    Delegates to PipelineOrchestrator to run the 3-stage pipeline.
+    """
+    _orchestrator.run_analysis(job_id, pdf_path, config, llm_provider)
 
 
 @jobs_bp.route("/upload", methods=["POST"])
