@@ -9,11 +9,14 @@ Usage:
     python manage_users.py activate <username>     Activate user account
     python manage_users.py deactivate <username>   Deactivate user account
     python manage_users.py delete <username>       Delete user account
+    python manage_users.py reset-password <username> <password>  Reset user password
 """
 
 import sys
 import os
 import sqlite3
+import hashlib
+import secrets
 from pathlib import Path
 from datetime import datetime
 
@@ -32,6 +35,13 @@ def get_db():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def hash_password(password):
+    """Hash password using PBKDF2."""
+    salt = secrets.token_hex(32)
+    pwdhash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+    return f"{salt}${pwdhash.hex()}"
 
 
 def ensure_column_exists():
@@ -188,6 +198,31 @@ def delete_user(username):
     return True
 
 
+def reset_password(username, password):
+    """Reset a user's password."""
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Check if user exists
+    c.execute("SELECT id FROM users WHERE username = ?", (username,))
+    user = c.fetchone()
+    
+    if not user:
+        print(f"✗ User '{username}' not found")
+        conn.close()
+        return False
+    
+    # Hash and update password
+    password_hash = hash_password(password)
+    c.execute("UPDATE users SET password_hash = ? WHERE username = ?", (password_hash, username))
+    conn.commit()
+    conn.close()
+    
+    print(f"✓ Password reset for user '{username}' successfully")
+    print(f"  New password: {password}")
+    return True
+
+
 def main():
     """Main CLI handler."""
     if len(sys.argv) < 2:
@@ -219,6 +254,14 @@ def main():
             sys.exit(1)
         username = sys.argv[2]
         delete_user(username)
+    elif command == "reset-password":
+        if len(sys.argv) < 4:
+            print("Error: Username and password required")
+            print("Usage: python manage_users.py reset-password <username> <password>")
+            sys.exit(1)
+        username = sys.argv[2]
+        password = sys.argv[3]
+        reset_password(username, password)
     else:
         print(f"Unknown command: {command}")
         print(__doc__)
