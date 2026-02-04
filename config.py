@@ -77,8 +77,11 @@ class Config:
     
     # Docker
     DOCKER_AVAILABLE = False  # Will be set in app initialization
-    DOCKER_NETWORK = os.getenv('DOCKER_NETWORK', 'workspace_traefik')
-    DOCKER_BACKEND_URL = os.getenv('DOCKER_BACKEND_URL', 'http://paper-reproducibility:5000')
+    # DOCKER_NETWORK: If empty/not set, Docker uses default bridge network
+    # For Traefik: set to 'workspace_traefik' (or your network name)
+    # For standalone: leave empty or unset (uses Docker default bridge)
+    DOCKER_NETWORK = os.getenv('DOCKER_NETWORK', '')
+    DOCKER_BACKEND_URL = os.getenv('DOCKER_BACKEND_URL', 'http://localhost:5000')
 
 
 def get_config():

@@ -4,32 +4,44 @@ The Paper Reproducibility Checker uses Docker containers for sandboxed code exec
 
 ## Quick Start
 
-### For Traefik-Based Deployments (OpenClaw)
-If you're using this inside OpenClaw with Traefik, the network already exists:
+### Default Behavior (Recommended for Standalone)
+If `DOCKER_NETWORK` is empty or not set, the app uses Docker's default bridge network:
 
 ```bash
+# .env
+DOCKER_NETWORK=          # Leave blank for default bridge network
+DOCKER_BACKEND_URL=http://localhost:5000
+```
+
+This works out-of-the-box on any Docker installation with no additional setup.
+
+### For Traefik-Based Deployments (OpenClaw)
+If you're using this inside OpenClaw with Traefik, set the network explicitly:
+
+```bash
+# .env
 DOCKER_NETWORK=workspace_traefik
 DOCKER_BACKEND_URL=http://paper-reproducibility:5000
 ```
 
-### For Standalone Deployments (No Traefik)
-If you're deploying on a new machine without Traefik:
+### For Custom Docker Networks
+If you want to use a specific custom network:
 
-**Step 1: Create a Docker network**
+**Step 1: Create the network**
 ```bash
-docker network create paper-network
+docker network create my-network
 ```
 
-**Step 2: Update `.env`**
+**Step 2: Set in `.env`**
 ```bash
 # .env
-DOCKER_NETWORK=paper-network
+DOCKER_NETWORK=my-network
 DOCKER_BACKEND_URL=http://localhost:5000
 ```
 
 **Step 3: Verify**
 ```bash
-docker network ls | grep paper-network
+docker network ls | grep my-network
 ```
 
 ## How It Works
@@ -60,7 +72,18 @@ docker network ls | grep paper-network
 
 ## Common Setups
 
-### Setup 1: Docker Compose on Same Host
+### Setup 1: Standalone Docker on Single Host (Simplest)
+Flask and agents on same Docker default bridge:
+
+```bash
+# .env - No Docker network configuration needed!
+DOCKER_NETWORK=          # Leave blank to use Docker default bridge
+DOCKER_BACKEND_URL=http://localhost:5000
+```
+
+No additional setup required. Works immediately.
+
+### Setup 2: Docker Compose with Custom Network
 ```yaml
 # docker-compose.yml
 services:
@@ -79,48 +102,82 @@ networks:
     driver: bridge
 ```
 
-### Setup 2: Host-Based Flask + Docker Agent Containers
-Flask runs on host, agents in Docker:
+### Setup 3: Traefik-Based (OpenClaw)
+When DOCKER_NETWORK is set to the Traefik network:
 
 ```bash
 # .env
-DOCKER_NETWORK=paper-network
+DOCKER_NETWORK=workspace_traefik
+DOCKER_BACKEND_URL=http://paper-reproducibility:5000
+```
+
+Containers can reach Flask app by service name on shared network.
+
+### Setup 4: Host-Based Flask + Docker Agent Containers
+Flask runs on host, agents in Docker. Agents reach host via special addresses:
+
+```bash
+# .env
+DOCKER_NETWORK=          # Use default bridge
 DOCKER_BACKEND_URL=http://host.docker.internal:5000  # macOS/Windows
 # or
 DOCKER_BACKEND_URL=http://172.17.0.1:5000  # Linux (Docker bridge gateway)
 ```
 
-### Setup 3: Kubernetes (Advanced)
-For Kubernetes deployments, adjust network names and backend URLs:
+### Setup 5: Kubernetes (Advanced)
+For Kubernetes deployments, set network to pod network:
 
 ```bash
-DOCKER_NETWORK=default  # or your namespace
+DOCKER_NETWORK=          # Or use the pod network name if applicable
 DOCKER_BACKEND_URL=http://paper-reproducibility-service:5000
 ```
 
 ## Troubleshooting
 
-### Error: "network paper-network not found"
-**Solution:** Create the network
+### Error: "network X not found"
+**Solution 1:** If using custom network, create it:
 ```bash
-docker network create paper-network
+docker network create X
+```
+
+**Solution 2:** Leave `DOCKER_NETWORK` blank to use default bridge:
+```bash
+# .env
+DOCKER_NETWORK=
 ```
 
 ### Error: Agent can't reach Flask app
-**Check:** Verify `DOCKER_BACKEND_URL` is reachable from inside container
+**Check:** Verify `DOCKER_BACKEND_URL` is correct and reachable:
+
+For default bridge:
 ```bash
-docker run -it --rm --network paper-network \
-  ubuntu curl http://host.docker.internal:5000/api/health
+docker run -it --rm ubuntu curl http://host.docker.internal:5000/api/health  # macOS/Windows
+docker run -it --rm ubuntu curl http://172.17.0.1:5000/api/health  # Linux
+```
+
+For custom network:
+```bash
+docker run -it --rm --network paper-network ubuntu curl http://localhost:5000/api/health
 ```
 
 ### Error: "cannot connect to Docker daemon"
 **Check:** Docker is running and current user has permissions
 ```bash
 docker ps  # Should list running containers
+sudo usermod -aG docker $USER  # Add user to docker group
 ```
 
 ### Error: Port 5000 already in use
-**Solution:** Use different port in `docker-compose.yml` or set `FLASK_PORT` env var
+**Solution 1:** Use different port:
+```bash
+FLASK_PORT=5001
+```
+
+**Solution 2:** Stop container using port:
+```bash
+docker ps | grep 5000
+docker stop <container-id>
+```
 
 ## Network Isolation
 

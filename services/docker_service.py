@@ -204,17 +204,45 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
         
         storage_limit_str = f"{storage_limit}g"
         
-        # Validate Docker network exists
-        network_valid, network_error = validate_network(Config.DOCKER_NETWORK, app_logger)
-        if not network_valid:
+        # Prepare network configuration
+        # If DOCKER_NETWORK is empty, Docker uses default bridge network
+        container_kwargs = {
+            "detach": True,
+            "name": container_name,
+            "environment": {
+                "REPO_URL": repo_url,
+                "JOB_ID": job_id,
+                "BACKEND_URL": backend_url,
+                "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
+                "STORAGE_LIMIT": storage_limit_str
+            },
+            "mem_limit": "2g",
+            "memswap_limit": "2g",
+            "nano_cpus": int(2 * 1e9),
+            "tmpfs": {"/tmp": f"size={storage_limit_str}"},
+            "remove": False,
+            "stdout": True,
+            "stderr": True
+        }
+        
+        # Only validate and use custom network if specified
+        if Config.DOCKER_NETWORK:
+            network_valid, network_error = validate_network(Config.DOCKER_NETWORK, app_logger)
+            if not network_valid:
+                if app_logger:
+                    app_logger.error(f"[{job_id}] {network_error}")
+                if emit_event:
+                    emit_event(job_id, {
+                        "step": "error",
+                        "message": f"Docker network validation failed: {network_error}"
+                    })
+                return False
+            container_kwargs["network"] = Config.DOCKER_NETWORK
             if app_logger:
-                app_logger.error(f"[{job_id}] {network_error}")
-            if emit_event:
-                emit_event(job_id, {
-                    "step": "error",
-                    "message": f"Docker network validation failed: {network_error}"
-                })
-            return False
+                app_logger.info(f"[{job_id}] Using Docker network: {Config.DOCKER_NETWORK}")
+        else:
+            if app_logger:
+                app_logger.info(f"[{job_id}] Using Docker default bridge network")
         
         if app_logger:
             app_logger.info(f"[{job_id}] Starting container with storage limit: {storage_limit}GB")
@@ -222,23 +250,7 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
         # Run agent container
         container = DOCKER_CLIENT.containers.run(
             "paper-reproducibility-agent:latest",
-            detach=True,
-            name=container_name,
-            environment={
-                "REPO_URL": repo_url,
-                "JOB_ID": job_id,
-                "BACKEND_URL": backend_url,
-                "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
-                "STORAGE_LIMIT": storage_limit_str
-            },
-            mem_limit="2g",
-            memswap_limit="2g",
-            nano_cpus=int(2 * 1e9),
-            tmpfs={"/tmp": f"size={storage_limit_str}"},
-            network=Config.DOCKER_NETWORK,
-            remove=False,
-            stdout=True,
-            stderr=True
+            **container_kwargs
         )
         
         if app_logger:
