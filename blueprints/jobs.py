@@ -367,11 +367,17 @@ def get_job_full(job_id):
     from services.analysis_service import get_paper_analysis
     paper_analysis = get_paper_analysis(job_id) or {}
     
+    # Try to get current_stage, default to pending if not set
+    try:
+        current_stage = job["current_stage"] or "pending"
+    except (KeyError, IndexError):
+        current_stage = "pending"
+    
     response = {
         "id": job["id"],
         "status": job["status"],
         "progress": job["progress"] if job["progress"] is not None else 0.0,  # 0.0-1.0
-        "current_stage": job.get("current_stage", "pending"),  # pipeline stage
+        "current_stage": current_stage,  # pipeline stage
         "pdf_filename": job["pdf_filename"],
         "created_at": job["created_at"],
         "completed_at": job["completed_at"],
