@@ -40,6 +40,7 @@ def init_db(app_logger=None):
         CREATE TABLE IF NOT EXISTS jobs (
             id TEXT PRIMARY KEY,
             status TEXT DEFAULT 'pending',
+            progress REAL DEFAULT 0.0,
             pdf_path TEXT NOT NULL,
             pdf_filename TEXT,
             report JSON,
@@ -186,6 +187,14 @@ def init_db(app_logger=None):
         c.execute("ALTER TABLE jobs ADD COLUMN num_pages INTEGER")
         if app_logger:
             app_logger.info("Added num_pages column to jobs table")
+    except:
+        pass
+    
+    # Add progress to jobs table (migration for progress tracking)
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN progress REAL DEFAULT 0.0")
+        if app_logger:
+            app_logger.info("Added progress column to jobs table")
     except:
         pass
     

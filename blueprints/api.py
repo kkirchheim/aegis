@@ -569,7 +569,8 @@ def agent_complete():
     try:
         # Update job status based on success flag
         status = "completed" if success else "failed"
-        update_job_status(job_id, status, message)
+        progress = 1.0 if success else 0.0  # 100% if complete, 0% if failed
+        update_job_status(job_id, status, progress=progress)
         
         emit_event(job_id, {
             "step": "agent_finished",

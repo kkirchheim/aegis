@@ -183,14 +183,17 @@ function renderPage() {
         progressSection.style.display = "block";
         logSection.style.display = "block";  // Show log section for live updates
         
+        // Set progress bar from API response (0.0-1.0 converted to 0-100)
+        const progressPercentage = Math.round((currentJob.progress || 0) * 100);
+        progressFill.value = progressPercentage;
+        progressText.textContent = `${progressPercentage}%`;
+        
         // First, render historical events if any exist
         if (currentJob.events && currentJob.events.length > 0) {
             renderProgressHistory();
         } else {
             // No historical events, show empty state
             eventLog.innerHTML = "";
-            progressFill.value = 0;
-            progressText.textContent = "0%";
         }
         
         // Then connect to SSE for live updates (new events will be appended)
@@ -636,29 +639,16 @@ function handleProgressEvent(event) {
         return;
     }
     
-    // Update progress bar based on completion events (3 stages = 33%, 66%, 100%)
-    let displayProgress = 0;
-    
-    // Use stage-based progress only for "complete" events
-    if (step.includes("_complete")) {
-        if (stage === "paper_analysis") {
-            displayProgress = 33;
-        } else if (stage === "code_execution") {
-            displayProgress = 66;
-        } else if (stage === "reproducibility_evaluation") {
-            displayProgress = 100;
-        }
-    } else if (progress === 100) {
-        // Final completion
-        displayProgress = 100;
-    } else if (progress !== undefined) {
-        // For intermediate events, use raw progress but cap at 32% for stage 1, 65% for stage 2
-        displayProgress = Math.min(progress, 100);
-    }
-    
-    if (displayProgress > 0) {
-        progressFill.value = displayProgress;
-        progressText.textContent = `${displayProgress}%`;
+    // Refresh job data from API on stage completion events to get latest progress
+    if (step && (step === "stage_1_complete" || step === "stage_2_complete" || step === "stage_3_complete")) {
+        loadJobData().then(() => {
+            // After refresh, update progress bar with new value from API
+            if (currentJob) {
+                const progressPercentage = Math.round((currentJob.progress || 0) * 100);
+                progressFill.value = progressPercentage;
+                progressText.textContent = `${progressPercentage}%`;
+            }
+        });
     }
     
     // Update stage icons and times

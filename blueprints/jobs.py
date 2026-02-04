@@ -26,8 +26,10 @@ event_queues_lock = threading.Lock()
 
 
 def emit_event(job_id, event_dict):
-    """Emit event to SSE clients."""
+    """Emit event to SSE clients and update job progress for milestone events."""
     from datetime import datetime
+    from services.job_service import update_job_status
+    
     event_dict["timestamp"] = datetime.utcnow().isoformat()
     
     # Store non-chat events in database
@@ -52,6 +54,14 @@ def emit_event(job_id, event_dict):
             conn.close()
         except Exception as e:
             pass
+        
+        # Update job progress for milestone events
+        if step == "stage_1_complete":
+            update_job_status(job_id, "processing", progress=0.33)
+        elif step == "stage_2_complete":
+            update_job_status(job_id, "processing", progress=0.66)
+        elif step == "stage_3_complete":
+            update_job_status(job_id, "processing", progress=1.0)
     
     # Emit to SSE clients
     with event_queues_lock:
@@ -354,6 +364,7 @@ def get_job_full(job_id):
     response = {
         "id": job["id"],
         "status": job["status"],
+        "progress": job.get("progress", 0.0) or 0.0,  # 0.0-1.0
         "pdf_filename": job["pdf_filename"],
         "created_at": job["created_at"],
         "completed_at": job["completed_at"],
