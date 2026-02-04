@@ -567,16 +567,18 @@ def agent_complete():
         return jsonify({"error": "Failed to validate job"}), 500
     
     try:
-        if not success:
-            update_job_status(job_id, "failed", message)
+        # Update job status based on success flag
+        status = "completed" if success else "failed"
+        update_job_status(job_id, status, message)
         
         emit_event(job_id, {
             "step": "agent_finished",
             "message": f"Agent finished: {message}",
-            "status": "success" if success else "failed"
+            "status": status,
+            "progress": 100
         })
         
-        return jsonify({"ok": True, "status": "success" if success else "failed"})
+        return jsonify({"ok": True, "status": status})
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
