@@ -165,14 +165,26 @@ def analyze_paper_background(job_id, pdf_path, config, llm_provider):
         
         if not evaluation_result:
             raise Exception("Evaluation failed")
+        
+        # Emit final completion event
+        emit_event(job_id, {
+            "step": "complete",
+            "message": "Analysis complete",
+            "progress": 100,
+            "status": "success"
+        })
+        
+        # Mark job as completed
+        update_job_status(job_id, "completed", progress=1.0, current_stage="completed")
     
     except Exception as e:
         emit_event(job_id, {
             "step": "error",
-            "message": f"Error: {str(e)}"
+            "message": f"Error: {str(e)}",
+            "progress": 100
         })
         
-        update_job_status(job_id, "error", str(e))
+        update_job_status(job_id, "failed", error_message=str(e), progress=0.0, current_stage="failed")
 
 
 @jobs_bp.route("/upload", methods=["POST"])
