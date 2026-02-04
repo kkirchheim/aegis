@@ -362,31 +362,68 @@ function renderChecklist() {
         // Group by tier (5-4-6 split)
         // TIER 1 (CRITICAL - 5 aspects): Must have for reproducibility
         // TIER 2 (HIGH VALUE - 4 aspects): Strongly recommended
-        // TIER 3 (NICE-TO-HAVE - 6 aspects): Additional best practices
+        // TIER 3 (NICE-TO-HAVE - 6+ aspects): Additional best practices
         const tierMap = {
             // TIER 1 (CRITICAL) - 5 aspects
             "dependencies_pinned": 1,
+            // Results Reproducible (all variants)
             "results_reproducible": 1,
-            "result_reproducibility": 1,  // Alternate name
+            "result_reproducibility": 1,
+            "reproducible_results": 1,
+            "execution_reproducibility": 1,
+            "results_verification": 1,
+            // Hyperparameters Documented (all variants)
             "hyperparameters_documented": 1,
-            "parameter_documentation": 1,  // Alternate name
+            "hyperparameter_specification": 1,
+            "parameter_documentation": 1,
+            // Dataset Available (all variants)
             "dataset_available": 1,
-            "dataset_availability": 1,  // Alternate name
+            "dataset_availability": 1,
+            "dataset_specification": 1,
+            // Environment Documented (all variants)
             "environment_documented": 1,
+            "environment_specification": 1,
+            
             // TIER 2 (HIGH VALUE) - 4 aspects
+            // Test Suite Present (all variants)
             "test_suite_present": 2,
+            "test_suite_presence": 2,
+            // Config File Present
             "config_file_present": 2,
+            // Documentation Quality (all variants)
             "documentation_quality": 2,
+            "documentation_completeness": 2,
+            "execution_instructions": 2,
+            // Randomness Controlled (all variants)
             "randomness_controlled": 2,
-            "random_seed_control": 2,  // Alternate name
-            // TIER 3 (NICE-TO-HAVE) - 6 aspects
-            "code_availability": 3,
+            "random_seed_control": 2,
+            
+            // TIER 3 (NICE-TO-HAVE) - 6+ aspects
+            // License Specified
             "license_specified": 3,
+            // Continuous Integration
             "continuous_integration": 3,
+            // Data Versioning (all variants)
             "data_versioning": 3,
+            "data_preprocessing_documentation": 3,
+            // Computational Requirements
             "computational_requirements": 3,
+            // Output Format Documented
             "output_format_documented": 3,
-            "python_version_compatibility": 3
+            // Python Version Compatibility
+            "python_version_compatibility": 3,
+            
+            // EXTRA ASPECTS (not in core 15 but in database)
+            "code_availability": 3,
+            "code_clarity": 3,
+            "code_quality_and_clarity": 3,
+            "version_control": 3,
+            "statistical_significance": 3,
+            "hyperparameter_justification": 3,
+            "methodology_clarity": 3,
+            "train_test_split_specification": 3,
+            "evaluation_metrics": 3,
+            "result_consistency": 3
         };
         
         const tiers = { 1: [], 2: [], 3: [] };
