@@ -1014,6 +1014,7 @@ def upload_pdf():
     
     # Get configuration parameters
     config = {
+        "container": request.form.get("container", "python"),
         "model": request.form.get("model", "haiku"),
         "cpu_limit": int(request.form.get("cpu_limit", 4)),
         "memory_limit": int(request.form.get("memory_limit", 2048)),
@@ -2258,6 +2259,7 @@ def analyze_paper_background(job_id, pdf_path, config=None):
         job_id: Unique job identifier
         pdf_path: Path to PDF file
         config: Dictionary with analysis config:
+            - container: "python" (default) or other runners
             - model: "haiku" or "opus"
             - cpu_limit: CPU cores
             - memory_limit: Memory in MB
@@ -2268,6 +2270,7 @@ def analyze_paper_background(job_id, pdf_path, config=None):
     # Use defaults if config not provided
     if config is None:
         config = {
+            "container": "python",
             "model": "haiku",
             "cpu_limit": 4,
             "memory_limit": 2048,

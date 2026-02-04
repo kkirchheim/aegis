@@ -85,6 +85,7 @@ async function handleAnalyzeClick() {
     formData.append("pdf", file);
     
     // Add configuration options
+    formData.append("container", document.getElementById("containerSelect").value);
     formData.append("model", document.getElementById("modelSelect").value);
     formData.append("cpu_limit", document.getElementById("cpuLimit").value);
     formData.append("memory_limit", document.getElementById("memoryLimit").value);
