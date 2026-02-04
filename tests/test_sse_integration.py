@@ -121,6 +121,7 @@ class TestNewEventsStreamLive:
         4. Verify UI gets real-time updates
         """
         job = create_test_job(job_id=None, status="processing")
+        job_id = job.id
         
         # We'll collect events in this list
         received_events = []
@@ -140,7 +141,7 @@ class TestNewEventsStreamLive:
             
             for step, message in events_to_emit:
                 try:
-                    emit_event("test_job_live", {
+                    emit_event(job_id, {
                         "step": step,
                         "message": message,
                         "severity": "info",
@@ -270,7 +271,7 @@ class TestEventPersistence:
         
         with app.app_context():
             # Emit event
-            emit_event("test_job_persist", {
+            emit_event(job_id, {
                 "step": "test_step",
                 "message": "Testing persistence",
                 "severity": "info",
@@ -298,7 +299,7 @@ class TestEventPersistence:
         
         with app.app_context():
             # Emit non-chat event
-            emit_event("test_job_persist_non_chat", {
+            emit_event(job_id, {
                 "step": "stage_1_starting",
                 "message": "Starting stage 1",
             })
@@ -319,7 +320,7 @@ class TestEventPersistence:
         
         with app.app_context():
             # Emit event with duration
-            emit_event("test_job_persist_duration", {
+            emit_event(job_id, {
                 "step": "stage_1_complete",
                 "message": "Stage 1 complete",
                 "stage_duration_ms": 5000,
@@ -373,7 +374,7 @@ class TestRaceCondition:
             ]
             
             for step, message in pre_sse_events:
-                emit_event("test_job_race", {
+                emit_event(job_id, {
                     "step": step,
                     "message": message,
                     "severity": "info",
@@ -438,7 +439,7 @@ class TestRaceCondition:
             ]
             
             for step, message in live_events:
-                emit_event("test_job_mixed", {
+                emit_event(job_id, {
                     "step": step,
                     "message": message,
                 })
@@ -482,7 +483,7 @@ class TestRaceCondition:
         def emit_from_thread(thread_id):
             with app.app_context():
                 for i in range(5):
-                    emit_event("test_job_concurrent", {
+                    emit_event(job_id, {
                         "step": f"thread_{thread_id}_event_{i}",
                         "message": f"Event {i} from thread {thread_id}",
                     })
