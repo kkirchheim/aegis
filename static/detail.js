@@ -348,17 +348,23 @@ function renderChecklist() {
     if (evaluations.length === 0) {
         html += "<p>No evaluations available</p>";
     } else {
-        // Group by tier
+        // Group by tier (5-4-6 split)
+        // TIER 1 (CRITICAL - 5 aspects): Must have for reproducibility
+        // TIER 2 (HIGH VALUE - 4 aspects): Strongly recommended
+        // TIER 3 (NICE-TO-HAVE - 6 aspects): Additional best practices
         const tierMap = {
+            // TIER 1 (CRITICAL) - 5 aspects
             "dependencies_pinned": 1,
             "results_reproducible": 1,
             "hyperparameters_documented": 1,
-            "dataset_available": 2,
-            "environment_documented": 2,
+            "dataset_available": 1,
+            "environment_documented": 1,
+            // TIER 2 (HIGH VALUE) - 4 aspects
             "test_suite_present": 2,
             "config_file_present": 2,
             "documentation_quality": 2,
-            "randomness_controlled": 3,
+            "randomness_controlled": 2,
+            // TIER 3 (NICE-TO-HAVE) - 6 aspects
             "license_specified": 3,
             "continuous_integration": 3,
             "data_versioning": 3,
