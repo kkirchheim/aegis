@@ -141,7 +141,7 @@ def get_job_events(job_id):
         events = EventRepository.list_by_job(job_id)
         return [
             {
-                "timestamp": e.timestamp,
+                "timestamp": e.timestamp.isoformat() if hasattr(e.timestamp, 'isoformat') else str(e.timestamp),
                 "step": e.step,
                 "message": e.message,
                 "severity": e.severity,
