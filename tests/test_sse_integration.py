@@ -119,7 +119,7 @@ class TestNewEventsStreamLive:
         3. Verify events arrive in SSE stream
         4. Verify UI gets real-time updates
         """
-        job = create_test_job(job_id="test_job_live", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         # We'll collect events in this list
         received_events = []
@@ -199,7 +199,7 @@ class TestEventOrder:
         2. Connect to SSE
         3. Verify events are ordered by timestamp
         """
-        job = create_test_job(job_id="test_job_order", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         # Create multiple events
         steps = [
@@ -265,7 +265,7 @@ class TestEventPersistence:
         from blueprints.jobs import emit_event
         from models.database import Event, Job
         
-        job = create_test_job(job_id="test_job_persist", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         with app.app_context():
             # Emit event
@@ -293,7 +293,7 @@ class TestEventPersistence:
         from blueprints.jobs import emit_event
         from models.database import Event, Job
         
-        job = create_test_job(job_id="test_job_persist_non_chat", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         with app.app_context():
             # Emit non-chat event
@@ -314,7 +314,7 @@ class TestEventPersistence:
         from blueprints.jobs import emit_event
         from models.database import Event, Job
         
-        job = create_test_job(job_id="test_job_persist_duration", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         with app.app_context():
             # Emit event with duration
@@ -360,7 +360,7 @@ class TestRaceCondition:
         from blueprints.jobs import emit_event
         from models.database import Event, Job
         
-        job = create_test_job(job_id="test_job_race", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         with app.app_context():
             # Emit events BEFORE SSE connects (the race condition)
@@ -411,7 +411,7 @@ class TestRaceCondition:
         3. Emit new events while SSE is connected
         4. Verify both sets arrive
         """
-        job = create_test_job(job_id="test_job_mixed", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         # Create some historical events
         historical_events = [
@@ -476,7 +476,7 @@ class TestRaceCondition:
         from blueprints.jobs import emit_event
         from models.database import Event, Job
         
-        job = create_test_job(job_id="test_job_concurrent", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         def emit_from_thread(thread_id):
             with app.app_context():
@@ -526,7 +526,7 @@ class TestSSETimeout:
         
         This test verifies that behavior.
         """
-        job = create_test_job(job_id="test_job_timeout", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         # This test would take 30+ seconds to complete if run in full
         # Instead, we can verify the timeout logic by checking the code
@@ -546,7 +546,7 @@ class TestSSETimeout:
         """
         Verify SSE response has proper HTTP headers for streaming.
         """
-        job = create_test_job(job_id="test_job_headers", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         response = authenticated_user.get(f'/events/test_job_headers')
         
@@ -575,7 +575,7 @@ class TestSSEAccessControl:
         """
         Verify SSE endpoint requires authentication.
         """
-        job = create_test_job(job_id="test_job_noauth", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         # Try to access SSE without authentication
         response = client.get('/events/test_job_noauth')
@@ -641,7 +641,7 @@ class TestEventQueueManagement:
         """
         from blueprints.jobs import event_queues, event_queues_lock
         
-        job = create_test_job(job_id="test_job_queue_create", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         # Connect to SSE
         response = authenticated_user.get(f'/events/test_job_queue_create', follow_redirects=False)
@@ -660,7 +660,7 @@ class TestEventQueueManagement:
         """
         from blueprints.jobs import event_queues, event_queues_lock
         
-        job = create_test_job(job_id="test_job_cleanup", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         # The cleanup is handled in the finally block of the generate() function
         # When the response ends, the queue should be deleted
@@ -681,7 +681,7 @@ class TestEventFormatAndDataIntegrity:
         """
         Verify SSE events are properly formatted as JSON.
         """
-        job = create_test_job(job_id="test_job_format", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         create_test_event("test_job_format", "test_step", "Test message")
         
         response = authenticated_user.get(f'/events/test_job_format')
@@ -703,7 +703,7 @@ class TestEventFormatAndDataIntegrity:
         """
         Verify all event fields are included in SSE stream.
         """
-        job = create_test_job(job_id="test_job_fields", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         # Create event with all fields
         event = create_test_event("test_job_fields", "test_step", "Test message")
@@ -741,7 +741,7 @@ class TestSSEIntegrationWithDispatcher:
         """
         from blueprints.jobs import event_queues, event_queues_lock, _dispatcher
         
-        job = create_test_job(job_id="test_job_dispatcher", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         with app.app_context():
             # Create queue
@@ -778,7 +778,7 @@ class TestLargeEventStreams:
         
         Simulates job with many intermediate events.
         """
-        job = create_test_job(job_id="test_job_many", status="processing")
+        job = create_test_job(job_id=None, status="processing")
         
         # Create many events
         num_events = 50
