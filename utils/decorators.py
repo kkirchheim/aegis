@@ -2,6 +2,7 @@
 
 from functools import wraps
 from flask import session, jsonify
+from models.database import User
 
 
 def require_auth(f):
@@ -34,19 +35,11 @@ def require_admin(f):
         # Second check: verify admin status in database
         # This prevents privilege escalation if session is hijacked
         try:
-            from database import get_db
-            
             user_id = session.get('user_id')
-            username = session.get('username')
             
             # Verify user exists and is admin
-            conn = get_db()
-            c = conn.cursor()
-            c.execute("SELECT username FROM users WHERE id = ? AND username = ?", (user_id, 'admin'))
-            admin_user = c.fetchone()
-            conn.close()
-            
-            if not admin_user:
+            user = User.get_by_id(user_id)
+            if not user or user.username != 'admin':
                 # User is not admin (or user doesn't exist)
                 return jsonify({"error": "Forbidden - admin access required"}), 403
             

@@ -7,7 +7,7 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify, session
 from utils.decorators import require_auth, require_admin
 from services.cache_service import get_cache_stats, clear_cache
-from database import get_db
+from models.database import User, db
 from config import Config
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -40,10 +40,8 @@ def health_check():
     
     # Check database connection
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT 1")
-        conn.close()
+        # Simple query to verify database works
+        User.select().limit(1).exists()
         database_healthy = True
     except Exception as e:
         # Log error internally but don't expose to client

@@ -8,7 +8,7 @@ and running them in isolated Docker containers with an LLM agent.
 import os
 from flask import Flask, render_template
 from config import Config
-from database import init_db, get_db
+from models.database import init_db as init_peewee_db
 from services.auth_service import create_default_admin_user
 from services.llm_service import init_llm_provider
 from services.docker_service import init_docker
@@ -29,8 +29,8 @@ def create_app():
     # Load configuration
     app.config.from_object(Config)
     
-    # Initialize database
-    init_db(app.logger)
+    # Initialize database (Peewee ORM)
+    init_peewee_db(app.logger)
     create_default_admin_user(app.logger)
     
     # Initialize LLM provider
