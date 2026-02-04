@@ -115,67 +115,12 @@ def cache_clear():
 # Chat API
 # ============================================================================
 
-def get_or_create_chat_session(job_id):
-    """Get or create chat session."""
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        
-        c.execute("SELECT id FROM chat_sessions WHERE job_id = ?", (job_id,))
-        row = c.fetchone()
-        
-        if row:
-            session_id = row["id"]
-        else:
-            c.execute("INSERT INTO chat_sessions (job_id) VALUES (?)", (job_id,))
-            conn.commit()
-            session_id = c.lastrowid
-        
-        conn.close()
-        return {"id": session_id, "job_id": job_id}
-    
-    except Exception as e:
-        raise
-
-
-def store_chat_message(session_id, role, content):
-    """Store chat message."""
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(
-            "INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)",
-            (session_id, role, content)
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        pass
-
-
-def get_chat_history(session_id, limit=20):
-    """Get chat history."""
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("""
-            SELECT role, content, created_at FROM chat_messages
-            WHERE session_id = ?
-            ORDER BY created_at ASC
-            LIMIT ?
-        """, (session_id, limit))
-        messages = c.fetchall()
-        conn.close()
-        return [dict(m) for m in messages]
-    except Exception as e:
-        return []
-
-
 @api_bp.route("/job/<job_id>/chat", methods=["POST"])
 @require_auth
 def chat_with_paper(job_id):
     """Chat with paper analysis."""
     from services.llm_service import init_llm_provider
+    from services.chat_service import ChatService
     from blueprints.jobs import emit_event
     
     user_id = session.get('user_id')
@@ -186,41 +131,28 @@ def chat_with_paper(job_id):
         return jsonify({"error": "Empty message"}), 400
     
     try:
-        # Verify job exists and user owns it
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT status, user_id FROM jobs WHERE id = ?", (job_id,))
-        job = c.fetchone()
-        conn.close()
-        
-        if not job:
-            return jsonify({"error": "Job not found"}), 404
-        
-        if job["user_id"] != user_id:
-            return jsonify({"error": "Access denied"}), 403
-        
-        if job["status"] not in ["completed", "processing"]:
-            return jsonify({"error": "Job analysis not complete"}), 400
+        # Verify access
+        ok, error = ChatService.verify_access(job_id, user_id)
+        if not ok:
+            status_code = 403 if error == "Access denied" else (404 if "not found" in error else 400)
+            return jsonify({"error": error}), status_code
         
         # Get or create session
-        session_obj = get_or_create_chat_session(job_id)
-        store_chat_message(session_obj["id"], "user", user_message)
+        session_id = ChatService.get_or_create_session(job_id)
+        ChatService.save_message(session_id, "user", user_message)
         
-        # Build context
-        history = get_chat_history(session_obj["id"], limit=10)
+        # Build message history
+        history = ChatService.get_history(session_id, limit=10)
         messages = [{"role": msg["role"], "content": msg["content"]} for msg in history]
         
         # Start response thread
-        try:
-            llm_provider = init_llm_provider()
-            thread = threading.Thread(
-                target=_generate_chat_response,
-                args=(job_id, session_obj["id"], messages, llm_provider, emit_event),
-                daemon=True
-            )
-            thread.start()
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+        llm_provider = init_llm_provider()
+        success = ChatService.start_response_thread(
+            job_id, session_id, messages, llm_provider, emit_event
+        )
+        
+        if not success:
+            return jsonify({"error": "Failed to start chat response"}), 500
         
         return jsonify({"ok": True})
     
@@ -228,68 +160,25 @@ def chat_with_paper(job_id):
         return jsonify({"error": str(e)}), 500
 
 
-def _generate_chat_response(job_id, session_id, messages, llm_provider, emit_event):
-    """Generate chat response in background."""
-    try:
-        full_response = ""
-        for chunk in llm_provider.stream(
-            messages=messages,
-            max_tokens=2048,
-            temperature=0.7
-        ):
-            if not chunk:
-                continue
-            full_response += chunk
-            emit_event(job_id, {
-                "step": "chat_response",
-                "content": chunk
-            })
-        
-        if not full_response:
-            emit_event(job_id, {
-                "step": "chat_error",
-                "message": "Error: Empty response from LLM"
-            })
-            return
-        
-        store_chat_message(session_id, "assistant", full_response)
-        
-        emit_event(job_id, {
-            "step": "chat_complete",
-            "message": "Response complete"
-        })
-    
-    except Exception as e:
-        emit_event(job_id, {
-            "step": "chat_error",
-            "message": f"Error: {str(e)}"
-        })
-
-
 @api_bp.route("/job/<job_id>/chat/history", methods=["GET"])
 @require_auth
 def get_chat_history_endpoint(job_id):
     """Get chat history."""
+    from services.chat_service import ChatService
+    
     user_id = session.get('user_id')
     
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT user_id FROM jobs WHERE id = ?", (job_id,))
-        job = c.fetchone()
+        # Verify access
+        ok, error = ChatService.verify_access(job_id, user_id)
+        if not ok:
+            status_code = 403 if error == "Access denied" else 404
+            return jsonify({"error": error}), status_code
         
-        if not job or job["user_id"] != user_id:
-            conn.close()
-            return jsonify({"error": "Access denied"}), 403
+        # Get chat history
+        session_id = ChatService.get_or_create_session(job_id)
+        history = ChatService.get_history(session_id, limit=100)
         
-        c.execute("SELECT id FROM chat_sessions WHERE job_id = ?", (job_id,))
-        row = c.fetchone()
-        conn.close()
-        
-        if not row:
-            return jsonify([])
-        
-        history = get_chat_history(row["id"], limit=100)
         return jsonify(history)
     
     except Exception as e:
@@ -300,27 +189,21 @@ def get_chat_history_endpoint(job_id):
 @require_auth
 def delete_chat_history_endpoint(job_id):
     """Delete chat history."""
+    from services.chat_service import ChatService
+    
     user_id = session.get('user_id')
     
     try:
-        conn = get_db()
-        c = conn.cursor()
+        # Verify access
+        ok, error = ChatService.verify_access(job_id, user_id)
+        if not ok:
+            status_code = 403 if error == "Access denied" else 404
+            return jsonify({"error": error}), status_code
         
-        c.execute("SELECT user_id FROM jobs WHERE id = ?", (job_id,))
-        job = c.fetchone()
+        # Clear chat history
+        session_id = ChatService.get_or_create_session(job_id)
+        ChatService.clear_history(session_id)
         
-        if not job or job["user_id"] != user_id:
-            conn.close()
-            return jsonify({"error": "Access denied"}), 403
-        
-        c.execute("SELECT id FROM chat_sessions WHERE job_id = ?", (job_id,))
-        row = c.fetchone()
-        
-        if row:
-            c.execute("DELETE FROM chat_messages WHERE session_id = ?", (row["id"],))
-            conn.commit()
-        
-        conn.close()
         return jsonify({"ok": True, "message": "Chat history cleared"})
     
     except Exception as e:
