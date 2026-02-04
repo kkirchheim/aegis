@@ -40,7 +40,7 @@ def get_user_by_id(user_id):
     try:
         conn = get_db()
         c = conn.cursor()
-        c.execute("SELECT id, username, email, is_active, created_at FROM users WHERE id = ?", (user_id,))
+        c.execute("SELECT id, password_hash, username, email, is_active, created_at FROM users WHERE id = ?", (user_id,))
         user = c.fetchone()
         conn.close()
         return user

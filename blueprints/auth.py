@@ -105,8 +105,8 @@ def profile():
         if not user:
             return redirect("/login")
         
-        email = user[2]  # email is index 2
-        created_at = user[4]  # created_at is index 4
+        email = user[3]  # email is index 3
+        created_at = user[5]  # created_at is index 5
         
         # Format created_at
         if created_at:
@@ -161,7 +161,7 @@ def api_change_password():
         if not user:
             return jsonify({"error": "User not found"}), 404
         
-        password_hash = user[3] if len(user) > 3 else None
+        password_hash = user[1] if len(user) > 1 else None
         if not password_hash or not verify_password(old_password, password_hash):
             return jsonify({"error": "Current password is incorrect"}), 400
         
