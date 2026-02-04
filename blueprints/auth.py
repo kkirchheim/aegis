@@ -68,16 +68,16 @@ def login():
         
         user = get_user_by_username(username)
         
-        if not user or not verify_password(password, user[1]):
+        if not user or not verify_password(password, user.password_hash):
             return jsonify({"error": "Invalid username or password"}), 401
         
         # Check if user is active
-        if not user[3]:  # is_active is index 3
+        if not user.is_active:
             return jsonify({"error": "Account not activated yet"}), 403
         
         # Set session
-        session['user_id'] = user[0]
-        session['username'] = user[2]
+        session['user_id'] = user.id
+        session['username'] = user.username
         
         return jsonify({"message": "Login successful", "redirect": "/"}), 200
     
@@ -105,8 +105,8 @@ def profile():
         if not user:
             return redirect("/login")
         
-        email = user[3]  # email is index 3
-        created_at = user[5]  # created_at is index 5
+        email = user.email
+        created_at = user.created_at
         
         # Format created_at
         if created_at:
@@ -161,8 +161,7 @@ def api_change_password():
         if not user:
             return jsonify({"error": "User not found"}), 404
         
-        password_hash = user[1] if len(user) > 1 else None
-        if not password_hash or not verify_password(old_password, password_hash):
+        if not verify_password(old_password, user.password_hash):
             return jsonify({"error": "Current password is incorrect"}), 400
         
         # Update password
