@@ -138,7 +138,7 @@ def events(job_id):
     
     # Verify user has access
     job = get_job(job_id)
-    if not job or job["user_id"] != user_id:
+    if not job or job.user_id != user_id:
         return jsonify({"error": "Access denied"}), 403
     
     def generate():
@@ -202,21 +202,21 @@ def get_job_detail(job_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
     
-    if job["user_id"] != user_id:
+    if job.user_id != user_id:
         return jsonify({"error": "Access denied"}), 403
     
     response = {
-        "id": job["id"],
-        "status": job["status"],
-        "created_at": job["created_at"],
-        "completed_at": job["completed_at"]
+        "id": job.id,
+        "status": job.status,
+        "created_at": job.created_at,
+        "completed_at": job.completed_at
     }
     
-    if job["report"]:
-        response["report"] = json.loads(job["report"])
+    if job.report:
+        response["report"] = json.loads(job.report) if isinstance(job.report, str) else job.report
     
-    if job["error_message"]:
-        response["error"] = job["error_message"]
+    if job.error_message:
+        response["error"] = job.error_message
     
     return jsonify(response)
 
@@ -241,7 +241,7 @@ def get_job_full(job_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
     
-    if job["user_id"] != user_id:
+    if job.user_id != user_id:
         return jsonify({"error": "Access denied"}), 403
     
     # Fetch related data
@@ -252,22 +252,19 @@ def get_job_full(job_id):
     from services.analysis_service import get_paper_analysis
     paper_analysis = get_paper_analysis(job_id) or {}
     
-    # Try to get current_stage, default to pending if not set
-    try:
-        current_stage = job["current_stage"] or "pending"
-    except (KeyError, IndexError):
-        current_stage = "pending"
+    # Get current_stage, default to pending if not set
+    current_stage = job.current_stage or "pending"
     
     response = {
-        "id": job["id"],
-        "status": job["status"],
-        "progress": job["progress"] if job["progress"] is not None else 0.0,  # 0.0-1.0
+        "id": job.id,
+        "status": job.status,
+        "progress": job.progress if job.progress is not None else 0.0,  # 0.0-1.0
         "current_stage": current_stage,  # pipeline stage
-        "pdf_filename": job["pdf_filename"],
-        "created_at": job["created_at"],
-        "completed_at": job["completed_at"],
-        "report": json.loads(job["report"]) if job["report"] else {},
-        "error_message": job["error_message"],
+        "pdf_filename": job.pdf_filename,
+        "created_at": job.created_at,
+        "completed_at": job.completed_at,
+        "report": json.loads(job.report) if job.report else {},
+        "error_message": job.error_message,
         "events": events_list,
         "artifacts": artifacts,
         "paper_analysis": paper_analysis
@@ -284,7 +281,7 @@ def detail_page(job_id):
     
     job = get_job(job_id)
     
-    if not job or job["user_id"] != user_id:
+    if not job or job.user_id != user_id:
         return jsonify({"error": "Access denied"}), 403
     
     return render_template("detail.html", job_id=job_id)
@@ -298,7 +295,7 @@ def results_page(job_id):
     
     job = get_job(job_id)
     
-    if not job or job["user_id"] != user_id:
+    if not job or job.user_id != user_id:
         return jsonify({"error": "Access denied"}), 403
     
     return render_template("detail.html", job_id=job_id)
@@ -316,7 +313,7 @@ def delete_job_route(job_id):
         if not job:
             return jsonify({"error": "Job not found"}), 404
         
-        if job["user_id"] != user_id:
+        if job.user_id != user_id:
             return jsonify({"error": "Access denied"}), 403
         
         if delete_job(job_id):
