@@ -67,7 +67,12 @@ def emit_event(job_id, event_dict):
         elif step == "stage_3_starting":
             update_job_status(job_id, "processing", progress=0.67, current_stage="evaluation")
         elif step == "stage_3_complete":
-            update_job_status(job_id, "processing", progress=1.0, current_stage="completed")
+            # Don't transition to "completed" yet - stay in "evaluation" stage
+            # Final "complete" event will mark as truly completed
+            update_job_status(job_id, "processing", progress=1.0, current_stage="evaluation")
+        elif step == "complete":
+            # Final completion - mark as completed
+            update_job_status(job_id, "completed", progress=1.0, current_stage="completed")
     
     # Emit to SSE clients
     with event_queues_lock:
