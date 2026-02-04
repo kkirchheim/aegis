@@ -364,7 +364,7 @@ def get_job_full(job_id):
     response = {
         "id": job["id"],
         "status": job["status"],
-        "progress": job.get("progress", 0.0) or 0.0,  # 0.0-1.0
+        "progress": job["progress"] if job["progress"] is not None else 0.0,  # 0.0-1.0
         "pdf_filename": job["pdf_filename"],
         "created_at": job["created_at"],
         "completed_at": job["completed_at"],

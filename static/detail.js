@@ -84,12 +84,20 @@ async function loadJobData() {
         const response = await fetch(`/api/job/${JOB_ID}/full`);
         
         if (!response.ok) {
-            const error = await response.json();
-            statusContent.innerHTML = `<div class='alert alert-error'>Error: ${error.error}</div>`;
+            const text = await response.text();
+            console.error(`HTTP ${response.status}: ${text}`);
+            statusContent.innerHTML = `<div class='alert alert-error'>Error: HTTP ${response.status}</div>`;
             return;
         }
         
-        currentJob = await response.json();
+        const text = await response.text();
+        if (!text) {
+            console.error("Empty response from API");
+            statusContent.innerHTML = `<div class='alert alert-error'>Empty response from API</div>`;
+            return;
+        }
+        
+        currentJob = JSON.parse(text);
         renderPage();
         
     } catch (error) {
