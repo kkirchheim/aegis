@@ -198,6 +198,14 @@ def init_db(app_logger=None):
     except:
         pass
     
+    # Add current_stage to jobs table (migration for pipeline stage tracking)
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN current_stage TEXT DEFAULT 'pending'")
+        if app_logger:
+            app_logger.info("Added current_stage column to jobs table")
+    except:
+        pass
+    
     c.execute("""
         CREATE TABLE IF NOT EXISTS cache_code_execution (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -5,6 +5,9 @@
 
 // State
 let currentJob = null;
+let pollInterval = null;
+let eventSource = null;
+let lastStage = null;
 
 // DOM Elements
 const statusSection = document.getElementById("statusSection");
@@ -51,6 +54,12 @@ document.addEventListener("DOMContentLoaded", () => {
     
     loadJobData();
     setupEventListeners();
+});
+
+// Cleanup on page unload
+window.addEventListener("beforeunload", () => {
+    stopProgressPolling();
+    if (eventSource) eventSource.close();
 });
 
 function setupEventListeners() {
@@ -664,12 +673,16 @@ function renderEventLog() {
 // ============================================================================
 
 function setupSSEConnection() {
-    const eventSource = new EventSource(`/events/${JOB_ID}`);
+    // Start polling for job progress
+    startProgressPolling();
+    
+    // Connect to SSE only for live logs (not for progress)
+    eventSource = new EventSource(`/events/${JOB_ID}`);
     
     eventSource.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
-            handleProgressEvent(data);
+            handleLogEvent(data);
         } catch (e) {
             console.error("Failed to parse event:", e);
         }
@@ -677,55 +690,90 @@ function setupSSEConnection() {
     
     eventSource.onerror = (error) => {
         console.error("SSE connection error:", error);
-        eventSource.close();
+        // Don't close, let polling continue
     };
 }
 
-function handleProgressEvent(event) {
-    const { step, message, progress, severity, stage, stage_duration_ms } = event;
-    
-    // Skip chat-related events (they shouldn't be in execution log)
-    if (step && (step.startsWith('chat_') || step === 'chat_error')) {
-        return;
-    }
-    
-    // Refresh job data from API on stage completion events to get latest progress
-    if (step && (step === "stage_1_complete" || step === "stage_2_complete" || step === "stage_3_complete")) {
-        loadJobData().then(() => {
-            // After refresh, update progress bar with new value from API
-            if (currentJob) {
-                const progressPercentage = Math.round((currentJob.progress || 0) * 100);
-                progressFill.value = progressPercentage;
-                progressText.textContent = `${progressPercentage}%`;
+function startProgressPolling() {
+    // Poll every 1.5 seconds for job progress
+    pollInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/job/${JOB_ID}/full`);
+            if (!response.ok) {
+                console.error(`Poll failed: HTTP ${response.status}`);
+                return;
             }
-        });
+            
+            const job = await response.json();
+            currentJob = job;
+            
+            // Update progress bar from backend field
+            const progressPercentage = Math.round((job.progress || 0) * 100);
+            progressFill.value = progressPercentage;
+            progressText.textContent = `${progressPercentage}%`;
+            
+            // Update stages based on current_stage field
+            if (job.current_stage && job.current_stage !== lastStage) {
+                lastStage = job.current_stage;
+                updateStagesFromStage(job.current_stage);
+            }
+            
+            // Stop polling if complete
+            if (job.status === "completed" || job.status === "failed") {
+                stopProgressPolling();
+                if (eventSource) eventSource.close();
+                // Don't reload - user can see the full results
+            }
+        } catch (error) {
+            console.error("Polling error:", error);
+        }
+    }, 1500);
+}
+
+function stopProgressPolling() {
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
     }
+}
+
+function updateStagesFromStage(currentStage) {
+    // Map backend stage names to UI stage elements
+    const stageMap = {
+        'paper_analysis': 'stage1',
+        'code_execution': 'stage2',
+        'evaluation': 'stage3'
+    };
     
-    // Update stage icons and times
-    if (stage === "paper_analysis") {
-        const icon = document.getElementById("stage1Icon");
-        icon.textContent = "✓";
-        icon.style.color = "#22c55e";
-        icon.className = "text-2xl mb-1";
-        if (stage_duration_ms) {
-            document.getElementById("stage1Time").textContent = `${(stage_duration_ms / 1000).toFixed(1)}s`;
+    const stageKey = stageMap[currentStage];
+    if (!stageKey) return;
+    
+    // Update the stage icons - mark all previous as complete, current as active
+    const stages = ['stage1', 'stage2', 'stage3'];
+    const currentIndex = stages.indexOf(stageKey);
+    
+    stages.forEach((stage, index) => {
+        const icon = document.getElementById(`${stage}Icon`);
+        if (icon) {
+            if (index < currentIndex) {
+                icon.textContent = "✓";
+                icon.style.color = "#22c55e";
+                icon.className = "text-2xl mb-1";
+            } else if (index === currentIndex) {
+                icon.textContent = "▶";
+                icon.style.color = "#ffa500";
+                icon.className = "text-2xl mb-1 animate-pulse";
+            }
         }
-    } else if (stage === "code_execution") {
-        const icon = document.getElementById("stage2Icon");
-        icon.textContent = "✓";
-        icon.style.color = "#22c55e";
-        icon.className = "text-2xl mb-1";
-        if (stage_duration_ms) {
-            document.getElementById("stage2Time").textContent = `${(stage_duration_ms / 1000).toFixed(1)}s`;
-        }
-    } else if (stage === "reproducibility_evaluation") {
-        const icon = document.getElementById("stage3Icon");
-        icon.textContent = "✓";
-        icon.style.color = "#22c55e";
-        icon.className = "text-2xl mb-1";
-        if (stage_duration_ms) {
-            document.getElementById("stage3Time").textContent = `${(stage_duration_ms / 1000).toFixed(1)}s`;
-        }
+    });
+}
+
+function handleLogEvent(event) {
+    const { step, message, severity } = event;
+    
+    // Skip chat-related events and stage events (those are handled by polling)
+    if (step && (step.startsWith('chat_') || step === 'chat_error' || step.includes('stage_'))) {
+        return;
     }
     
     // Add to event log
@@ -735,13 +783,6 @@ function handleProgressEvent(event) {
     const logEntry = `<div class="${severityClass}">${time} ${stepLabel} ${escapeHtml(message)}</div>`;
     eventLog.innerHTML += logEntry;
     eventLog.scrollTop = eventLog.scrollHeight;
-    
-    // If job completed, refresh the page
-    if (progress === 100) {
-        setTimeout(() => {
-            location.reload();
-        }, 2000);
-    }
 }
 
 function renderProgressHistory() {

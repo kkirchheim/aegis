@@ -56,43 +56,39 @@ def get_user_jobs(user_id):
         return []
 
 
-def update_job_status(job_id, status, error_message=None, progress=None):
-    """Update job status and optionally progress.
+def update_job_status(job_id, status, error_message=None, progress=None, current_stage=None):
+    """Update job status, progress, and optionally stage.
     
     Args:
         job_id: Job ID
         status: New status ('pending', 'processing', 'completed', 'failed')
         error_message: Optional error message if status='failed'
         progress: Optional progress (0.0 to 1.0)
+        current_stage: Optional pipeline stage ('paper_analysis', 'code_execution', 'evaluation', 'completed')
     """
     try:
         conn = get_db()
         c = conn.cursor()
         
+        # Build dynamic UPDATE query based on provided parameters
+        updates = ["status = ?"]
+        params = [status]
+        
         if progress is not None:
-            # Update status and progress
-            if error_message:
-                c.execute(
-                    "UPDATE jobs SET status = ?, progress = ?, error_message = ? WHERE id = ?",
-                    (status, progress, error_message, job_id)
-                )
-            else:
-                c.execute(
-                    "UPDATE jobs SET status = ?, progress = ? WHERE id = ?",
-                    (status, progress, job_id)
-                )
-        else:
-            # Update only status (backward compatible)
-            if error_message:
-                c.execute(
-                    "UPDATE jobs SET status = ?, error_message = ? WHERE id = ?",
-                    (status, error_message, job_id)
-                )
-            else:
-                c.execute(
-                    "UPDATE jobs SET status = ? WHERE id = ?",
-                    (status, job_id)
-                )
+            updates.append("progress = ?")
+            params.append(progress)
+        
+        if current_stage is not None:
+            updates.append("current_stage = ?")
+            params.append(current_stage)
+        
+        if error_message:
+            updates.append("error_message = ?")
+            params.append(error_message)
+        
+        params.append(job_id)
+        query = f"UPDATE jobs SET {', '.join(updates)} WHERE id = ?"
+        c.execute(query, params)
         
         conn.commit()
         conn.close()

@@ -11,6 +11,8 @@
 // State
 let currentJobId = null;
 let eventSource = null;
+let pollInterval = null;
+let lastStage = null;
 let stages = {
   paper_analysis: { name: '📄 Paper Analysis', status: 'pending', start: null, duration: null },
   code_execution: { name: '⚙️ Code Execution', status: 'pending', start: null, duration: null },
@@ -142,83 +144,139 @@ async function handleAnalyzeClick() {
 }
 
 // ============================================================================
-// Server-Sent Events (SSE)
+// Polling + SSE Architecture
 // ============================================================================
 
 function connectToEventStream(jobId) {
-    addLog("Connecting to live stream...");
+    addLog("Starting analysis...");
     
+    // Start polling job progress (1-2 second intervals)
+    startProgressPolling(jobId);
+    
+    // Connect to SSE for logs only
     eventSource = new EventSource(`/events/${jobId}`);
     
     eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        handleProgressEvent(data);
+        handleLogEvent(data);
     };
     
     eventSource.onerror = (error) => {
         console.error("SSE connection error:", error);
+        // Don't log this every time - just close silently
         eventSource.close();
-        logError("Connection lost");
     };
 }
 
-function handleProgressEvent(event) {
-    const { step, message, progress, error, report, artifacts, status, stage, stage_duration_ms } = event;
-    
-    // Handle stage events (only if stage exists in our stages object)
-    if (stage && stages[stage]) {
-        if (step && step.includes('stage_') && step.includes('starting')) {
-            stages[stage].status = 'active';
-            stages[stage].start = Date.now();
-            updateStagesUI();
+function startProgressPolling(jobId) {
+    // Poll every 1.5 seconds for job progress
+    pollInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/job/${jobId}/full`);
+            if (!response.ok) {
+                console.error(`Poll failed: HTTP ${response.status}`);
+                return;
+            }
+            
+            const job = await response.json();
+            updateProgressFromJob(job);
+            
+            // Stop polling if job is complete
+            if (job.status === "completed" || job.status === "failed") {
+                stopProgressPolling();
+                handleJobComplete(job);
+            }
+        } catch (error) {
+            console.error("Polling error:", error);
         }
-        
-        if (step && step.includes('stage_') && step.includes('complete')) {
-            stages[stage].status = 'complete';
-            stages[stage].duration = stage_duration_ms;
-            updateStagesUI();
-        }
+    }, 1500);
+}
+
+function stopProgressPolling() {
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+    }
+}
+
+function updateProgressFromJob(job) {
+    // Update progress bar from backend field
+    const progressPercentage = Math.round((job.progress || 0) * 100);
+    if (progressFill && progressText) {
+        progressFill.value = progressPercentage;
+        progressText.textContent = `${progressPercentage}%`;
     }
     
-    // Refresh job data from backend on stage completion to get accurate progress
-    if (step && (step === "stage_1_complete" || step === "stage_2_complete" || step === "stage_3_complete")) {
-        // Fetch latest job data to get backend-tracked progress
-        fetch(`/api/job/${currentJobId}/full`)
-            .then(r => r.json())
-            .then(job => {
-                if (job && typeof job.progress === 'number') {
-                    const progressPercentage = Math.round(job.progress * 100);
-                    if (progressFill && progressText) {
-                        progressFill.value = progressPercentage;
-                        progressText.textContent = `${progressPercentage}%`;
-                    }
-                }
-            })
-            .catch(e => console.error("Failed to fetch progress:", e));
+    // Update stages based on current_stage field
+    if (job.current_stage && job.current_stage !== lastStage) {
+        lastStage = job.current_stage;
+        updateStagesFromStage(job.current_stage);
+    }
+}
+
+function handleLogEvent(event) {
+    // SSE now only handles logs/events, not progress
+    const { step, message, error } = event;
+    
+    // Skip stage events (progress is handled by polling)
+    if (step && step.includes('stage_')) {
+        return;
     }
     
-    // Add to log (skip stage starting/complete events)
-    if (!step.includes('stage_')) {
-        if (error) {
-            logError(`[${step}] ${message}`);
+    // Add to log
+    if (error) {
+        logError(`[${step}] ${message}`);
+    } else if (step && message) {
+        addLog(`[${step}] ${message}`);
+    }
+}
+
+function updateStagesFromStage(currentStage) {
+    // Map backend stage names to our internal stage keys
+    const stageMap = {
+        'paper_analysis': 'paper_analysis',
+        'code_execution': 'code_execution',
+        'evaluation': 'reproducibility_evaluation',
+        'completed': null  // All stages complete
+    };
+    
+    const stageKey = stageMap[currentStage];
+    
+    // Mark all stages based on current position
+    const stageKeys = Object.keys(stages);
+    const stageOrder = ['paper_analysis', 'code_execution', 'reproducibility_evaluation'];
+    const currentIndex = stageOrder.indexOf(stageKey);
+    
+    stageOrder.forEach((key, index) => {
+        if (index < currentIndex) {
+            stages[key].status = 'complete';
+        } else if (index === currentIndex) {
+            stages[key].status = 'active';
+            stages[key].start = Date.now();
         } else {
-            addLog(`[${step}] ${message}`);
+            stages[key].status = 'pending';
         }
+    });
+    
+    updateStagesUI();
+}
+
+function handleJobComplete(job) {
+    // Stop polling and SSE
+    stopProgressPolling();
+    if (eventSource) {
+        eventSource.close();
     }
     
-    // Handle completion
-    if (step === "complete") {
-        // Include status in report if present
-        if (status && report) {
-            report.status = status;
-        }
-        handleAnalysisComplete(report || { status, message });
-        eventSource.close();
-        analyzeBtn.disabled = false;
-    } else if (step === "error") {
-        eventSource.close();
-        analyzeBtn.disabled = false;
-    }
+    // Mark all stages as complete
+    Object.keys(stages).forEach(key => {
+        stages[key].status = 'complete';
+    });
+    updateStagesUI();
+    
+    // Show completion UI
+    handleAnalysisComplete(job.report || { status: job.status, message: "Analysis complete" });
+    analyzeBtn.disabled = false;
 }
 
 function updateStagesUI() {
@@ -642,4 +700,10 @@ async function viewJob(jobId) {
 
 document.addEventListener("DOMContentLoaded", () => {
     loadJobsHistory();
+});
+
+// Cleanup on page unload
+window.addEventListener("beforeunload", () => {
+    stopProgressPolling();
+    if (eventSource) eventSource.close();
 });

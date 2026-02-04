@@ -55,13 +55,19 @@ def emit_event(job_id, event_dict):
         except Exception as e:
             pass
         
-        # Update job progress for milestone events
-        if step == "stage_1_complete":
-            update_job_status(job_id, "processing", progress=0.33)
+        # Update job progress and current_stage for milestone events
+        if step == "stage_1_starting":
+            update_job_status(job_id, "processing", progress=0.05, current_stage="paper_analysis")
+        elif step == "stage_1_complete":
+            update_job_status(job_id, "processing", progress=0.33, current_stage="code_execution")
+        elif step == "stage_2_starting":
+            update_job_status(job_id, "processing", progress=0.34, current_stage="code_execution")
         elif step == "stage_2_complete":
-            update_job_status(job_id, "processing", progress=0.66)
+            update_job_status(job_id, "processing", progress=0.66, current_stage="evaluation")
+        elif step == "stage_3_starting":
+            update_job_status(job_id, "processing", progress=0.67, current_stage="evaluation")
         elif step == "stage_3_complete":
-            update_job_status(job_id, "processing", progress=1.0)
+            update_job_status(job_id, "processing", progress=1.0, current_stage="completed")
     
     # Emit to SSE clients
     with event_queues_lock:

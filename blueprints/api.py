@@ -570,7 +570,13 @@ def agent_complete():
         # Update job status based on success flag
         status = "completed" if success else "failed"
         progress = 1.0 if success else 0.0  # 100% if complete, 0% if failed
-        update_job_status(job_id, status, progress=progress)
+        
+        # Debug logging
+        import sys
+        print(f"[agent_complete] job_id={job_id}, success={success}, status={status}, progress={progress}", file=sys.stderr)
+        
+        result = update_job_status(job_id, status, progress=progress)
+        print(f"[agent_complete] update_job_status returned: {result}", file=sys.stderr)
         
         emit_event(job_id, {
             "step": "agent_finished",
@@ -579,6 +585,7 @@ def agent_complete():
             "progress": 100
         })
         
+        print(f"[agent_complete] event emitted, job status should now be: {status}", file=sys.stderr)
         return jsonify({"ok": True, "status": status})
     
     except Exception as e:
