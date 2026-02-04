@@ -690,41 +690,83 @@ function renderEventLog() {
 // ============================================================================
 
 function setupSSEConnection() {
-    // Start polling for job progress
-    startProgressPolling();
-    
-    // Connect to SSE only for live logs (not for progress)
-    console.log(`[SSE] Connecting to /events/${JOB_ID}`);
-    eventSource = new EventSource(`/events/${JOB_ID}`, { withCredentials: true });
-    
-    let eventCount = 0;
-    
-    eventSource.onopen = () => {
-        console.log(`[SSE] Connection opened`);
-    };
-    
-    eventSource.onmessage = (event) => {
-        eventCount++;
-        console.log(`[SSE] Event #${eventCount} received:`, event.data.substring(0, 100));
-        try {
-            const data = JSON.parse(event.data);
-            console.log(`[SSE] Parsed event: step=${data.step}, message=${data.message}`);
-            handleLogEvent(data);
-            console.log(`[SSE] Event #${eventCount} handled`);
-        } catch (e) {
-            console.error(`[SSE] Failed to parse event #${eventCount}:`, e);
+    // Use polling for both progress AND events
+    // Much simpler and more reliable than SSE with race conditions
+    startEventPolling();
+}
+
+// Track the last timestamp we fetched events from
+let lastEventTimestamp = null;
+
+function startEventPolling() {
+    // Poll every 500ms for new events
+    console.log(`[Polling] Starting event polling for ${JOB_ID}`);
+    pollInterval = setInterval(pollForEvents, 500);
+    // Also poll immediately to avoid initial delay
+    pollForEvents();
+}
+
+async function pollForEvents() {
+    try {
+        // Build URL with 'since' parameter if we have a last timestamp
+        let url = `/api/job/${JOB_ID}/events`;
+        if (lastEventTimestamp) {
+            url += `?since=${encodeURIComponent(lastEventTimestamp)}`;
         }
-    };
-    
-    eventSource.onerror = (error) => {
-        console.error(`[SSE] Connection error after ${eventCount} events:`, error);
-        console.error(`[SSE] readyState: ${eventSource.readyState}`);
-        // Don't close, let polling continue
-    };
+        
+        const response = await fetch(url, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            console.warn(`[Polling] Failed to fetch events: HTTP ${response.status}`);
+            return;
+        }
+        
+        const data = await response.json();
+        
+        // Update job completion status
+        if (data.completed) {
+            stopProgressPolling();
+        }
+        
+        // Update progress from job status
+        if (data.job_status) {
+            const job = await fetch(`/api/job/${JOB_ID}/full`, { credentials: 'include' })
+                .then(r => r.json());
+            currentJob = job;
+            
+            const progressPercentage = Math.round((job.progress || 0) * 100);
+            progressFill.value = progressPercentage;
+            progressText.textContent = `${progressPercentage}%`;
+            
+            if (job.current_stage && job.current_stage !== lastStage) {
+                lastStage = job.current_stage;
+                updateStagesFromStage(job.current_stage);
+            }
+        }
+        
+        // Process all new events
+        if (data.events && data.events.length > 0) {
+            console.log(`[Polling] Received ${data.events.length} new events`);
+            data.events.forEach(event => {
+                handleLogEvent(event);
+                // Update last timestamp to this event's timestamp
+                lastEventTimestamp = event.timestamp;
+            });
+        }
+        
+    } catch (error) {
+        console.error(`[Polling] Error fetching events:`, error);
+    }
 }
 
 function startProgressPolling() {
-    // Poll every 100ms for job progress
+    // DEPRECATED: Poll every 100ms for job progress
+    // Now handled by pollForEvents() instead
+    console.log(`[Polling] startProgressPolling called but polling already started`);
+    return;
+    
     pollInterval = setInterval(async () => {
         try {
             const response = await fetch(`/api/job/${JOB_ID}/full`, {
