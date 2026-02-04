@@ -56,22 +56,30 @@ def emit_event(job_id, event_dict):
             pass
         
         # Update job progress and current_stage for milestone events
+        import sys
         if step == "stage_1_starting":
+            print(f"[{job_id}] TRANSITION: stage_1_starting -> paper_analysis", file=sys.stderr)
             update_job_status(job_id, "processing", progress=0.05, current_stage="paper_analysis")
         elif step == "stage_1_complete":
+            print(f"[{job_id}] TRANSITION: stage_1_complete -> code_execution", file=sys.stderr)
             update_job_status(job_id, "processing", progress=0.33, current_stage="code_execution")
         elif step == "stage_2_starting":
+            print(f"[{job_id}] TRANSITION: stage_2_starting -> code_execution", file=sys.stderr)
             update_job_status(job_id, "processing", progress=0.34, current_stage="code_execution")
         elif step == "stage_2_complete":
+            print(f"[{job_id}] TRANSITION: stage_2_complete -> evaluation", file=sys.stderr)
             update_job_status(job_id, "processing", progress=0.66, current_stage="evaluation")
         elif step == "stage_3_starting":
+            print(f"[{job_id}] TRANSITION: stage_3_starting -> evaluation", file=sys.stderr)
             update_job_status(job_id, "processing", progress=0.67, current_stage="evaluation")
         elif step == "stage_3_complete":
             # Don't transition to "completed" yet - stay in "evaluation" stage
             # Final "complete" event will mark as truly completed
+            print(f"[{job_id}] TRANSITION: stage_3_complete -> staying in evaluation", file=sys.stderr)
             update_job_status(job_id, "processing", progress=1.0, current_stage="evaluation")
         elif step == "complete":
             # Final completion - mark as completed
+            print(f"[{job_id}] TRANSITION: complete -> completed", file=sys.stderr)
             update_job_status(job_id, "completed", progress=1.0, current_stage="completed")
     
     # Emit to SSE clients
@@ -82,7 +90,9 @@ def emit_event(job_id, event_dict):
 
 def analyze_paper_background(job_id, pdf_path, config, llm_provider):
     """Background job for paper analysis."""
+    import sys
     try:
+        print(f"[{job_id}] ===== ANALYSIS STARTED =====", file=sys.stderr)
         emit_event(job_id, {
             "step": "starting",
             "message": "Analysis starting...",
@@ -93,6 +103,7 @@ def analyze_paper_background(job_id, pdf_path, config, llm_provider):
         update_job_status(job_id, "processing")
         
         # STAGE 1: Paper analysis
+        print(f"[{job_id}] >>> STAGE 1 STARTING", file=sys.stderr)
         emit_event(job_id, {
             "step": "stage_1_starting",
             "message": "Stage 1: Analyzing Paper...",
@@ -116,6 +127,7 @@ def analyze_paper_background(job_id, pdf_path, config, llm_provider):
         artifacts = paper_info.get("artifacts", [])
         store_artifacts(job_id, artifacts)
         
+        print(f"[{job_id}] >>> STAGE 1 COMPLETE", file=sys.stderr)
         emit_event(job_id, {
             "step": "stage_1_complete",
             "message": f"Found {len(artifacts)} artifacts",
@@ -123,6 +135,7 @@ def analyze_paper_background(job_id, pdf_path, config, llm_provider):
         })
         
         # STAGE 2: Code execution
+        print(f"[{job_id}] >>> STAGE 2 STARTING", file=sys.stderr)
         emit_event(job_id, {
             "step": "stage_2_starting",
             "message": "Stage 2: Executing Code...",
@@ -148,6 +161,7 @@ def analyze_paper_background(job_id, pdf_path, config, llm_provider):
                         "message": f"Agent failed for {repo_url}: {str(e)}"
                     })
         
+        print(f"[{job_id}] >>> STAGE 2 COMPLETE", file=sys.stderr)
         emit_event(job_id, {
             "step": "stage_2_complete",
             "message": "Code execution complete",
@@ -155,6 +169,7 @@ def analyze_paper_background(job_id, pdf_path, config, llm_provider):
         })
         
         # STAGE 3: Evaluation
+        print(f"[{job_id}] >>> STAGE 3 STARTING", file=sys.stderr)
         emit_event(job_id, {
             "step": "stage_3_starting",
             "message": "Stage 3: Evaluating Reproducibility...",
@@ -162,16 +177,19 @@ def analyze_paper_background(job_id, pdf_path, config, llm_provider):
         })
         
         # Run evaluation and WAIT for it to complete before proceeding
+        print(f"[{job_id}] === Calling evaluate_reproducibility_aspects ===", file=sys.stderr)
         evaluation_result = evaluate_reproducibility_aspects(
             job_id, 
             llm_provider,
             emit_event=emit_event
         )
+        print(f"[{job_id}] === evaluate_reproducibility_aspects returned: {evaluation_result} ===", file=sys.stderr)
         
         if not evaluation_result:
             raise Exception("Evaluation failed")
         
         # Emit final completion event
+        print(f"[{job_id}] >>> EMITTING FINAL COMPLETE EVENT", file=sys.stderr)
         emit_event(job_id, {
             "step": "complete",
             "message": "Analysis complete",
@@ -180,7 +198,9 @@ def analyze_paper_background(job_id, pdf_path, config, llm_provider):
         })
         
         # Mark job as completed
+        print(f"[{job_id}] >>> MARKING JOB AS COMPLETED", file=sys.stderr)
         update_job_status(job_id, "completed", progress=1.0, current_stage="completed")
+        print(f"[{job_id}] ===== ANALYSIS COMPLETE =====", file=sys.stderr)
     
     except Exception as e:
         emit_event(job_id, {
