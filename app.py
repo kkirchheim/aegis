@@ -54,15 +54,35 @@ def create_app():
     app.register_blueprint(jobs_bp)
     app.register_blueprint(api_bp)
     
-    # Static files - disable caching
+    # Security headers and cache control
     @app.after_request
-    def set_cache_headers(response):
-        """Disable caching for static files."""
+    def set_security_headers(response):
+        """Set security headers and cache control."""
         from flask import request
+        
+        # Static files - disable caching
         if request.path.startswith('/static/'):
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
             response.headers['Pragma'] = 'no-cache'
             response.headers['Expires'] = '0'
+        
+        # Security headers (all responses)
+        # Prevent browsers from MIME-sniffing files
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        
+        # Prevent clickjacking attacks
+        response.headers['X-Frame-Options'] = 'DENY'
+        
+        # Enable browser XSS protection
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        
+        # Strict transport security (HTTPS only in production)
+        if Config.FLASK_ENV == 'production':
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        
+        # Referrer policy (don't leak referrer to external sites)
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        
         return response
     
     # Serve thumbnails

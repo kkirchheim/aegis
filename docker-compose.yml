@@ -6,8 +6,27 @@ services:
     container_name: paper-reproducibility
     env_file: .env
     environment:
+      # Flask Configuration
       - FLASK_ENV=development
       - FLASK_DEBUG=1
+      
+      # Database Configuration
+      - DATABASE_PATH=reproducibility.db
+      
+      # Docker Configuration
+      - DOCKER_NETWORK=workspace_traefik
+      - DOCKER_BACKEND_URL=http://paper-reproducibility:5000
+      
+      # LLM Provider Configuration
+      - LLM_PROVIDER=anthropic
+      - ANTHROPIC_MODEL=claude-haiku-4-5
+      
+      # Agent Configuration
+      - AGENT_CONTEXT_LIMIT=10000
+      
+      # Caching Configuration
+      - ENABLE_CACHING=false
+    
     volumes:
       # Docker-in-Docker: allow container to spawn other containers
       - /var/run/docker.sock:/var/run/docker.sock
@@ -16,13 +35,22 @@ services:
       - ./logs:/app/logs
       # Live code reload for development
       - .:/app
+    
     networks:
       - workspace_traefik
+    
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.repro.rule=Host(`repro.selene.local`)"
       - "traefik.http.routers.repro.entrypoints=web"
       - "traefik.http.services.repro.loadbalancer.server.port=5000"
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   workspace_traefik:

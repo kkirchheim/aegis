@@ -8,8 +8,78 @@ from flask import Blueprint, request, jsonify, session
 from utils.decorators import require_auth, require_admin
 from services.cache_service import get_cache_stats, clear_cache
 from database import get_db
+from config import Config
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
+
+
+# ============================================================================
+# Health Check Endpoint
+# ============================================================================
+
+@api_bp.route("/health", methods=["GET"])
+def health_check():
+    """
+    Health check endpoint.
+    
+    Returns 200 if all critical services are healthy, 503 otherwise.
+    
+    Security: This endpoint is intentionally public and does NOT expose:
+    - Detailed error messages or connection strings
+    - System paths or configuration details
+    - Internal service information that could aid attackers
+    
+    Returns minimal information: only the status code and overall health.
+    """
+    from services.docker_service import is_docker_available
+    from services.llm_service import init_llm_provider
+    
+    # Internal checks (not exposed to client)
+    database_healthy = False
+    llm_healthy = False
+    
+    # Check database connection
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT 1")
+        conn.close()
+        database_healthy = True
+    except Exception as e:
+        # Log error internally but don't expose to client
+        import logging
+        logging.error(f"Health check: Database connection failed: {str(e)}")
+        database_healthy = False
+    
+    # Check LLM provider (optional)
+    try:
+        llm_provider = init_llm_provider()
+        llm_healthy = True
+    except Exception as e:
+        # LLM provider is optional - not required for health
+        llm_healthy = False
+    
+    # Determine overall health status
+    # Critical services: flask and database only
+    is_healthy = database_healthy
+    
+    # For production, return minimal information
+    response = {
+        "status": "healthy" if is_healthy else "unhealthy",
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+    
+    # In development/non-production, we can include more details
+    # This helps with debugging but should be removed in production
+    if Config.FLASK_ENV != 'production':
+        response["checks"] = {
+            "database": database_healthy,
+            "docker": is_docker_available(),
+            "llm_provider": llm_healthy
+        }
+    
+    status_code = 200 if is_healthy else 503
+    return jsonify(response), status_code
 
 
 # ============================================================================
@@ -263,7 +333,12 @@ def delete_chat_history_endpoint(job_id):
 
 @api_bp.route("/agent/think", methods=["POST"])
 def agent_think():
-    """Agent calls this to ask for next action."""
+    """
+    Agent calls this to ask for next action.
+    
+    Security: Validates job_id exists before processing.
+    Job must exist in database - agents cannot invent job IDs.
+    """
     from services.llm_service import init_llm_provider
     from config import Config
     
@@ -273,6 +348,20 @@ def agent_think():
     
     if not job_id:
         return jsonify({"error": "job_id required"}), 400
+    
+    # SECURITY: Validate that job_id actually exists in database
+    # This prevents agents from making up job IDs or accessing arbitrary jobs
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
+        job = c.fetchone()
+        conn.close()
+        
+        if not job:
+            return jsonify({"error": "Invalid job_id"}), 404
+    except Exception as e:
+        return jsonify({"error": "Failed to validate job"}), 500
     
     try:
         # Build prompt for Claude
@@ -357,7 +446,10 @@ RESPONSE FORMAT (JSON only):
 
 @api_bp.route("/agent/log", methods=["POST"])
 def agent_log():
-    """Agent logs progress."""
+    """Agent logs progress.
+    
+    Security: Validates job_id exists before accepting logs.
+    """
     from blueprints.jobs import emit_event
     
     data = request.json
@@ -366,6 +458,19 @@ def agent_log():
     
     if not job_id:
         return jsonify({"error": "job_id required"}), 400
+    
+    # SECURITY: Validate that job_id actually exists
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
+        job = c.fetchone()
+        conn.close()
+        
+        if not job:
+            return jsonify({"error": "Invalid job_id"}), 404
+    except Exception as e:
+        return jsonify({"error": "Failed to validate job"}), 500
     
     emit_event(job_id, {
         "step": "agent_progress",
@@ -377,12 +482,30 @@ def agent_log():
 
 @api_bp.route("/agent/execution", methods=["POST"])
 def agent_execution():
-    """Agent stores execution details."""
+    """
+    Agent stores execution details.
+    
+    Security: Validates job_id exists before storing execution details.
+    """
     data = request.json
     job_id = data.get("job_id")
     
     if not job_id:
         return jsonify({"error": "job_id required"}), 400
+    
+    # SECURITY: Validate that job_id actually exists
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
+        job = c.fetchone()
+        
+        if not job:
+            conn.close()
+            return jsonify({"error": "Invalid job_id"}), 404
+        conn.close()
+    except Exception as e:
+        return jsonify({"error": "Failed to validate job"}), 500
     
     try:
         conn = get_db()
@@ -413,7 +536,11 @@ def agent_execution():
 
 @api_bp.route("/agent/complete", methods=["POST"])
 def agent_complete():
-    """Agent reports completion."""
+    """
+    Agent reports completion.
+    
+    Security: Validates job_id exists before accepting completion.
+    """
     from blueprints.jobs import emit_event
     from services.job_service import update_job_status
     
@@ -424,6 +551,20 @@ def agent_complete():
     
     if not job_id:
         return jsonify({"error": "job_id required"}), 400
+    
+    # SECURITY: Validate that job_id actually exists
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
+        job = c.fetchone()
+        
+        if not job:
+            conn.close()
+            return jsonify({"error": "Invalid job_id"}), 404
+        conn.close()
+    except Exception as e:
+        return jsonify({"error": "Failed to validate job"}), 500
     
     try:
         if not success:

@@ -94,7 +94,12 @@ def update_password(user_id, new_password):
 
 
 def create_default_admin_user(app_logger=None):
-    """Create default admin user if it doesn't exist."""
+    """
+    Create default admin user if it doesn't exist.
+    
+    SECURITY: Default admin password is randomly generated on first run
+    and should be changed immediately after initial login.
+    """
     try:
         conn = get_db()
         c = conn.cursor()
@@ -107,16 +112,25 @@ def create_default_admin_user(app_logger=None):
             if app_logger:
                 app_logger.info("✓ Admin user already exists")
         else:
-            # Create admin user with default password
-            password_hash = hash_password("admin")
+            # Generate random password for admin user
+            # This ensures the admin account is unique per deployment
+            admin_password = secrets.token_urlsafe(16)  # Random 16-char base64 string
+            password_hash = hash_password(admin_password)
+            
             c.execute(
                 "INSERT INTO users (username, email, password_hash, is_active) VALUES (?, ?, ?, 1)",
                 ("admin", "admin@example.com", password_hash)
             )
             conn.commit()
+            
             if app_logger:
-                app_logger.info("✓ Default admin user created (username: admin, password: admin)")
-                app_logger.warning("⚠️  Please change the admin password on first login!")
+                app_logger.warning("=" * 70)
+                app_logger.warning("⚠️  DEFAULT ADMIN USER CREATED")
+                app_logger.warning("=" * 70)
+                app_logger.warning(f"Username: admin")
+                app_logger.warning(f"Password: {admin_password}")
+                app_logger.warning("⚠️  PLEASE CHANGE THIS PASSWORD IMMEDIATELY!")
+                app_logger.warning("=" * 70)
         
         conn.close()
     except Exception as e:

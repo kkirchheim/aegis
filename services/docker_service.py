@@ -137,7 +137,7 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
             app_logger.info(f"[{job_id}] Repository: {repo_url}")
         
         # Backend URL for agent
-        backend_url = "http://paper-reproducibility:5000"
+        backend_url = Config.DOCKER_BACKEND_URL
         
         if app_logger:
             app_logger.info(f"[{job_id}] Backend URL for agent: {backend_url}")
@@ -193,7 +193,7 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
             memswap_limit="2g",
             nano_cpus=int(2 * 1e9),
             tmpfs={"/tmp": f"size={storage_limit_str}"},
-            network="workspace_traefik",
+            network=Config.DOCKER_NETWORK,
             remove=False,
             stdout=True,
             stderr=True
