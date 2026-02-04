@@ -34,19 +34,6 @@ The system implements a **three-stage evaluation pipeline**:
 
 Result: Comprehensive reproducibility report scoring 15 key aspects.
 
-## Features
-
-✨ **v0.4.0**
-- Multi-layer caching (3x speedup on repeated analyses)
-- Citations extraction from papers
-- Live progress timeline with 3-stage pipeline visualization
-- Paper metadata (title, abstract) on detail page
-- **Multi-provider LLM support** (Anthropic, Ollama, more to come)
-- **Interactive chat** — Ask questions about papers after analysis
-- Haiku model by default for **80% cost reduction**
-- Full reproducibility checklist (15 aspects, tier-based)
-- Professional UI with dark mode support
-
 ## Documentation
 
 - **[API Reference](./docs/API.md)** — Full API documentation and examples
@@ -62,23 +49,6 @@ Result: Comprehensive reproducibility report scoring 15 key aspects.
 - Code execution: 2-5 min (repo-dependent)
 - Evaluation: 10-15s
 - **Total: ~3-5 min per paper**
-- With caching: 1-2s on cache hit
-
-### Caching Configuration
-
-By default, **caching is disabled** to ensure fresh analyses. To enable caching:
-
-```bash
-export ENABLE_CACHING=true
-```
-
-**Cache behavior:**
-- **Disabled (default):** Each analysis computes fresh results, no cache reads/writes — useful for development and testing
-- **Enabled:** Results cached for identical PDFs and code combinations — 3x speedup on repeated analyses
-
-The cache stores:
-- Paper analyses (title, abstract, citations, methodology, datasets)
-- Evaluation results (reproducibility scores and metrics)
 
 ## License
 
