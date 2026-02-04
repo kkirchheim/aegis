@@ -275,7 +275,9 @@ class ChatMessage(BaseModel):
 
 def init_db(app_logger=None):
     """Initialize database and create all tables."""
-    db.connect()
+    # Only connect if not already connected
+    if db.is_closed():
+        db.connect()
     
     models = [
         User, Job, Artifact, Event,
