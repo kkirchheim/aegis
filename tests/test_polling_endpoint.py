@@ -13,11 +13,14 @@ from repositories import JobRepository
 @pytest.fixture
 def auth_user(app, client):
     """Create authenticated user and return client with session."""
+    import time
+    unique_suffix = str(int(time.time() * 1000000))
+    
     with app.app_context():
         user = User.create(
-            username="testuser",
+            username=f"testuser_{unique_suffix}",
             password_hash="test_hash",
-            email="test@example.com"
+            email=f"test_{unique_suffix}@example.com"
         )
     
     # Set session
