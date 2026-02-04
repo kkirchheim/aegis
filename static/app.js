@@ -250,6 +250,20 @@ function handleLogEvent(event) {
         updateStagesUI();
         // Log the completion
         addLog(`[${step}] ${message}`);
+        
+        // Show completion UI with link to report
+        setTimeout(() => {
+            // Fetch latest job data to get report
+            fetch(`/api/job/${currentJobId}/full`, {
+                credentials: 'include'
+            })
+            .then(r => r.json())
+            .then(job => {
+                handleAnalysisComplete(job.report || { status: job.status, message: "Analysis complete" });
+                analyzeBtn.disabled = false;
+            })
+            .catch(e => console.error("Failed to fetch job for completion:", e));
+        }, 500);
         return;
     }
     
