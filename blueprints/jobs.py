@@ -15,6 +15,8 @@ from services.job_service import (
 from services.analysis_service import extract_and_analyze_pdf
 from services.docker_service import spawn_agent_container
 from services.evaluation_service import evaluate_reproducibility_aspects
+from services.event_dispatcher import EventDispatcher
+from models.events import JobEvent
 from utils.pdf_utils import extract_page_count, generate_pdf_thumbnail
 from database import get_db
 
@@ -24,68 +26,27 @@ jobs_bp = Blueprint('jobs', __name__)
 event_queues = {}
 event_queues_lock = threading.Lock()
 
+# Event dispatcher
+_dispatcher = EventDispatcher(event_queues=event_queues, event_queues_lock=event_queues_lock)
+
 
 def emit_event(job_id, event_dict):
-    """Emit event to SSE clients and update job progress for milestone events."""
-    from datetime import datetime
-    from services.job_service import update_job_status
+    """Emit event to SSE clients and update job progress for milestone events.
     
-    event_dict["timestamp"] = datetime.utcnow().isoformat()
-    
-    # Store non-chat events in database
-    step = event_dict.get("step", "unknown")
-    is_chat_event = step and (step.startswith("chat_") or step == "chat_error")
-    
-    if not is_chat_event:
-        try:
-            conn = get_db()
-            c = conn.cursor()
-            c.execute("""
-                INSERT INTO events (job_id, timestamp, step, message, severity)
-                VALUES (?, ?, ?, ?, ?)
-            """, (
-                job_id,
-                event_dict["timestamp"],
-                step,
-                event_dict.get("message", ""),
-                event_dict.get("severity", "info")
-            ))
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            pass
-        
-        # Update job progress and current_stage for milestone events
-        import sys
-        if step == "stage_1_starting":
-            print(f"[{job_id}] TRANSITION: stage_1_starting -> paper_analysis", file=sys.stderr)
-            update_job_status(job_id, "processing", progress=0.05, current_stage="paper_analysis")
-        elif step == "stage_1_complete":
-            print(f"[{job_id}] TRANSITION: stage_1_complete -> code_execution", file=sys.stderr)
-            update_job_status(job_id, "processing", progress=0.33, current_stage="code_execution")
-        elif step == "stage_2_starting":
-            print(f"[{job_id}] TRANSITION: stage_2_starting -> code_execution", file=sys.stderr)
-            update_job_status(job_id, "processing", progress=0.34, current_stage="code_execution")
-        elif step == "stage_2_complete":
-            print(f"[{job_id}] TRANSITION: stage_2_complete -> evaluation", file=sys.stderr)
-            update_job_status(job_id, "processing", progress=0.66, current_stage="evaluation")
-        elif step == "stage_3_starting":
-            print(f"[{job_id}] TRANSITION: stage_3_starting -> evaluation", file=sys.stderr)
-            update_job_status(job_id, "processing", progress=0.67, current_stage="evaluation")
-        elif step == "stage_3_complete":
-            # Don't transition to "completed" yet - stay in "evaluation" stage
-            # Final "complete" event will mark as truly completed
-            print(f"[{job_id}] TRANSITION: stage_3_complete -> staying in evaluation", file=sys.stderr)
-            update_job_status(job_id, "processing", progress=1.0, current_stage="evaluation")
-        elif step == "complete":
-            # Final completion - mark as completed
-            print(f"[{job_id}] TRANSITION: complete -> completed", file=sys.stderr)
-            update_job_status(job_id, "completed", progress=1.0, current_stage="completed")
-    
-    # Emit to SSE clients
-    with event_queues_lock:
-        if job_id in event_queues:
-            event_queues[job_id].append(event_dict)
+    Args:
+        job_id: Job ID
+        event_dict: Dict with 'step', 'message' (optional), 'severity' (optional), etc.
+    """
+    # Convert dict to JobEvent and dispatch
+    event = JobEvent(
+        job_id=job_id,
+        step=event_dict.get("step", "unknown"),
+        message=event_dict.get("message"),
+        severity=event_dict.get("severity", "info"),
+        progress=event_dict.get("progress"),
+        content=event_dict.get("content"),
+    )
+    _dispatcher.emit(event)
 
 
 def analyze_paper_background(job_id, pdf_path, config, llm_provider):
