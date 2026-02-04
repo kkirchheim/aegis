@@ -21,6 +21,7 @@ import json
 import pytest
 import threading
 import time
+import uuid
 from datetime import datetime
 from unittest.mock import patch, MagicMock
 from models.events import JobEvent
@@ -156,7 +157,7 @@ class TestNewEventsStreamLive:
         start_time = time.time()
         timeout = 3.0  # 3 second timeout
         
-        response = authenticated_user.get(f'/events/test_job_live')
+        response = authenticated_user.get(f'/events/{job_id}')
         assert response.status_code == 200
         
         # Parse streaming response
@@ -213,12 +214,12 @@ class TestEventOrder:
         ]
         
         for step in steps:
-            event = create_test_event("test_job_order", step, f"Message for {step}")
+            event = create_test_event(job_id, step, f"Message for {step}")
             # Small delay between events to ensure timestamp ordering
             time.sleep(0.01)
         
         # Retrieve events via SSE
-        response = authenticated_user.get(f'/events/test_job_order')
+        response = authenticated_user.get(f'/events/{job_id}')
         assert response.status_code == 200
         
         # Parse events
@@ -276,7 +277,7 @@ class TestEventPersistence:
             })
             
             # Immediately check database
-            job_record = Job.get_by_id("test_job_persist")
+            job_record = Job.get_by_id(job_id)
             events = list(Event.select().where(Event.job == job_record))
             
             assert len(events) > 0, "Event not persisted to database"
@@ -302,7 +303,7 @@ class TestEventPersistence:
                 "message": "Starting stage 1",
             })
             
-            job_record = Job.get_by_id("test_job_persist_non_chat")
+            job_record = Job.get_by_id(job_id)
             events = list(Event.select().where(Event.job == job_record))
             
             assert len(events) >= 1
@@ -324,7 +325,7 @@ class TestEventPersistence:
                 "stage_duration_ms": 5000,
             })
             
-            job_record = Job.get_by_id("test_job_persist_duration")
+            job_record = Job.get_by_id(job_id)
             events = list(Event.select().where(Event.job == job_record))
             
             assert len(events) >= 1
@@ -382,7 +383,7 @@ class TestRaceCondition:
         # Now connect to SSE (simulating client joining after events already exist)
         time.sleep(0.1)  # Small delay to ensure DB flush
         
-        response = authenticated_user.get(f'/events/test_job_race')
+        response = authenticated_user.get(f'/events/{job_id}')
         assert response.status_code == 200
         
         # Parse all events from SSE response
@@ -421,7 +422,7 @@ class TestRaceCondition:
         ]
         
         for step, message in historical_events:
-            create_test_event("test_job_mixed", step, message)
+            create_test_event(job_id, step, message)
         
         received_events = []
         
@@ -448,7 +449,7 @@ class TestRaceCondition:
         emitter.start()
         
         # Connect to SSE
-        response = authenticated_user.get(f'/events/test_job_mixed')
+        response = authenticated_user.get(f'/events/{job_id}')
         assert response.status_code == 200
         
         # Parse events
@@ -501,7 +502,7 @@ class TestRaceCondition:
         
         # Verify all events were persisted
         with app.app_context():
-            job_record = Job.get_by_id("test_job_concurrent")
+            job_record = Job.get_by_id(job_id)
             events = list(Event.select().where(Event.job == job_record))
             
             # 3 threads × 5 events = 15 total
@@ -533,7 +534,7 @@ class TestSSETimeout:
         # or running a shorter integration test with mocked time
         
         # For now, verify the endpoint returns 200 with proper headers
-        response = authenticated_user.get(f'/events/test_job_timeout')
+        response = authenticated_user.get(f'/events/{job_id}')
         
         assert response.status_code == 200
         assert response.content_type.startswith('text/event-stream')
@@ -548,7 +549,7 @@ class TestSSETimeout:
         """
         job = create_test_job(job_id=None, status="processing")
         
-        response = authenticated_user.get(f'/events/test_job_headers')
+        response = authenticated_user.get(f'/events/{job_id}')
         
         # Verify SSE headers
         assert response.status_code == 200
@@ -578,7 +579,7 @@ class TestSSEAccessControl:
         job = create_test_job(job_id=None, status="processing")
         
         # Try to access SSE without authentication
-        response = client.get('/events/test_job_noauth')
+        response = client.get('/events/{job_id}')
         
         # Should redirect to login (302) or return 403
         assert response.status_code in [302, 403]
@@ -590,24 +591,29 @@ class TestSSEAccessControl:
         from models.database import User, Job
         
         with app.app_context():
-            # Create two users
+            # Create two users with unique IDs and emails
+            user1_id = str(uuid.uuid4())
+            user2_id = str(uuid.uuid4())
             user1 = User.create(
-                username='user1',
-                email='user1@test.com',
+                id=user1_id,
+                username='user1_' + user1_id[:8],
+                email='user1_' + user1_id[:8] + '@test.com',
                 password_hash='hash1',
                 is_active=True,
             )
             user2 = User.create(
-                username='user2',
-                email='user2@test.com',
+                id=user2_id,
+                username='user2_' + user2_id[:8],
+                email='user2_' + user2_id[:8] + '@test.com',
                 password_hash='hash2',
                 is_active=True,
             )
             
             # Create job for user1
+            job_id = str(uuid.uuid4())
             job = Job.create(
-                id='test_job_access',
-                user=user1,
+                id=job_id,
+                user_id=user1.id,
                 status='processing',
                 current_stage='processing',
                 pdf_path='/test/path.pdf',
@@ -619,10 +625,10 @@ class TestSSEAccessControl:
         user2_client = app.test_client()
         with user2_client.session_transaction() as sess:
             sess['user_id'] = user2.id
-            sess['username'] = 'user2'
+            sess['username'] = user2.username
         
         # Try to access user1's job SSE stream
-        response = user2_client.get('/events/test_job_access')
+        response = user2_client.get(f'/events/{job_id}')
         
         # Should deny access (403)
         assert response.status_code == 403
@@ -642,9 +648,10 @@ class TestEventQueueManagement:
         from blueprints.jobs import event_queues, event_queues_lock
         
         job = create_test_job(job_id=None, status="processing")
+        job_id = job.id
         
         # Connect to SSE
-        response = authenticated_user.get(f'/events/test_job_queue_create', follow_redirects=False)
+        response = authenticated_user.get(f'/events/{job_id}', follow_redirects=False)
         assert response.status_code == 200
         
         # Queue should have been created and then cleaned up
@@ -682,9 +689,9 @@ class TestEventFormatAndDataIntegrity:
         Verify SSE events are properly formatted as JSON.
         """
         job = create_test_job(job_id=None, status="processing")
-        create_test_event("test_job_format", "test_step", "Test message")
+        create_test_event(job_id, "test_step", "Test message")
         
-        response = authenticated_user.get(f'/events/test_job_format')
+        response = authenticated_user.get(f'/events/{job_id}')
         assert response.status_code == 200
         
         # Parse events
@@ -706,9 +713,9 @@ class TestEventFormatAndDataIntegrity:
         job = create_test_job(job_id=None, status="processing")
         
         # Create event with all fields
-        event = create_test_event("test_job_fields", "test_step", "Test message")
+        event = create_test_event(job_id, "test_step", "Test message")
         
-        response = authenticated_user.get(f'/events/test_job_fields')
+        response = authenticated_user.get(f'/events/{job_id}')
         assert response.status_code == 200
         
         received_events = []
@@ -742,15 +749,16 @@ class TestSSEIntegrationWithDispatcher:
         from blueprints.jobs import event_queues, event_queues_lock, _dispatcher
         
         job = create_test_job(job_id=None, status="processing")
+        job_id = job.id
         
         with app.app_context():
             # Create queue
             with event_queues_lock:
-                event_queues["test_job_dispatcher"] = []
+                event_queues[job_id] = []
             
             # Emit event
             event = JobEvent(
-                job_id="test_job_dispatcher",
+                job_id=job_id,
                 step="test_step",
                 message="Test message",
             )
@@ -759,8 +767,8 @@ class TestSSEIntegrationWithDispatcher:
             
             # Verify event in queue
             with event_queues_lock:
-                assert len(event_queues["test_job_dispatcher"]) > 0
-                queued_event = event_queues["test_job_dispatcher"][0]
+                assert len(event_queues[job_id]) > 0
+                queued_event = event_queues[job_id][0]
                 assert queued_event['step'] == "test_step"
                 assert queued_event['message'] == "Test message"
 
@@ -783,9 +791,9 @@ class TestLargeEventStreams:
         # Create many events
         num_events = 50
         for i in range(num_events):
-            create_test_event("test_job_many", f"step_{i:03d}", f"Message {i}")
+            create_test_event(job_id, f"step_{i:03d}", f"Message {i}")
         
-        response = authenticated_user.get(f'/events/test_job_many')
+        response = authenticated_user.get(f'/events/{job_id}')
         assert response.status_code == 200
         
         # Parse all events
