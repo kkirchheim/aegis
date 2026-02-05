@@ -2,6 +2,22 @@
 
 Complete HTTP API documentation for the Paper Reproducibility Checker.
 
+## Table of Contents
+
+- [Base URL](#base-url)
+- [Content Types](#content-types)
+- [Public Endpoints](#public-endpoints)
+- [Polling Endpoint](#polling-endpoint)
+- [List Jobs](#list-jobs)
+- [Chat Endpoints](#chat-endpoints)
+- [Internal Agent Endpoints](#internal-agent-endpoints)
+- [Database Endpoints](#database-endpoints)
+- [Error Responses](#error-responses)
+- [Rate Limiting](#rate-limiting)
+- [Example Workflow](#example-workflow)
+
+---
+
 ## Base URL
 
 ```
@@ -11,7 +27,7 @@ http://localhost:5000
 ## Content Types
 
 - Request: `multipart/form-data` (uploads) or `application/json`
-- Response: `application/json` or `text/event-stream` (SSE)
+- Response: `application/json`
 
 ---
 
@@ -41,32 +57,11 @@ curl -X POST -F "pdf=@paper.pdf" http://localhost:5000/upload
 
 ---
 
-### Stream Progress
-
-**GET /events/{job_id}**
-
-Real-time progress via Server-Sent Events (SSE).
-
-```javascript
-const es = new EventSource(`/events/${jobId}`);
-es.onmessage = (e) => console.log(JSON.parse(e.data));
-```
-
-**Event Types:**
-- `starting` - Job initialized
-- `extracting_pdf` - Reading PDF
-- `parsing_paper` - Claude analysis
-- `analyzing_artifact` - Executing code
-- `complete` - Success (includes report)
-- `error` - Failed
-
----
-
 ### Get Job Status
 
 **GET /job/{job_id}**
 
-Fetch complete job data (paper analysis, execution, evaluation).
+Fetch job status (brief overview).
 
 ```bash
 curl http://localhost:5000/job/abc123
@@ -77,14 +72,13 @@ curl http://localhost:5000/job/abc123
 {
   "id": "abc123",
   "status": "completed",
-  "pdf_filename": "paper.pdf",
+  "created_at": "2026-02-03T...",
+  "completed_at": "2026-02-03T...",
   "report": {
     "status": "success",
     "reproducibility_score": 0.87,
     "aspect_evaluations": [...]
-  },
-  "events": [...],
-  "artifacts": [...]
+  }
 }
 ```
 
@@ -94,7 +88,7 @@ curl http://localhost:5000/job/abc123
 
 **GET /jobs**
 
-List all analysis jobs.
+List all analysis jobs for the current user.
 
 ```bash
 curl http://localhost:5000/jobs
@@ -116,6 +110,195 @@ curl http://localhost:5000/jobs
 
 ---
 
+## Polling Endpoint
+
+### Get Full Job Data
+
+**GET /api/job/{job_id}/full**
+
+Fetch complete job data including all details, events, and progress.
+
+Used by the frontend to poll for updates. Call this endpoint repeatedly to track job progress.
+
+```bash
+curl http://localhost:5000/api/job/abc123/full
+```
+
+**Response:**
+```json
+{
+  "id": "abc123",
+  "status": "processing",
+  "progress": 0.65,
+  "current_stage": "analyzing_artifact",
+  "pdf_filename": "paper.pdf",
+  "created_at": "2026-02-03T10:00:00Z",
+  "completed_at": null,
+  "report": {
+    "status": "success",
+    "reproducibility_score": 0.87,
+    "aspect_evaluations": [...]
+  },
+  "error_message": null,
+  "events": [
+    {
+      "step": "starting",
+      "message": "Job initialized",
+      "timestamp": "2026-02-03T10:00:01Z"
+    },
+    {
+      "step": "extracting_pdf",
+      "message": "Reading PDF",
+      "timestamp": "2026-02-03T10:00:05Z"
+    },
+    {
+      "step": "parsing_paper",
+      "message": "Analyzing with Claude",
+      "timestamp": "2026-02-03T10:01:00Z"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "art1",
+      "job_id": "abc123",
+      "path": "/code/script.py",
+      "type": "code",
+      "content": "..."
+    }
+  ],
+  "paper_analysis": {
+    "title": "Improving Image Classification with...",
+    "abstract": "This paper proposes...",
+    "citations": [
+      {
+        "authors": ["Smith, J.", "Doe, A."],
+        "year": 2023,
+        "title": "Deep Learning Advances",
+        "url": "https://arxiv.org/..."
+      }
+    ]
+  }
+}
+```
+
+**Response Fields:**
+- `progress` - Float 0.0-1.0 indicating job progress
+- `current_stage` - Current pipeline stage (starting, extracting_pdf, parsing_paper, analyzing_artifact, complete)
+- `events` - Array of all events emitted during job execution
+- `artifacts` - Code/output artifacts extracted from the paper
+- `paper_analysis` - Extracted metadata (title, abstract, citations)
+
+**Frontend Usage:**
+Poll this endpoint every 1-2 seconds while status is `processing` or `pending`:
+
+```javascript
+async function pollJob(jobId) {
+  while (true) {
+    const response = await fetch(`/api/job/${jobId}/full`);
+    const job = await response.json();
+    
+    console.log(`Progress: ${job.progress * 100}%`);
+    console.log(`Stage: ${job.current_stage}`);
+    
+    if (['completed', 'failed', 'error'].includes(job.status)) {
+      break;
+    }
+    
+    await new Promise(r => setTimeout(r, 1000)); // wait 1 second
+  }
+}
+```
+
+---
+
+## Chat Endpoints
+
+### Send Message
+
+**POST /api/job/{job_id}/chat**
+
+Send a message about the paper analysis and get a streaming response.
+
+```bash
+curl -X POST http://localhost:5000/api/job/abc123/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Why did the code fail?"}'
+```
+
+**Request:**
+```json
+{
+  "message": "Why did the code fail?"
+}
+```
+
+**Response (202):**
+```json
+{
+  "ok": true
+}
+```
+
+**Streaming Response:**
+The response is streamed via events in the job's event stream. Listen for events with `step: "chat_response"`:
+
+```json
+{
+  "step": "chat_response",
+  "content": "The code failed because..."
+}
+```
+
+---
+
+### Get Chat History
+
+**GET /api/job/{job_id}/chat/history**
+
+Retrieve the conversation history for a job.
+
+```bash
+curl http://localhost:5000/api/job/abc123/chat/history
+```
+
+**Response:**
+```json
+[
+  {
+    "role": "user",
+    "content": "Why did the code fail?",
+    "created_at": "2026-02-03T10:30:00Z"
+  },
+  {
+    "role": "assistant",
+    "content": "The code failed because of a missing dependency...",
+    "created_at": "2026-02-03T10:30:05Z"
+  }
+]
+```
+
+---
+
+### Clear Chat History
+
+**DELETE /api/job/{job_id}/chat/history**
+
+Delete all chat messages for a job.
+
+```bash
+curl -X DELETE http://localhost:5000/api/job/abc123/chat/history
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "message": "Chat history cleared"
+}
+```
+
+---
+
 ## Internal Agent Endpoints
 
 Used by Docker agent (not for external clients).
@@ -132,7 +315,7 @@ Agent asks Claude for next action.
   "repo_state": {
     "repo_url": "https://github.com/...",
     "discovered_files": ["README.md", "requirements.txt", ...],
-    "last_output": "...",
+    "combined_output": "...",
     "errors": [],
     "iteration": 5
   }
@@ -154,7 +337,7 @@ Agent asks Claude for next action.
 
 **POST /api/agent/log**
 
-Agent logs progress (emitted to SSE stream).
+Agent logs progress.
 
 ```json
 {
@@ -194,11 +377,7 @@ Agent signals completion (success or failure).
 {
   "job_id": "abc123",
   "success": true,
-  "message": "Script executed successfully",
-  "accuracy": 0.93,
-  "reproducibility_aspects": {
-    "aspects": [...]
-  }
+  "message": "Script executed successfully"
 }
 ```
 
@@ -210,6 +389,13 @@ Agent signals completion (success or failure).
 ```json
 {
   "error": "File must be a PDF"
+}
+```
+
+### 403 Forbidden
+```json
+{
+  "error": "Access denied"
 }
 ```
 
@@ -236,26 +422,6 @@ Currently no rate limits. Will be added in production deployment.
 ---
 
 ## Database Endpoints
-
-### Get Full Job Data
-
-**GET /api/job/{job_id}/full**
-
-Returns complete job data including events, artifacts, evaluations, citations.
-
-Used by detail page to fetch all information.
-
-**Response includes:**
-- `events` - All SSE events (timestamps, steps)
-- `artifacts` - Code artifacts found
-- `report` - Analysis report
-- `paper_analysis` - Extracted metadata:
-  - `title` - Paper title
-  - `abstract` - Paper abstract
-  - `citations` - Array of citations: `{authors, year, title, url}`
-- `aspect_evaluations` - Reproducibility scores
-
----
 
 ### Cache Management
 
@@ -289,7 +455,7 @@ curl -X DELETE http://localhost:5000/api/cache/clear
 ```json
 {
   "ok": true,
-  "message": "Cache cleared - deleted 5 PDF files and all analysis data"
+  "message": "Cache cleared - deleted 5 PDF files"
 }
 ```
 
@@ -317,15 +483,80 @@ curl -X DELETE http://localhost:5000/job/abc123
 
 ## Example Workflow
 
+### Polling-Based Progress Tracking
+
 ```bash
+#!/bin/bash
+
 # 1. Upload paper
 JOB_ID=$(curl -s -X POST -F "pdf=@paper.pdf" \
   http://localhost:5000/upload | jq -r '.job_id')
 
-# 2. Stream events in real-time
-curl -N http://localhost:5000/events/$JOB_ID &
+echo "Job ID: $JOB_ID"
 
-# 3. Wait for completion, then fetch results
-sleep 5
-curl http://localhost:5000/job/$JOB_ID | jq '.report'
+# 2. Poll for progress until completion
+while true; do
+  RESPONSE=$(curl -s http://localhost:5000/api/job/$JOB_ID/full)
+  
+  STATUS=$(echo "$RESPONSE" | jq -r '.status')
+  PROGRESS=$(echo "$RESPONSE" | jq -r '.progress')
+  STAGE=$(echo "$RESPONSE" | jq -r '.current_stage')
+  
+  echo "Status: $STATUS | Progress: ${PROGRESS}% | Stage: $STAGE"
+  
+  if [[ "$STATUS" == "completed" ]] || [[ "$STATUS" == "failed" ]]; then
+    break
+  fi
+  
+  sleep 1
+done
+
+# 3. Fetch final results
+curl -s http://localhost:5000/api/job/$JOB_ID/full | jq '.report'
+```
+
+### JavaScript Polling Example
+
+```javascript
+async function analyzeAndWait(pdfFile) {
+  // Upload
+  const formData = new FormData();
+  formData.append('pdf', pdfFile);
+  const uploadResp = await fetch('/upload', { method: 'POST', body: formData });
+  const { job_id } = await uploadResp.json();
+  
+  // Poll
+  while (true) {
+    const pollResp = await fetch(`/api/job/${job_id}/full`);
+    const job = await pollResp.json();
+    
+    console.log(`Progress: ${(job.progress * 100).toFixed(0)}%`);
+    console.log(`Stage: ${job.current_stage}`);
+    
+    if (['completed', 'failed', 'error'].includes(job.status)) {
+      return job;
+    }
+    
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+```
+
+### Chat Integration Example
+
+```javascript
+// Send message
+const chatResp = await fetch(`/api/job/${job_id}/chat`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ message: 'Why did it fail?' })
+});
+
+// Get history
+const historyResp = await fetch(`/api/job/${job_id}/chat/history`);
+const messages = await historyResp.json();
+console.log(messages);
+
+// Clear history
+await fetch(`/api/job/${job_id}/chat/history`, { method: 'DELETE' });
 ```
