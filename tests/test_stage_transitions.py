@@ -62,9 +62,9 @@ def setup_test_job(test_job_id):
     # Create test job
     try:
         c.execute(
-            """INSERT INTO jobs (id, pdf_filename, pdf_path, status, user_id) 
-               VALUES (?, ?, ?, ?, ?)""",
-            (test_job_id, "test.pdf", "/tmp/test.pdf", "processing", 1)
+            """INSERT INTO jobs (id, pdf_filename, pdf_path, status, user_id, current_stage) 
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (test_job_id, "test.pdf", "/tmp/test.pdf", "processing", 1, "stage_1")
         )
     except:
         pass  # Job may already exist

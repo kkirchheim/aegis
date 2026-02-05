@@ -128,6 +128,15 @@ def create_app():
         # Otherwise, render HTML error page
         return render_template("404.html"), 404
     
+    @app.errorhandler(400)
+    def bad_request(error):
+        """Handle 400 errors (bad requests, bad JSON) with content negotiation."""
+        from flask import jsonify, request
+        
+        # For now, always return JSON for 400 errors since they typically come from API calls
+        # (invalid JSON, missing required fields, type validation errors)
+        return jsonify({"error": "Bad request"}), 400
+    
     @app.errorhandler(500)
     def server_error(error):
         """Handle 500 errors with content negotiation."""

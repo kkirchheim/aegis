@@ -272,8 +272,8 @@ class TestCrossUserAccessControl:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id) VALUES (?, ?, ?, ?)",
-                ("job-user2-456", "completed", "/tmp/test.pdf", 2)
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
+                ("job-user2-456", "completed", "/tmp/test.pdf", 2, "evaluation")
             )
             conn.commit()
             conn.close()
@@ -293,8 +293,8 @@ class TestCrossUserAccessControl:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id) VALUES (?, ?, ?, ?)",
-                ("job-user2-789", "completed", "/tmp/test.pdf", 2)
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
+                ("job-user2-789", "completed", "/tmp/test.pdf", 2, "evaluation")
             )
             conn.commit()
             conn.close()
@@ -314,8 +314,8 @@ class TestCrossUserAccessControl:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id) VALUES (?, ?, ?, ?)",
-                ("job-user2-chat", "completed", "/tmp/test.pdf", 2)
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
+                ("job-user2-chat", "completed", "/tmp/test.pdf", 2, "evaluation")
             )
             conn.commit()
             conn.close()
@@ -337,8 +337,8 @@ class TestCrossUserAccessControl:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id) VALUES (?, ?, ?, ?)",
-                ("job-user2-hist", "completed", "/tmp/test.pdf", 2)
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
+                ("job-user2-hist", "completed", "/tmp/test.pdf", 2, "evaluation")
             )
             c.execute(
                 "INSERT INTO chat_sessions (job_id) VALUES (?)",
@@ -362,8 +362,8 @@ class TestCrossUserAccessControl:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id) VALUES (?, ?, ?, ?)",
-                ("job-user2-del", "completed", "/tmp/test.pdf", 2)
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
+                ("job-user2-del", "completed", "/tmp/test.pdf", 2, "evaluation")
             )
             c.execute(
                 "INSERT INTO chat_sessions (job_id) VALUES (?)",
@@ -387,8 +387,8 @@ class TestCrossUserAccessControl:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id) VALUES (?, ?, ?, ?)",
-                ("job-user2-events", "processing", "/tmp/test.pdf", 2)
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
+                ("job-user2-events", "processing", "/tmp/test.pdf", 2, "stage_1")
             )
             conn.commit()
             conn.close()
@@ -554,8 +554,8 @@ class TestCriticalSecurityGaps:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id) VALUES (?, ?, ?, ?)",
-                ("job-detail-test", "completed", "/tmp/test.pdf", 2)
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
+                ("job-detail-test", "completed", "/tmp/test.pdf", 2, "evaluation")
             )
             conn.commit()
             conn.close()

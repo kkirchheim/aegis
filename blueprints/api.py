@@ -44,7 +44,11 @@ def api_login():
     from services.auth_service import get_user_by_username, verify_password
     
     try:
-        data = request.json or {}
+        try:
+            data = request.json or {}
+        except Exception as e:
+            return jsonify({"error": "Invalid JSON in request body"}), 400
+        
         username = data.get("username", "").strip()
         password = data.get("password", "")
         
@@ -94,11 +98,25 @@ def api_register():
     )
     
     try:
-        data = request.json or {}
-        username = data.get("username", "").strip()
+        try:
+            data = request.json or {}
+        except Exception as e:
+            return jsonify({"error": "Invalid JSON in request body"}), 400
+        
+        username = data.get("username", "")
         email = data.get("email", "").strip()
         password = data.get("password", "")
         confirm_password = data.get("confirm_password", "")
+        
+        # Type validation - username and password should be strings
+        if not isinstance(username, str):
+            return jsonify({"error": "Username must be a string"}), 400
+        if not isinstance(password, str):
+            return jsonify({"error": "Password must be a string"}), 400
+        if not isinstance(confirm_password, str):
+            return jsonify({"error": "Confirm password must be a string"}), 400
+        
+        username = username.strip()
         
         # Validate inputs
         valid, error = validate_username(username)

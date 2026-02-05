@@ -240,7 +240,7 @@ class TestJobRoutes:
             conn.close()
         
         # Retrieve via API with authenticated user
-        response = authenticated_user.get(f'/job/{job_id}')
+        response = authenticated_user.get(f'/api/job/{job_id}')
         assert response.status_code == 200  # Should find job now that user_id matches
         data = response.get_json()
         assert data['id'] == job_id
@@ -289,18 +289,19 @@ class TestDataIntegrity:
     def test_store_execution_details(self, app):
         """Test storing execution details with all fields."""
         with app.app_context():
+            from datetime import datetime
             conn = get_db()
             c = conn.cursor()
             
             job_id = "test-exec-details"
-            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress) VALUES (?, ?, ?, ?, ?)",
-                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0))
+            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0, datetime.now()))
             
             c.execute("""
                 INSERT INTO execution_details
                 (job_id, commands_run, stdout_combined, actual_results, 
-                 dependencies_used, errors_summary, discovered_files, test_info, randomness_info)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 dependencies_used, errors_summary, discovered_files, test_info, randomness_info, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 job_id,
                 "python main.py",
@@ -310,7 +311,8 @@ class TestDataIntegrity:
                 "No errors",
                 json.dumps(["README.md", "main.py"]),
                 "Tests found: 5",
-                "Seeds set: 2"
+                "Seeds set: 2",
+                datetime.now()
             ))
             
             conn.commit()
@@ -331,12 +333,13 @@ class TestDataIntegrity:
     def test_store_aspect_evaluations(self, app):
         """Test storing aspect evaluations."""
         with app.app_context():
+            from datetime import datetime
             conn = get_db()
             c = conn.cursor()
             
             job_id = "test-aspects"
-            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress) VALUES (?, ?, ?, ?, ?)",
-                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0))
+            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0, datetime.now()))
             
             # Insert aspect evaluations
             aspects = [
@@ -348,8 +351,8 @@ class TestDataIntegrity:
             for aspect_id, name, status, paper, code in aspects:
                 c.execute("""
                     INSERT INTO aspect_evaluations
-                    (job_id, aspect_id, name, status, evidence, paper_supports, code_supports, conclusion)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (job_id, aspect_id, name, status, evidence, paper_supports, code_supports, conclusion, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                 """, (job_id, aspect_id, name, status, f"Evidence for {name}", paper, code, "Conclusion"))
             
             conn.commit()
@@ -368,17 +371,18 @@ class TestPaperAnalysisStorage:
     def test_store_paper_analysis(self, app):
         """Test storing paper analysis data."""
         with app.app_context():
+            from datetime import datetime
             conn = get_db()
             c = conn.cursor()
             
             job_id = "test-paper-analysis"
-            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress) VALUES (?, ?, ?, ?, ?)",
-                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0))
+            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0, datetime.now()))
             
             c.execute("""
                 INSERT INTO paper_analysis
-                (job_id, extracted_text, claimed_results, methodology, dependencies, dataset_description)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (job_id, extracted_text, claimed_results, methodology, dependencies, dataset_description, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
             """, (
                 job_id,
                 "Extracted text from PDF",
@@ -405,12 +409,13 @@ class TestArtifactStorage:
     def test_store_artifacts(self, app):
         """Test storing discovered artifacts."""
         with app.app_context():
+            from datetime import datetime
             conn = get_db()
             c = conn.cursor()
             
             job_id = "test-artifacts"
-            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress) VALUES (?, ?, ?, ?, ?)",
-                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0))
+            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0, datetime.now()))
             
             artifacts = [
                 ("https://github.com/user/repo", "github_repo", "Main repository"),
