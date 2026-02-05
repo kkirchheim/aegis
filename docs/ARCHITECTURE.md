@@ -1,336 +1,494 @@
 # System Architecture
 
-High-level design and data flow of the Paper Reproducibility Checker.
+Complete technical design of the Paper Reproducibility Checker.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Three-Stage Pipeline](#three-stage-pipeline)
+- [System Components](#system-components)
+  - [Data Layer Architecture](#data-layer-architecture)
+  - [Service Architecture](#service-architecture)
+- [Real-Time Updates](#real-time-updates)
+- [Data Flow](#data-flow)
+- [Execution Model](#execution-model)
+- [Networking](#networking)
+- [Security](#security)
+- [Performance](#performance)
+- [Technology Stack](#technology-stack)
+
+---
+
+## Overview
+
+Paper Reproducibility Checker is a web application that analyzes academic papers for reproducibility by:
+1. Extracting and parsing PDF content
+2. Executing paper code in sandboxed containers
+3. Evaluating reproducibility across 15 dimensions
+
+All components communicate via REST APIs. Event-driven architecture tracks progress via database polling.
+
+---
 
 ## Three-Stage Pipeline
 
 ```
-┌─────────────────────────────────────┐
-│ STAGE 1: PAPER ANALYSIS             │
-├─────────────────────────────────────┤
-│ • Extract PDF text                  │
-│ • Claude parses methodology          │
+┌──────────────────────────────────────┐
+│ STAGE 1: PAPER ANALYSIS              │
+├──────────────────────────────────────┤
+│ • Extract PDF text                   │
+│ • Parse metadata (title, abstract)    │
+│ • Extract citations                  │
 │ • Identify code artifacts            │
-│ → Store in paper_analysis table     │
-└──────────────┬──────────────────────┘
+│ → Store in PaperAnalysis model      │
+└──────────────┬───────────────────────┘
                ↓
-┌─────────────────────────────────────┐
-│ STAGE 2: CODE EXECUTION             │
-├─────────────────────────────────────┤
-│ • Clone GitHub repository            │
-│ • Discover files (tests, config)    │
-│ • Execute main script in sandbox    │
-│ • Capture all output & results      │
-│ → Store in execution_details table  │
-└──────────────┬──────────────────────┘
+┌──────────────────────────────────────┐
+│ STAGE 2: CODE EXECUTION              │
+├──────────────────────────────────────┤
+│ • Clone GitHub repositories          │
+│ • Discover files and dependencies    │
+│ • Execute main script in sandbox     │
+│ • Capture output and results         │
+│ → Store in ExecutionDetails model   │
+└──────────────┬───────────────────────┘
                ↓
-┌─────────────────────────────────────┐
-│ STAGE 3: MULTI-SOURCE EVALUATION    │
-├─────────────────────────────────────┤
-│ • Claude receives all three sources  │
-│ • Evaluates 15 reproducibility      │
-│   aspects comparing claims vs exec   │
-│ → Store in aspect_evaluations table │
-└──────────────┬──────────────────────┘
+┌──────────────────────────────────────┐
+│ STAGE 3: MULTI-SOURCE EVALUATION     │
+├──────────────────────────────────────┤
+│ • Claude evaluates 15 aspects        │
+│ • Compares paper claims vs actual    │
+│ • Generates evidence-based findings  │
+│ → Store in AspectEvaluation models  │
+└──────────────┬───────────────────────┘
                ↓
          Report Display
 ```
 
+**Progress Ranges:**
+- Stage 1: 0.0 → 0.33
+- Stage 2: 0.33 → 0.66
+- Stage 3: 0.66 → 1.0
+
+---
+
 ## System Components
 
 ### Frontend
-- **HTML:** Upload form, progress log, job history
+- **HTML Templates:** Upload form, report display, job history
 - **CSS:** Tailwind + DaisyUI for professional UI
-- **JavaScript:** Real-time updates via SSE, interactions
+- **JavaScript:** Polling mechanism every 200ms via `/api/job/<id>/full`
+- **Real-Time Updates:** Appended event log, dynamic section visibility
 
 ### Backend (Flask)
-- **PDF Handler:** Extract text, store files
-- **Claude Interface:** Send to API, parse responses
-- **Agent Coordinator:** Spawn Docker containers, manage jobs
-- **Database:** SQLite with 6 tables
-- **SSE Broadcaster:** Stream events to frontend
+- **PDF Processing:** Extract text, extract metadata, cache results
+- **LLM Interface:** Multi-provider abstraction (Anthropic, Ollama)
+- **Agent Orchestration:** Spawn Docker containers, coordinate pipeline
+- **Database:** SQLite with Peewee ORM (12 models)
+- **Authentication:** User registration, session management
 
 ### Agent (Docker Container)
-- **Repository Cloning:** Git clone + fetch
-- **File Discovery:** Find tests, config, licenses
-- **Code Execution:** Run scripts in sandbox
-- **Backend Communication:** HTTP POST to ask Claude + log results
+- **Repository Operations:** Clone repos, discover files
+- **Code Execution:** Run scripts in sandbox, capture output
+- **Backend Communication:** HTTP requests for decisions and logging
 
 ### External Services
-- **Anthropic API:** Claude LLM for parsing, evaluation, reasoning
-- **GitHub:** Source repositories
+- **Anthropic Claude API:** Paper parsing, artifact extraction, evaluation
+- **GitHub:** Clone public repositories
 
-## Database Schema
+---
 
-### Tables
+## System Components
 
-**jobs**
-- id (UUID, PK)
-- status (pending, processing, completed, failed)
-- pdf_path, pdf_filename
-- report (JSON with scores & evaluation results)
-- created_at, completed_at
+### Data Layer Architecture
 
-**artifacts**
-- id (auto-inc)
-- job_id (FK)
-- url (GitHub repo, dataset URL, etc.)
-- artifact_type (github, dataset, docker, etc.)
-- description
+#### Peewee ORM Overview
+We use **Peewee** (lightweight ORM) for type-safe, testable database access:
+- Replaces 25+ raw SQL calls with object-oriented models
+- Automatic query generation and parameter binding
+- Transaction support for multi-step operations
+- Easy migrations and schema management
 
-**events**
-- id (auto-inc)
-- job_id (FK)
-- timestamp
-- step (starting, extracting_pdf, parsing_paper, etc.)
-- message
-- severity (info, warning, error)
+**Why Peewee:** Minimal dependencies, plays well with Flask, zero-boilerplate queries.
 
-**paper_analysis**
-- id (auto-inc)
-- job_id (unique FK)
-- pdf_hash (MD5 of full PDF for caching)
-- title (extracted paper title)
-- abstract (extracted paper abstract)
-- citations (JSON array of citations: {authors, year, title, url})
-- extracted_text (first 50k chars of PDF)
-- claimed_results (JSON)
-- methodology, dependencies, dataset_description
+#### Database Models (12 total)
 
-**execution_details**
-- id (auto-inc)
-- job_id (unique FK)
-- commands_run (all bash commands executed)
-- stdout_combined (full output log)
-- actual_results (parsed metrics: accuracy, loss, etc.)
-- dependencies_used (pip list output)
-- errors_summary (last 5 errors)
+**Core Models:**
+- `User` - User accounts (username, email, password_hash)
+- `Job` - PDF analysis jobs (id, status, progress, pdf_path, report)
 
-**aspect_evaluations**
-- id (auto-inc)
-- job_id (FK)
-- aspect_id (dependencies_pinned, results_reproducible, etc.)
-- name, status (pass, partial, fail)
-- evidence (finding from all sources)
-- paper_supports, code_supports (booleans)
-- conclusion
+**Analysis Results:**
+- `PaperAnalysis` - Stage 1: PDF extraction (title, abstract, citations, methodology)
+- `ExecutionDetails` - Stage 2: Code execution (commands_run, stdout, actual_results)
+- `AspectEvaluation` - Stage 3: Reproducibility aspects (15 evaluations per job)
 
-## 15 Reproducibility Aspects
+**Supporting Models:**
+- `Artifact` - Code artifacts discovered in papers (url, artifact_type)
+- `Event` - Job events for tracking progress (step, message, stage_duration_ms)
+- `ChatSession` - Interactive Q&A session per job
+- `ChatMessage` - Messages in chat session (role, content, timestamp)
 
-### Tier 1: CRITICAL
-1. Dependencies Pinned - Exact versions (==)?
-2. Results Reproducible - Execution matches paper claims?
-3. Hyperparameters Documented - Values documented AND correct?
-4. Dataset Available - Data public/easy to obtain?
-5. Environment Documented - Python version, OS, etc.?
+**Cache Models:**
+- `CachePaperAnalysis` - Cached paper analysis by PDF hash
+- `CacheCodeExecution` - Cached code execution by repo hash
+- `CacheEvaluation` - Cached evaluations by paper+code hash
 
-### Tier 2: HIGH VALUE
-6. Test Suite Present - Tests included?
-7. Config File Present - Hyperparameters externalized?
-8. Documentation Quality - README, comments, docstrings?
-9. Randomness Controlled - Seeds set?
+#### Repositories (11 total)
 
-### Tier 3: NICE-TO-HAVE
-10. License Specified
-11. Continuous Integration
-12. Data Versioning
-13. Computational Requirements
-14. Output Format Documented
-15. Python Version Compatibility
+Pattern for consistent data access:
+```python
+# Each repository encapsulates queries for one model
+repository.get(id)           # Get single item
+repository.list_all()        # List all items
+repository.create()          # Insert
+repository.delete(id)        # Delete
+```
+
+**Core Repositories:**
+1. `UserRepository` - User lookup, creation, password updates
+2. `JobRepository` - Job CRUD, filtering by user
+3. `PaperAnalysisRepository` - Stage 1 results lookup/store
+4. `ExecutionDetailsRepository` - Stage 2 results lookup/store
+5. `AspectEvaluationRepository` - Stage 3 results lookup/store
+6. `ArtifactRepository` - Artifact discovery and lookup
+7. `EventRepository` - Event storage and querying
+
+**Cache Repositories:**
+8. `CachePaperAnalysisRepository` - Cache lookup by PDF hash
+9. `CacheCodeExecutionRepository` - Cache lookup by repo hash
+10. `CacheEvaluationRepository` - Cache lookup by paper+code hash
+11. `ChatSessionRepository` - Session management
+
+---
+
+### Service Architecture
+
+#### Service Layer Overview
+
+Services implement business logic and orchestrate repositories. Each service:
+- Uses repositories for data access (no direct SQL)
+- Emits events for state transitions
+- Handles caching at appropriate layers
+- Provides testable abstractions
+
+#### Service Dependency Diagram
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ PipelineOrchestrator (MAIN ENTRY POINT)                │
+│ run_analysis() → coordinates all 3 stages             │
+└────────┬────────────────────────────────────────────────┘
+         │
+         ├─→ Stage 1: AnalysisService
+         │   ├─→ extract_and_analyze_pdf()
+         │   ├─→ CacheService (paper analysis cache)
+         │   └─→ PaperAnalysisRepository
+         │
+         ├─→ Stage 2: DockerService  
+         │   ├─→ spawn_agent_container()
+         │   ├─→ CacheService (code execution cache)
+         │   └─→ ExecutionDetailsRepository
+         │
+         ├─→ Stage 3: EvaluationService
+         │   ├─→ evaluate_reproducibility_aspects()
+         │   ├─→ CacheService (evaluation cache)
+         │   └─→ AspectEvaluationRepository
+         │
+         └─→ EventDispatcher (ALL STAGES)
+             ├─→ Persists events to Event table
+             └─→ Updates Job status/progress/stage
+```
+
+#### Services Reference Table
+
+| Service | Purpose | Key Responsibility |
+|---------|---------|-------------------|
+| `PipelineOrchestrator` | Coordinates 3-stage analysis | Run complete pipeline, emit stage transitions |
+| `AnalysisService` | PDF extraction & parsing | Extract text, call Claude for metadata/artifacts |
+| `DockerService` | Sandbox execution | Spawn containers, run agent loop, capture output |
+| `EvaluationService` | Aspect evaluation | Run reproducibility checks across 15 dimensions |
+| `EventDispatcher` | Central event hub | Persist events, update job status, handle transitions |
+| `JobService` | Job lifecycle | CRUD operations, user isolation, progress tracking |
+| `CacheService` | Multi-layer caching | Check/store cache at 3 layers (paper/code/eval) |
+| `AuthService` | User authentication | Login, registration, password hashing |
+| `LLMService` | LLM abstraction | Multi-provider support (Anthropic, Ollama, etc.) |
+
+---
+
+## Real-Time Updates
+
+### Polling Architecture
+
+Frontend uses **polling** (not SSE) for reliability:
+
+**How Polling Works:**
+```
+User uploads PDF
+  ↓
+POST /api/upload → creates job, starts background thread
+  ↓
+Returns job_id immediately to frontend
+  ↓
+Frontend polls every 200ms:
+  GET /api/job/<id>/full
+    → Returns: {status, progress, current_stage, events: [...]}
+  ↓
+Frontend updates UI:
+  - Progress bar (0.0 → 1.0)
+  - Section visibility (show when data ready)
+  - Event log (append new events)
+```
+
+**Endpoint: `/api/job/<id>/full`**
+```json
+{
+  "id": "uuid",
+  "status": "processing",
+  "progress": 0.45,
+  "current_stage": "code_execution",
+  "events": [
+    {"step": "stage_1_starting", "progress": 0.05, "timestamp": "..."},
+    {"step": "pdf_extracted", "progress": 0.25, "timestamp": "..."},
+    {"step": "stage_1_complete", "progress": 0.33, "timestamp": "..."},
+    ...
+  ],
+  "paper_analysis": {title, abstract, citations, ...},
+  "execution_details": {commands_run, stdout, actual_results, ...},
+  "aspect_evaluations": [{aspect_id, name, status, evidence, ...}, ...]
+}
+```
+
+### EventDispatcher Role
+
+`EventDispatcher` is the **central event hub**:
+1. **Receives events** from all stages (via `emit()` method)
+2. **Persists to database** - writes to Event table (except chat events)
+3. **Updates Job record** - sets status, progress, current_stage on stage transitions
+4. **Logs everything** - comprehensive logging for debugging
+
+**Stage Transition Events (trigger job status updates):**
+- `stage_1_starting` → current_stage = "paper_analysis"
+- `stage_1_complete` → current_stage = "code_execution"
+- `stage_2_starting` → current_stage = "code_execution"
+- `stage_2_complete` → current_stage = "evaluation"
+- `stage_3_starting` → current_stage = "evaluation"
+- `stage_3_complete` → current_stage = "evaluation"
+- `complete` → status = "completed", current_stage = "completed"
+
+**Progress Flow:**
+```
+PipelineOrchestrator emits event with progress value
+  ↓
+EventDispatcher.emit(JobEvent(..., progress=0.45))
+  ↓
+EventDispatcher logs progress: "*** EVENT INCLUDES PROGRESS: progress=0.45 ***"
+  ↓
+EventDispatcher._persist_event() → writes to Event table
+  ↓
+EventDispatcher._handle_stage_transition() → updates Job.progress in database
+```
+
+---
 
 ## Data Flow
 
-### Workflow: Upload → Analyze → Report
+### Complete Workflow
 
 ```
 1. USER UPLOADS PDF
-   ↓
-2. Backend validates file, creates job record
-   ↓
-3. Background thread starts analysis
-   ↓
-4. Extract PDF text
-   ↓
-5. Call Claude to parse paper
-   → Identifies code artifacts
-   → Extracts methodology, claims
-   ↓
-6. For each GitHub artifact:
-   a. Spawn Docker container
-   b. Agent clones repo
-   c. Agent loop (max 15 iterations):
-      - Ask Claude: "What should I do?"
-      - Execute action (read file, run command)
-      - Report results back
-   d. Collect execution output & results
-   ↓
-7. Trigger Stage 3: Multi-source Evaluation
-   Claude compares:
-   - What paper claimed
-   - What code actually does
-   - What execution achieved
-   ↓
-8. Generate report (15 aspects scored)
-   ↓
-9. Frontend displays checklist with evidence
+   POST /api/upload
+   ↓ Validates file, creates Job record (progress=0.0)
+   ↓ Returns job_id to frontend
+
+2. BACKGROUND THREAD SPAWNED
+   analyze_paper_background() runs in thread pool
+   ↓ Calls PipelineOrchestrator.run_analysis()
+
+3. STAGE 1: PAPER ANALYSIS
+   emit_event("stage_1_starting", progress=0.05)
+     ↓ EventDispatcher persists, updates Job
+   extract_and_analyze_pdf()
+     ↓ Check CachePaperAnalysis by PDF hash (cache hit = 1-2s)
+     ↓ If miss: Call Claude to extract metadata
+   store PaperAnalysis record
+   emit_event("stage_1_complete", progress=0.33)
+     ↓ EventDispatcher updates Job.current_stage="code_execution"
+
+4. STAGE 2: CODE EXECUTION
+   emit_event("stage_2_starting", progress=0.35)
+   For each GitHub artifact:
+     spawn_agent_container(repo_url)
+       ↓ Clone repo → discover files → agent loop (max 15 iterations)
+       ↓ Agent asks Claude: "What should I do?"
+       ↓ Execute action (read_file, run_command, done)
+       ↓ Collect output and results
+   Check CacheCodeExecution by repo hash
+   store ExecutionDetails record
+   emit_event("stage_2_complete", progress=0.66)
+     ↓ EventDispatcher updates Job.current_stage="evaluation"
+
+5. STAGE 3: EVALUATION
+   emit_event("stage_3_starting", progress=0.75)
+   Call Claude with all context:
+     - Paper claims (title, abstract, methodology)
+     - Code execution (commands, output, results)
+     - Artifacts discovered
+   Claude evaluates 15 reproducibility aspects
+   Check CacheEvaluation by (paper_hash, code_hash)
+   For each aspect:
+     store AspectEvaluation record
+   emit_event("stage_3_complete", progress=0.99)
+
+6. PIPELINE COMPLETION
+   emit_event("complete")
+     ↓ EventDispatcher updates Job.status="completed", progress=1.0
+   Return to frontend (polling catches update)
+
+7. FRONTEND POLLING
+   Every 200ms: GET /api/job/<id>/full
+   ↓ Receives job state + all events
+   ↓ Updates progress bar, appends events, shows results
 ```
 
-### Real-Time Events (SSE)
+### Repository Persistence
 
-Each stage emits events that frontend receives:
+Data persists via repositories at each stage:
 
 ```
-starting (0%) → extracting_pdf (10%) → pdf_extracted (20%)
-  → parsing_paper (25%) → paper_parsed (40%)
-  → analyzing_artifact (50-90%) → evaluating_aspects (95%)
-  → complete (100%)
+Stage 1:
+  PaperAnalysisRepository.create(job_id, ...)
+    ↓ Peewee: INSERT INTO paper_analysis
+    
+Stage 2:
+  ExecutionDetailsRepository.create(job_id, ...)
+    ↓ Peewee: INSERT INTO execution_details
+    
+Stage 3:
+  AspectEvaluationRepository.create_batch(job_id, evaluations)
+    ↓ Peewee: INSERT INTO aspect_evaluations (15+ rows)
+    
+Events:
+  EventDispatcher._persist_event()
+    ↓ Peewee: INSERT INTO events
+    ↓ Tracks every state transition, progress update, error
 ```
 
-Frontend shows live progress bar + log entries.
+---
 
 ## Execution Model
 
 ### Agent Container Sandbox
 
-Each job spawns isolated Docker container with:
-- **Memory limit:** 2GB RAM
-- **CPU limit:** 2 cores
+Each code execution spawns an isolated Docker container with:
+- **Memory:** 2GB limit
+- **CPU:** 2 cores max
 - **Timeout:** 300 seconds per command
-- **Network:** Isolated (can reach backend on shared Docker network)
-- **Filesystem:** /workspace/repo (cloned repository)
-- **Security:** Non-root user, no host access
+- **Network:** Can reach Flask backend on Docker network
+- **Filesystem:** `/workspace/repo` (cloned repository only)
+- **User:** Non-root for safety
 
 ### Agent Loop
 
-Agent runs inside container and communicates only via HTTP:
+Agent communicates with Flask backend via HTTP:
 
 ```
-1. Clone repo from URL
-2. List files (discover_files)
+1. Clone repository to /workspace/repo
+2. Discover files (requirements.txt, setup.py, tests, etc.)
 3. For iteration 1 to 15:
-   - POST to /api/agent/think
-     (sends: job_id + repo_state)
-   - Claude returns JSON action
+   - POST /api/agent/think
+     Request: {job_id, repo_state, history}
+     Response: {action, params}
    - Execute action:
-     * read_file: Read and store content
+     * read_file: Read source code, config files
      * run_command: Execute bash command
-     * check_success: Verify reproducibility
-     * done: Finished
-   - POST to /api/agent/log (emit events)
-4. Exit (normal, error, or max iterations)
+     * check_success: Verify reproducibility metrics
+     * done: Mark complete
+   - POST /api/agent/log (emit events)
+   - On error: Retry same action or move to next
+4. Exit and cleanup container
 ```
 
-No direct access to:
-- Backend code or database
-- Host filesystem
-- Other containers
-- External APIs (except via backend)
+**Agent never accesses:**
+- Backend code or database directly
+- Host filesystem (except via `/workspace`)
+- External APIs (uses Flask backend instead)
+- Anthropic API key (backend proxies requests)
+
+---
 
 ## Networking
 
-All containers on `workspace_traefik` network:
-- Flask app: `http://paper-reproducibility:5000`
-- Agent containers: spawn dynamically, isolated
-- DNS: Docker's internal DNS resolves container names
+All containers on shared Docker network (workspace_traefik):
+- **Flask app:** `http://paper-reproducibility:5000`
+- **Agent containers:** Ephemeral, spawn on demand
+- **DNS:** Docker's internal DNS (auto-discovery by hostname)
+
+---
 
 ## Security
 
 ### Isolation
-- ✅ Docker containers (filesystem isolation)
-- ✅ Resource limits (memory, CPU, timeout)
-- ✅ Non-root user in containers
-- ✅ No host mount (except /var/run/docker.sock for meta-control)
+- ✅ **Docker containers** - filesystem isolation per job
+- ✅ **Resource limits** - memory, CPU, timeout prevent DoS
+- ✅ **Non-root user** - containers run as unprivileged user
+- ✅ **No host access** - only /var/run/docker.sock for container control
 
 ### Credentials
-- ✅ ANTHROPIC_API_KEY in environment only
-- ✅ Never passed to agent
-- ✅ Agent calls backend API instead
+- ✅ **API keys in environment** - never in code or containers
+- ✅ **Agent proxy** - agent calls Flask backend, which proxies LLM requests
+- ✅ **User isolation** - jobs filtered by user_id in database queries
 
 ### Input Validation
-- ✅ PDF size limit (100MB)
-- ✅ Path traversal prevention
-- ✅ Command timeout (300s)
-- ✅ Output truncation (prevent context explosion)
+- ✅ **PDF size limit** - 100MB max (prevent memory exhaustion)
+- ✅ **Path traversal prevention** - validate file paths with `.resolve().is_relative_to()`
+- ✅ **Command timeout** - 300 seconds per command (prevent infinite loops)
+- ✅ **Output truncation** - limit output size in events to prevent UI issues
 
-## Caching System
-
-Three-layer caching reduces redundant API calls and agent execution:
-
-### Layer 1: Paper Analysis Cache
-- **Key:** MD5 hash of PDF text
-- **Stores:** Title, abstract, citations, methodology, dependencies
-- **Benefit:** Skip Claude parsing for duplicate PDFs
-- **Table:** `cache_paper_analysis`
-
-### Layer 2: Code Execution Cache
-- **Key:** Repository URL + code hash
-- **Stores:** Commands run, output, execution results, dependencies
-- **Benefit:** Skip Docker agent execution for known repos
-- **Table:** `cache_code_execution`
-
-### Layer 3: Evaluation Cache
-- **Key:** Paper hash + code hash
-- **Stores:** All 15 aspect evaluations with evidence
-- **Benefit:** Skip evaluation Claude call for known combinations
-- **Table:** `cache_evaluation`
-
-**Cache Miss Scenario:** New PDF + unknown repo = full 3-5 minute pipeline
-**Cache Hit Scenario:** Seen PDF + seen repo = ~1-2 seconds (cached results)
-
-## Agent Context Management
-
-The agent sees full command + output history to avoid loops:
-
-```
-Iteration 1: read_file(README.md) → [output]
-Iteration 2: read_file(requirements.txt) → [output]
-Iteration 3: [Claude sees full history] → moves to pip install
-```
-
-**Configuration:**
-- `AGENT_CONTEXT_LIMIT` environment variable (default: 10000 chars)
-- Controls max output shown to agent per iteration
-- Increase if agent loops, decrease if context too large
+---
 
 ## Performance
 
-- **Paper extraction (no cache):** 5-10 seconds
-- **Paper extraction (cache hit):** <1 second
-- **Code execution (no cache):** 2-5 minutes (repo-dependent)
-- **Code execution (cache hit):** <1 second
-- **Evaluation (no cache):** 10-15 seconds
-- **Evaluation (cache hit):** <1 second
-- **Total (worst case):** ~3-5 minutes per paper
-- **Total (best case with cache):** ~1-2 seconds
+### Caching Layers
 
-Bottleneck: Depends on repo size and agent execution complexity.
-Caching provides 100-300x speedup for repeated analyses.
+Three-layer caching provides 100-300x speedup for repeated analyses:
 
-## Deployment Targets
+1. **Paper Analysis Cache** (by PDF hash)
+   - Stores: Title, abstract, citations, methodology
+   - Benefit: Skip Claude parsing for duplicate PDFs
 
-### Local Development
-- Single Flask process (debug mode)
-- SQLite in-container
-- Agent containers on same host
+2. **Code Execution Cache** (by repo hash)
+   - Stores: Commands, output, results, dependencies
+   - Benefit: Skip Docker agent execution for known repos
 
-### Production
-- Gunicorn + multiple workers
-- PostgreSQL (replace SQLite)
-- Nginx reverse proxy + HTTPS
-- Monitoring + logging aggregation
-- Multi-node agent execution (optional)
+3. **Evaluation Cache** (by paper+code hash)
+   - Stores: All 15 aspect evaluations with evidence
+   - Benefit: Skip evaluation Claude call for known combinations
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for production setup.
+### Timing
+
+| Scenario | Time | Bottleneck |
+|----------|------|-----------|
+| No cache (new paper + new repo) | 3-5 min | Repository size, Claude latency |
+| Cache hits (seen paper + seen repo) | 1-2 sec | Database lookups |
+| Mixed (new paper + seen repo) | 2-3 min | Paper parsing + eval |
+| Paper parsing only | 5-10 sec | Claude latency |
+
+**Cost Reduction:** Using Haiku instead of Opus reduces LLM costs by 80% while maintaining 90%+ accuracy.
+
+---
 
 ## Technology Stack
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| Frontend | HTML/CSS/JS + Tailwind | Web UI |
-| Frontend UI | DaisyUI | Component library |
-| Real-time | Server-Sent Events (SSE) | Live updates |
-| Backend | Flask | Web framework |
-| Database | SQLite (dev) / PostgreSQL (prod) | Data storage |
-| Agent Runtime | Python subprocess | Command execution |
-| Isolation | Docker | Container sandboxing |
-| LLM | Claude (Anthropic) | AI reasoning |
+| **Frontend** | HTML/CSS/JavaScript | Web UI |
+| **Component Lib** | DaisyUI + Tailwind | Professional UI components |
+| **Real-Time** | Polling via fetch API | Live updates every 200ms |
+| **Backend** | Flask | Web framework |
+| **ORM** | Peewee | Type-safe database access |
+| **Database** | SQLite (dev) / PostgreSQL (prod) | Data persistence |
+| **Auth** | Werkzeug PBKDF2 | Secure password hashing |
+| **Agent Exec** | Python subprocess | Command execution in agent container |
+| **Sandbox** | Docker + Docker SDK | Container isolation and management |
+| **LLM** | Claude (Anthropic) + Ollama abstraction | AI reasoning and evaluation |
+| **Testing** | pytest + fixtures | Unit and integration tests |
