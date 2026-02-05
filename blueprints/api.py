@@ -25,7 +25,8 @@ from schemas import (
     SuccessMessageSchema, EventSchema, HealthResponseSchema, CacheStatsResponseSchema,
     UploadJobResponseSchema,
     AgentThinkRequestSchema, AgentLogRequestSchema, AgentExecutionRequestSchema,
-    AgentCompleteRequestSchema, AgentActionSchema, AgentResponseSchema
+    AgentCompleteRequestSchema, AgentActionSchema, AgentResponseSchema,
+    APIKeyCreateSchema, APIKeySchema, APIKeyGenerateSchema, APIKeyListSchema
 )
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -210,6 +211,168 @@ def api_change_password(old_password, new_password, confirm_password):
         # Update password
         if not update_password(user_id, new_password):
             return {"error": "Failed to update password"}, 500
+        
+        return "", 204
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+# ============================================================================
+# API Key Management Endpoints
+# ============================================================================
+# OpenAPI Tags: "API Keys"
+
+@api_bp.route("/keys", methods=["GET"])
+@require_auth
+@marshal_with(APIKeyListSchema, code=200)
+@marshal_with(ErrorSchema, code=500)
+@doc(
+    tags=["API Keys"],
+    description="List all API keys for authenticated user (prefix only)",
+    security=[{"sessionAuth": []}],
+    responses={
+        200: {"description": "List of API keys retrieved", "schema": APIKeyListSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+def list_api_keys():
+    """
+    List all API keys for current user.
+    
+    Only shows key prefix (first 8 characters) and metadata.
+    Full key cannot be retrieved after generation (save it securely).
+    
+    Returns:
+    - 200: {"keys": [...], "total": N}
+    - 500: {"error": "..."}
+    """
+    from models.api_key import APIKey
+    
+    try:
+        user_id = session.get('user_id')
+        keys = APIKey.select().where(APIKey.user_id == user_id).order_by(APIKey.created_at.desc())
+        
+        return {
+            "keys": [
+                {
+                    "id": str(k.id),
+                    "name": k.name,
+                    "key_prefix": k.key_prefix,
+                    "created_at": k.created_at,
+                    "last_used_at": k.last_used_at,
+                    "is_active": k.is_active
+                }
+                for k in keys
+            ],
+            "total": len(keys)
+        }
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@api_bp.route("/keys", methods=["POST"])
+@require_auth
+@use_kwargs(APIKeyCreateSchema, location="json")
+@marshal_with(APIKeyGenerateSchema, code=201)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=500)
+@doc(
+    tags=["API Keys"],
+    description="Generate a new API key for authenticated user",
+    security=[{"sessionAuth": []}],
+    responses={
+        201: {"description": "API key generated successfully", "schema": APIKeyGenerateSchema()},
+        400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+def create_api_key(name):
+    """
+    Generate a new API key for current user.
+    
+    Input validated by APIKeyCreateSchema (@use_kwargs):
+    - name: str (1-100 chars), required
+    
+    ⚠️ IMPORTANT: The full key is shown ONLY ONCE.
+    After this response, the key cannot be retrieved.
+    
+    Returns:
+    - 201: {"key": "prc_sk_...", "id": "...", ...}
+    - 400: {"error": "..."}
+    - 500: {"error": "..."}
+    """
+    from models.api_key import APIKey
+    from utils.api_key_utils import generate_api_key, hash_api_key
+    from datetime import datetime
+    
+    try:
+        user_id = session.get('user_id')
+        
+        # Generate API key
+        api_key = generate_api_key()
+        key_hash, _ = hash_api_key(api_key)
+        key_prefix = api_key[:8]
+        
+        # Store in database
+        db_key = APIKey.create(
+            user_id=user_id,
+            name=name,
+            key_hash=key_hash,
+            key_prefix=key_prefix
+        )
+        
+        return (
+            {
+                "id": str(db_key.id),
+                "name": name,
+                "key": api_key,  # ⚠️ Full key shown only once!
+                "key_prefix": key_prefix,
+                "created_at": db_key.created_at
+            },
+            201
+        )
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@api_bp.route("/keys/<key_id>", methods=["DELETE"])
+@require_auth
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
+@doc(
+    tags=["API Keys"],
+    description="Revoke (delete) an API key",
+    security=[{"sessionAuth": []}],
+    params={"key_id": {"description": "API Key ID", "in": "path"}},
+    responses={
+        204: {"description": "API key revoked successfully"},
+        404: {"description": "API key not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+def revoke_api_key(key_id):
+    """
+    Revoke (delete) an API key.
+    
+    Once revoked, the key cannot be used for authentication.
+    
+    Returns:
+    - 204: No content (success)
+    - 404: {"error": "API key not found"}
+    - 500: {"error": "..."}
+    """
+    from models.api_key import APIKey
+    
+    try:
+        user_id = session.get('user_id')
+        
+        # Ensure user owns this key
+        key = APIKey.get_or_none(APIKey.id == key_id)
+        if not key or key.user_id != user_id:
+            return {"error": "API key not found"}, 404
+        
+        # Delete the key
+        key.delete_instance()
         
         return "", 204
     except Exception as e:

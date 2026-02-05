@@ -280,11 +280,15 @@ def init_db(app_logger=None):
     if db.is_closed():
         db.connect()
     
+    # Import APIKey here to avoid circular imports
+    from models.api_key import APIKey
+    
     models = [
         User, Job, Artifact, Event,
         PaperAnalysis, ExecutionDetails, AspectEvaluation,
         CachePaperAnalysis, CacheCodeExecution, CacheEvaluation,
         ChatSession, ChatMessage,
+        APIKey,
     ]
     
     db.create_tables(models, safe=True)

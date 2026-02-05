@@ -27,6 +27,7 @@ from .agent import (
     AgentThinkRequestSchema, AgentLogRequestSchema, AgentExecutionRequestSchema,
     AgentCompleteRequestSchema, AgentActionSchema, AgentResponseSchema
 )
+from .api_key import APIKeyCreateSchema, APIKeySchema, APIKeyGenerateSchema, APIKeyListSchema
 
 __all__ = [
     # Common
@@ -69,4 +70,9 @@ __all__ = [
     'AgentCompleteRequestSchema',
     'AgentActionSchema',
     'AgentResponseSchema',
+    # API Keys (External Auth)
+    'APIKeyCreateSchema',
+    'APIKeySchema',
+    'APIKeyGenerateSchema',
+    'APIKeyListSchema',
 ]
