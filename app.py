@@ -7,6 +7,7 @@ and running them in isolated Docker containers with an LLM agent.
 
 import os
 from flask import Flask, render_template
+from flask_apispec import FlaskApiSpec
 from config import Config
 from models.database import init_db as init_peewee_db
 from services.auth_service import create_default_admin_user
@@ -53,6 +54,28 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(jobs_bp)
     app.register_blueprint(api_bp)
+    
+    # Initialize API documentation (FlaskApiSpec)
+    app.config.update({
+        "APISPEC_TITLE": "Paper Reproducibility Checker API",
+        "APISPEC_VERSION": "1.0.0",
+        "OPENAPI_VERSION": "3.0.2",
+        "APISPEC_SWAGGER_URL": "/swagger/",      # Raw OpenAPI JSON spec
+        "APISPEC_SWAGGER_UI_URL": "/docs/",      # Interactive Swagger UI
+        "API_TITLE": "Paper Reproducibility Checker",
+        "API_VERSION": "v1",
+    })
+    
+    docs = FlaskApiSpec(app)
+    app.logger.info("✓ API documentation initialized: /docs/ and /swagger/")
+    
+    # Configure security schemes for API documentation
+    docs.spec.components.security_scheme("sessionAuth", {
+        "type": "apiKey",
+        "name": "session_id",
+        "in": "cookie",
+        "description": "Session-based authentication via cookies"
+    })
     
     # Security headers and cache control
     @app.after_request
