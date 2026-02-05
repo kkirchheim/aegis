@@ -154,7 +154,68 @@ def print_progress(job_data: Dict[str, Any]) -> None:
     stage = job_data.get('current_stage', 'unknown')
     progress = job_data.get('progress', 0)
     
+    # Convert 0.0-1.0 scale to 0-100 if needed
+    if isinstance(progress, float) and progress <= 1.0:
+        progress = int(progress * 100)
+    
     print(f"Status: {status}, Stage: {stage}, Progress: {progress}%")
+
+
+def print_new_events(job_data: Dict[str, Any], last_event_index: int) -> int:
+    """
+    Print any new events that have arrived.
+    
+    Args:
+        job_data: Full job data from API
+        last_event_index: Index of the last event that was printed
+        
+    Returns:
+        Updated index of the last event printed
+    """
+    events = job_data.get('events', [])
+    
+    if not events:
+        return last_event_index
+    
+    # Print new events
+    for i in range(last_event_index, len(events)):
+        event = events[i]
+        
+        # Format event display
+        step = event.get('step', 'unknown')
+        timestamp = event.get('created_at', '')
+        
+        # Try to format timestamp nicely
+        if timestamp:
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                timestamp_str = dt.strftime('%H:%M:%S')
+            except:
+                timestamp_str = timestamp
+        else:
+            timestamp_str = '??:??:??'
+        
+        # Get event message/content
+        message = event.get('message') or event.get('content') or ''
+        
+        # Color-code based on step/status
+        if 'error' in step.lower() or 'failed' in step.lower():
+            emoji = '❌'
+        elif 'success' in step.lower() or 'completed' in step.lower():
+            emoji = '✅'
+        elif 'starting' in step.lower() or 'started' in step.lower():
+            emoji = '🚀'
+        else:
+            emoji = '📝'
+        
+        # Print with formatting
+        if message:
+            print(f"  {emoji} [{timestamp_str}] {step}: {message}")
+        else:
+            print(f"  {emoji} [{timestamp_str}] {step}")
+    
+    return len(events)
 
 
 def poll_job_status(client: APIClient, job_id: str, timeout_seconds: int = 600) -> Dict[str, Any]:
@@ -174,8 +235,10 @@ def poll_job_status(client: APIClient, job_id: str, timeout_seconds: int = 600) 
     """
     start_time = time.time()
     poll_interval = 2  # seconds
+    last_event_index = 0  # Track which events we've already shown
     
     print(f"\n⏳ Polling for job results (timeout: {timeout_seconds}s)...")
+    print("📋 Events:\n")
     
     while True:
         elapsed = time.time() - start_time
@@ -196,16 +259,20 @@ def poll_job_status(client: APIClient, job_id: str, timeout_seconds: int = 600) 
         
         status = job_data.get('status', 'unknown')
         
+        # Show new events first
+        last_event_index = print_new_events(job_data, last_event_index)
+        
+        # Then show progress
         print_progress(job_data)
         
         if status == "completed":
-            print("✅ Job completed successfully!")
+            print("\n✅ Job completed successfully!")
             return job_data
         elif status == "failed":
             error_msg = job_data.get('error_message', 'No error message provided')
             raise ReproCliError(f"Job failed: {error_msg}")
         elif status == "pending":
-            print("⏳ Job pending...")
+            pass  # Already shown via events
         elif status == "processing":
             pass  # Already printed progress
         
