@@ -53,6 +53,21 @@ def get_all_users():
 
 @admin_bp.route("/api/admin/users/<int:user_id>", methods=["PATCH"])
 @require_admin
+@doc(
+    description="Update user status (activate/deactivate)",
+    tags=["Admin"],
+    params={"user_id": {"description": "User ID", "in": "path"}},
+    security=[{"sessionAuth": []}],
+    responses={
+        200: {"description": "User status updated successfully", "schema": UserActionSchema()},
+        400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - admin access required", "schema": ErrorSchema()},
+        404: {"description": "User not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+@marshal_with(UserActionSchema, code=200)
 def update_user_status(user_id):
     """Update user status (is_active field) - admin only."""
     try:
@@ -89,6 +104,20 @@ def update_user_status(user_id):
 
 @admin_bp.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
 @require_admin
+@doc(
+    description="Delete a user account and all associated data",
+    tags=["Admin"],
+    params={"user_id": {"description": "User ID", "in": "path"}},
+    security=[{"sessionAuth": []}],
+    responses={
+        204: {"description": "User deleted successfully"},
+        400: {"description": "Bad request - cannot delete admin", "schema": ErrorSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - admin access required", "schema": ErrorSchema()},
+        404: {"description": "User not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
 def delete_user(user_id):
     """Delete a user - admin only."""
     try:

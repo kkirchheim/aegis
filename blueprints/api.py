@@ -748,6 +748,16 @@ def delete_chat_history_endpoint(job_id):
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/think", methods=["POST"])
+@doc(
+    tags=["Internal"],
+    description="Agent requests next action during code execution analysis",
+    responses={
+        200: {"description": "Action decision returned", "schema": {"type": "object"}},
+        400: {"description": "Bad request - job_id required", "schema": ErrorSchema()},
+        404: {"description": "Job not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
 def agent_think():
     """
     Agent calls this to ask for next action.
@@ -862,6 +872,16 @@ RESPONSE FORMAT (JSON only):
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/log", methods=["POST"])
+@doc(
+    tags=["Internal"],
+    description="Agent logs progress messages during analysis",
+    responses={
+        200: {"description": "Log message recorded successfully", "schema": SuccessMessageSchema()},
+        400: {"description": "Bad request - job_id required", "schema": ErrorSchema()},
+        404: {"description": "Job not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
 def agent_log():
     """Agent logs progress.
     
@@ -894,6 +914,16 @@ def agent_log():
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/execution", methods=["POST"])
+@doc(
+    tags=["Internal"],
+    description="Agent stores execution results and discovered information",
+    responses={
+        200: {"description": "Execution details stored successfully", "schema": SuccessMessageSchema()},
+        400: {"description": "Bad request - job_id required", "schema": ErrorSchema()},
+        404: {"description": "Job not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
 def agent_execution():
     """
     Agent stores execution details.
@@ -937,6 +967,16 @@ def agent_execution():
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/complete", methods=["POST"])
+@doc(
+    tags=["Internal"],
+    description="Agent reports completion of analysis",
+    responses={
+        200: {"description": "Completion recorded successfully", "schema": SuccessMessageSchema()},
+        400: {"description": "Bad request - job_id required", "schema": ErrorSchema()},
+        404: {"description": "Job not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
 def agent_complete():
     """
     Agent reports completion.
