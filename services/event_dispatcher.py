@@ -43,7 +43,8 @@ class EventDispatcher:
         Actions:
         1. Persist to database (unless chat event)
         2. Update job status for stage transitions
-        3. Emit to SSE queues for real-time updates
+        3. Log ANY progress values (for debugging)
+        4. Emit to SSE queues for real-time updates
         
         Args:
             event: JobEvent to emit
@@ -55,6 +56,10 @@ class EventDispatcher:
         # Handle stage transitions
         if event.is_stage_transition():
             self._handle_stage_transition(event)
+        
+        # Log ANY progress in event (even if not a stage transition)
+        if event.progress is not None:
+            self.logger(f"[{event.job_id}] *** EVENT INCLUDES PROGRESS: step={event.step}, progress={event.progress} ***")
         
         # NOTE: SSE queues disabled - now using polling for frontend
         # Events are retrieved via /api/job/<id>/events endpoint

@@ -92,8 +92,8 @@ def evaluate_reproducibility_aspects(job_id, llm_provider, app_logger=None, emit
             if emit_event:
                 emit_event(job_id, {
                     "step": "cache_hit_evaluation",
-                    "message": "Using cached evaluation results",
-                    "progress": 85
+                    "message": "Using cached evaluation results"
+                    # NOTE: Do NOT emit progress here - orchestrator controls all progress
                 })
             evaluation_results = cached_evaluation
         else:
