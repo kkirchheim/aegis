@@ -1,11 +1,13 @@
 """Admin blueprint - admin panel and user management."""
 
 from flask import Blueprint, request, jsonify, render_template
-from flask_apispec import doc, marshal_with
+from flask_apispec import doc, marshal_with, use_kwargs
 from utils.decorators import require_admin
 from models.database import User, Job
 from repositories import UserRepository, JobRepository
-from schemas import UserListSchema, UserActionSchema, ErrorSchema
+from schemas import (
+    UserListSchema, UserActionSchema, ErrorSchema, UpdateUserStatusSchema
+)
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -20,39 +22,46 @@ def admin_panel():
 
 @admin_bp.route("/api/admin/users", methods=["GET"])
 @require_admin
+@marshal_with(UserListSchema, code=200)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     description="Get list of all users with their details",
     tags=["Admin"],
     security=[{"sessionAuth": []}],
     responses={
         200: {"description": "List of users retrieved successfully", "schema": UserListSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
-        403: {"description": "Forbidden", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(UserListSchema, code=200)
 def get_all_users():
     """Get list of all users (JSON) - admin only."""
     try:
         users = list(User.select().order_by(User.created_at.desc()))
         
-        return ([
-            {
-                "id": u.id,
-                "username": u.username,
-                "email": u.email,
-                "is_active": u.is_active,
-                "created_at": u.created_at.isoformat() if u.created_at else None
-            }
-            for u in users
-        ])
+        return {
+            "users": [
+                {
+                    "id": u.id,
+                    "username": u.username,
+                    "email": u.email,
+                    "is_active": u.is_active,
+                    "created_at": u.created_at.isoformat() if u.created_at else None
+                }
+                for u in users
+            ],
+            "total": len(users)
+        }
     except Exception as e:
-        return ({"error": str(e)}), 500
+        return {"error": str(e)}, 500
 
 
 @admin_bp.route("/api/admin/users/<int:user_id>", methods=["PATCH"])
 @require_admin
+@use_kwargs(UpdateUserStatusSchema, location="json")
+@marshal_with(UserActionSchema, code=200)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     description="Update user status (activate/deactivate)",
     tags=["Admin"],
@@ -61,49 +70,48 @@ def get_all_users():
     responses={
         200: {"description": "User status updated successfully", "schema": UserActionSchema()},
         400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
-        403: {"description": "Forbidden - admin access required", "schema": ErrorSchema()},
         404: {"description": "User not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(UserActionSchema, code=200)
-def update_user_status(user_id):
-    """Update user status (is_active field) - admin only."""
+def update_user_status(user_id, is_active):
+    """
+    Update user status (is_active field) - admin only.
+    
+    Input validated by UpdateUserStatusSchema (@use_kwargs):
+    - is_active: bool, required
+    """
     try:
         from flask import current_app
-        
-        data = request.json or {}
-        is_active = data.get("is_active")
-        
-        if is_active is None:
-            return ({"error": "is_active field required"}), 400
         
         # Verify user exists
         user = UserRepository.get_by_id(user_id)
         if not user:
-            return ({"error": "User not found"}), 404
+            return {"error": "User not found"}, 404
         
         # Prevent deactivating admin
         if user.username == 'admin' and not is_active:
-            return ({"error": "Cannot deactivate admin user"}), 400
+            return {"error": "Cannot deactivate admin user"}, 400
         
         # Update user status
         User.update(is_active=is_active).where(User.id == user_id).execute()
         
         action = 'activated' if is_active else 'deactivated'
-        return ({
+        return {
             "ok": True,
             "message": f"User {user.username} {action} successfully"
-        }), 200
+        }
     except Exception as e:
         from flask import current_app
         current_app.logger.error(f"Error updating user: {e}")
-        return ({"error": "Failed to update user"}), 500
+        return {"error": "Failed to update user"}, 500
 
 
 @admin_bp.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
 @require_admin
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     description="Delete a user account and all associated data",
     tags=["Admin"],
@@ -112,8 +120,6 @@ def update_user_status(user_id):
     responses={
         204: {"description": "User deleted successfully"},
         400: {"description": "Bad request - cannot delete admin", "schema": ErrorSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
-        403: {"description": "Forbidden - admin access required", "schema": ErrorSchema()},
         404: {"description": "User not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
@@ -128,11 +134,11 @@ def delete_user(user_id):
         # Verify user exists
         user = UserRepository.get_by_id(user_id)
         if not user:
-            return ({"error": "User not found"}), 404
+            return {"error": "User not found"}, 404
         
         # Prevent deleting admin
         if user.username == 'admin':
-            return ({"error": "Cannot delete admin user"}), 400
+            return {"error": "Cannot delete admin user"}, 400
         
         # Delete user's jobs and related data
         user_jobs = list(Job.select().where(Job.user == user_id))
@@ -161,11 +167,14 @@ def delete_user(user_id):
     except Exception as e:
         from flask import current_app
         current_app.logger.error(f"Error deleting user: {e}")
-        return ({"error": "Failed to delete user"}), 500
+        return {"error": "Failed to delete user"}, 500
 
 
 @admin_bp.route("/api/admin/users/<int:user_id>/activate", methods=["POST"])
 @require_admin
+@marshal_with(UserActionSchema, code=200)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     description="Activate a user account",
     tags=["Admin"],
@@ -173,13 +182,10 @@ def delete_user(user_id):
     security=[{"sessionAuth": []}],
     responses={
         200: {"description": "User activated successfully", "schema": UserActionSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
-        403: {"description": "Forbidden", "schema": ErrorSchema()},
         404: {"description": "User not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(UserActionSchema, code=200)
 def activate_user(user_id):
     """Activate a user - admin only."""
     try:
@@ -188,23 +194,27 @@ def activate_user(user_id):
         # Verify user exists
         user = UserRepository.get_by_id(user_id)
         if not user:
-            return ({"error": "User not found"}), 404
+            return {"error": "User not found"}, 404
         
         # Update user status
         User.update(is_active=True).where(User.id == user_id).execute()
         
-        return ({
+        return {
             "ok": True,
             "message": f"User {user.username} activated successfully"
-        }), 200
+        }
     except Exception as e:
         from flask import current_app
         current_app.logger.error(f"Error activating user: {e}")
-        return ({"error": "Failed to activate user"}), 500
+        return {"error": "Failed to activate user"}, 500
 
 
 @admin_bp.route("/api/admin/users/<int:user_id>/deactivate", methods=["POST"])
 @require_admin
+@marshal_with(UserActionSchema, code=200)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     description="Deactivate a user account",
     tags=["Admin"],
@@ -212,13 +222,11 @@ def activate_user(user_id):
     security=[{"sessionAuth": []}],
     responses={
         200: {"description": "User deactivated successfully", "schema": UserActionSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
-        403: {"description": "Forbidden", "schema": ErrorSchema()},
+        400: {"description": "Cannot deactivate admin user", "schema": ErrorSchema()},
         404: {"description": "User not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(UserActionSchema, code=200)
 def deactivate_user(user_id):
     """Deactivate a user - admin only."""
     try:
@@ -227,41 +235,43 @@ def deactivate_user(user_id):
         # Verify user exists
         user = UserRepository.get_by_id(user_id)
         if not user:
-            return ({"error": "User not found"}), 404
+            return {"error": "User not found"}, 404
         
         # Prevent deactivating admin
         if user.username == 'admin':
-            return ({"error": "Cannot deactivate admin user"}), 400
+            return {"error": "Cannot deactivate admin user"}, 400
         
         # Update user status
         User.update(is_active=False).where(User.id == user_id).execute()
         
-        return ({
+        return {
             "ok": True,
             "message": f"User {user.username} deactivated successfully"
-        }), 200
+        }
     except Exception as e:
         from flask import current_app
         current_app.logger.error(f"Error deactivating user: {e}")
-        return ({"error": "Failed to deactivate user"}), 500
+        return {"error": "Failed to deactivate user"}, 500
 
 
 @admin_bp.route("/api/admin/users/<int:user_id>/delete", methods=["POST"])
 @require_admin
+@marshal_with(UserActionSchema, code=200)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
 @doc(
-    description="Delete a user account and all associated data",
+    description="Delete a user account and all associated data (POST version)",
     tags=["Admin"],
     params={"user_id": {"description": "User ID", "in": "path"}},
     security=[{"sessionAuth": []}],
     responses={
         200: {"description": "User deleted successfully", "schema": UserActionSchema()},
-        400: {"description": "Cannot delete admin user or self", "schema": ErrorSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
-        403: {"description": "Forbidden", "schema": ErrorSchema()},
-        404: {"description": "User not found", "schema": ErrorSchema()}
+        400: {"description": "Cannot delete admin user", "schema": ErrorSchema()},
+        404: {"description": "User not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(UserActionSchema, code=200)
 def delete_user_post(user_id):
     """Delete a user - admin only (POST version for compatibility)."""
     try:
@@ -272,11 +282,11 @@ def delete_user_post(user_id):
         # Verify user exists
         user = UserRepository.get_by_id(user_id)
         if not user:
-            return ({"error": "User not found"}), 404
+            return {"error": "User not found"}, 404
         
         # Prevent deleting admin
         if user.username == 'admin':
-            return ({"error": "Cannot delete admin user"}), 400
+            return {"error": "Cannot delete admin user"}, 400
         
         # Delete user's jobs and related data
         user_jobs = list(Job.select().where(Job.user == user_id))
@@ -301,8 +311,11 @@ def delete_user_post(user_id):
         # Delete user
         User.delete_by_id(user_id)
         
-        return ({"ok": True, "message": f"User {user.username} deleted successfully"}), 200
+        return {
+            "ok": True,
+            "message": f"User {user.username} deleted successfully"
+        }
     except Exception as e:
         from flask import current_app
         current_app.logger.error(f"Error deleting user: {e}")
-        return ({"error": "Failed to delete user"}), 500
+        return {"error": "Failed to delete user"}, 500
