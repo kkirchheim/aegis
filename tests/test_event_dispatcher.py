@@ -96,7 +96,7 @@ class TestStageTransitions:
         }
         assert set(STAGE_TRANSITIONS.keys()) == expected
     
-    def test_transition_properties(self):
+    def test_transition_properties(self, app):
         """Test transition metadata."""
         t = STAGE_TRANSITIONS['stage_1_starting']
         assert t.from_stage == 'pending'
@@ -104,7 +104,7 @@ class TestStageTransitions:
         assert t.progress == 0.05
         assert t.event_step == 'stage_1_starting'
     
-    def test_stage_3_complete_stays_in_evaluation(self):
+    def test_stage_3_complete_stays_in_evaluation(self, app):
         """Test that stage_3_complete doesn't transition to completed."""
         t = STAGE_TRANSITIONS['stage_3_complete']
         assert t.from_stage == 'evaluation'
@@ -130,7 +130,7 @@ class TestEventDispatcher:
         assert dispatcher.event_queues == queues
         assert dispatcher.event_queues_lock is lock
     
-    def test_emit_non_chat_event_to_queue(self):
+    def test_emit_non_chat_event_to_queue(self, app):
         """Test emitting non-chat event to SSE queue."""
         queues = {"job123": []}
         dispatcher = EventDispatcherFactory.create_test_dispatcher(event_queues=queues)
@@ -141,7 +141,7 @@ class TestEventDispatcher:
         assert len(queues["job123"]) == 1
         assert queues["job123"][0]['step'] == "stage_1_starting"
     
-    def test_emit_chat_event_to_queue(self):
+    def test_emit_chat_event_to_queue(self, app):
         """Test emitting chat event to SSE queue."""
         queues = {"job123": []}
         dispatcher = EventDispatcherFactory.create_test_dispatcher(event_queues=queues)
@@ -161,7 +161,7 @@ class TestEventDispatcher:
         # Should not raise error
         dispatcher.emit(event)
     
-    def test_emit_event_with_stage_duration(self):
+    def test_emit_event_with_stage_duration(self, app):
         """Test that emit_event properly passes stage_duration_ms to JobEvent."""
         queues = {"job123": []}
         dispatcher = EventDispatcherFactory.create_test_dispatcher(event_queues=queues)
@@ -323,7 +323,7 @@ class TestEventDispatcherFactory:
 class TestEventDispatcherThreadSafety:
     """Test thread safety of event dispatcher."""
     
-    def test_concurrent_emits(self):
+    def test_concurrent_emits(self, app):
         """Test emitting events concurrently."""
         queues = {"job123": []}
         dispatcher = EventDispatcherFactory.create_test_dispatcher(event_queues=queues)

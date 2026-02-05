@@ -16,7 +16,7 @@ from services.pipeline_orchestrator import PipelineOrchestrator
 class TestEventDispatcherIntegration:
     """Integration tests for event dispatcher with mocked database."""
     
-    def test_event_dispatcher_to_peewee_flow(self):
+    def test_event_dispatcher_to_peewee_flow(self, app):
         """Test EventDispatcher → Event.create flow with Peewee mocking."""
         queues = {"job123": []}
         
@@ -48,7 +48,7 @@ class TestEventDispatcherIntegration:
             assert len(queues["job123"]) == 1
             assert queues["job123"][0]["step"] == "stage_1_starting"
     
-    def test_stage_duration_ms_flows_through_layers(self):
+    def test_stage_duration_ms_flows_through_layers(self, app):
         """Test that stage_duration_ms parameter flows through all layers."""
         queues = {"job123": []}
         
@@ -78,7 +78,7 @@ class TestEventDispatcherIntegration:
             # This validates that emit was called correctly
             assert call_kwargs is not None
     
-    def test_multiple_events_sequence(self):
+    def test_multiple_events_sequence(self, app):
         """Test emitting multiple events in sequence."""
         queues = {"job123": []}
         logged = []
@@ -113,7 +113,7 @@ class TestEventDispatcherIntegration:
             transitions = [msg for msg in logged if "TRANSITION" in msg]
             assert len(transitions) == 2  # stage_1_starting and stage_1_complete
     
-    def test_chat_events_not_persisted_to_db(self):
+    def test_chat_events_not_persisted_to_db(self, app):
         """Test that chat events skip database persistence."""
         queues = {"job123": []}
         
@@ -142,7 +142,7 @@ class TestEventDispatcherIntegration:
 class TestPipelineOrchestratorEventEmission:
     """Test that PipelineOrchestrator properly emits events."""
     
-    def test_orchestrator_emits_stage_start_event(self):
+    def test_orchestrator_emits_stage_start_event(self, app):
         """Test that orchestrator emits stage start events."""
         queues = {"job123": []}
         
@@ -283,7 +283,7 @@ class TestJobRepositoryIntegration:
 class TestStageTransitionIntegration:
     """Test stage transition logic across the system."""
     
-    def test_all_stage_transitions_emit_to_queue(self):
+    def test_all_stage_transitions_emit_to_queue(self, app):
         """Test that all stage transitions appear in SSE queue."""
         queues = {"job123": []}
         
@@ -310,7 +310,7 @@ class TestStageTransitionIntegration:
             assert "stage_3_complete" in steps
             assert "complete" in steps
     
-    def test_progress_tracking_through_transitions(self):
+    def test_progress_tracking_through_transitions(self, app):
         """Test that progress values are correctly tracked through transitions."""
         queues = {"job123": []}
         

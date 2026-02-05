@@ -15,7 +15,7 @@ from services.event_dispatcher import EventDispatcher, EventDispatcherFactory
 class TestEventLoggingEndpoint:
     """Tests for event logging endpoint patterns."""
     
-    def test_emit_event_via_dispatcher(self):
+    def test_emit_event_via_dispatcher(self, app):
         """Test emitting event through dispatcher."""
         queues = {"job123": []}
         
@@ -32,7 +32,7 @@ class TestEventLoggingEndpoint:
         assert len(queues["job123"]) == 1
         assert queues["job123"][0]["step"] == "stage_1_starting"
     
-    def test_log_event_with_stage_duration(self):
+    def test_log_event_with_stage_duration(self, app):
         """Test logging event with stage_duration_ms."""
         queues = {"job123": []}
         dispatcher = EventDispatcher(event_queues=queues, job_service=None)
@@ -48,7 +48,7 @@ class TestEventLoggingEndpoint:
         # Event in queue should have stage_duration_ms
         assert queues["job123"][0]["stage_duration_ms"] == 5432
     
-    def test_log_chat_event_not_persisted(self):
+    def test_log_chat_event_not_persisted(self, app):
         """Test that chat events are not persisted to database."""
         queues = {"job123": []}
         
@@ -295,7 +295,7 @@ class TestStageTransitionEvents:
 class TestConcurrentEventEmission:
     """Tests for concurrent event emission."""
     
-    def test_multiple_events_to_same_job(self):
+    def test_multiple_events_to_same_job(self, app):
         """Test multiple events emitted to same job queue."""
         queues = {"job123": []}
         dispatcher = EventDispatcher(event_queues=queues, job_service=None)
@@ -312,7 +312,7 @@ class TestConcurrentEventEmission:
         
         assert len(queues["job123"]) == 4
     
-    def test_events_to_different_jobs(self):
+    def test_events_to_different_jobs(self, app):
         """Test events to different job queues."""
         queues = {"job1": [], "job2": [], "job3": []}
         dispatcher = EventDispatcher(event_queues=queues, job_service=None)
