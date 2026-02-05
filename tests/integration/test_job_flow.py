@@ -20,8 +20,8 @@ class TestJobUpload:
         
         assert response.status_code == 202  # Accepted
         data = response.get_json()
-        assert data["ok"] is True
         assert "job_id" in data
+        assert "message" in data
         job_id = data["job_id"]
         assert len(job_id) > 0
     
@@ -137,7 +137,10 @@ class TestJobDelete:
         
         response = authenticated_user.delete(f'/api/job/{job_id}')
         
-        assert response.status_code == 204  # No content
+        assert response.status_code == 200  # OK with response
+        data = response.get_json()
+        assert data["ok"] is True
+        assert "message" in data
         
         # Verify job is deleted
         response = authenticated_user.get(f'/api/job/{job_id}')
