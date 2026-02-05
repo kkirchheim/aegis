@@ -200,11 +200,12 @@ def print_new_events(job_data: Dict[str, Any], last_event_index: int) -> int:
         message = event.get('message') or event.get('content') or ''
         
         # Color-code based on step/status
-        if 'error' in step.lower() or 'failed' in step.lower():
+        step_lower = step.lower()
+        if 'error' in step_lower or 'failed' in step_lower:
             emoji = '❌'
-        elif 'success' in step.lower() or 'completed' in step.lower():
+        elif 'success' in step_lower or 'completed' in step_lower or 'complete' in step_lower:
             emoji = '✅'
-        elif 'starting' in step.lower() or 'started' in step.lower():
+        elif 'starting' in step_lower or 'started' in step_lower:
             emoji = '🚀'
         else:
             emoji = '📝'

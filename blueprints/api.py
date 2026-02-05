@@ -908,6 +908,7 @@ def delete_chat_history_endpoint(job_id):
 @marshal_with(AgentActionSchema, code=200)
 @marshal_with(ErrorSchema, code=400)
 @marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=422)
 @marshal_with(ErrorSchema, code=500)
 def agent_think(job_id, repo_state=None):
     """
@@ -916,6 +917,7 @@ def agent_think(job_id, repo_state=None):
     Input validated by AgentThinkRequestSchema (@use_kwargs):
     - job_id: UUID string, required
     - repo_state: dict with discovered_files, combined_output, executed_commands, errors
+    - Extra fields are ignored
     
     Security: Validates job_id exists before processing.
     Job must exist in database - agents cannot invent job IDs.
@@ -1032,13 +1034,14 @@ RESPONSE FORMAT (JSON only):
 @marshal_with(AgentResponseSchema, code=200)
 @marshal_with(ErrorSchema, code=400)
 @marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=422)
 @marshal_with(ErrorSchema, code=500)
 def agent_log(job_id, message=None):
     """Agent logs progress.
     
     Input validated by AgentLogRequestSchema (@use_kwargs):
     - job_id: UUID string, required
-    - message: progress message, optional
+    - message: progress message, optional (extra fields are ignored)
     
     Security: Validates job_id exists before accepting logs.
     
@@ -1046,6 +1049,7 @@ def agent_log(job_id, message=None):
     - 200: {"ok": True}
     - 400: {"error": "..."}
     - 404: {"error": "Invalid job_id"}
+    - 422: {"error": "..."} - Validation error (missing required field)
     - 500: {"error": "..."}
     """
     from blueprints.jobs import emit_event
@@ -1074,6 +1078,7 @@ def agent_log(job_id, message=None):
 @marshal_with(AgentResponseSchema, code=200)
 @marshal_with(ErrorSchema, code=400)
 @marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=422)
 @marshal_with(ErrorSchema, code=500)
 def agent_execution(job_id, commands_run=None, stdout_combined=None, actual_results=None,
                    dependencies_used=None, errors_summary=None, discovered_files=None,
@@ -1084,6 +1089,7 @@ def agent_execution(job_id, commands_run=None, stdout_combined=None, actual_resu
     Input validated by AgentExecutionRequestSchema (@use_kwargs):
     - job_id: UUID string, required
     - commands_run, stdout_combined, actual_results, dependencies_used, etc.: optional fields
+    - Extra fields are ignored
     
     Security: Validates job_id exists before storing execution details.
     
@@ -1128,6 +1134,7 @@ def agent_execution(job_id, commands_run=None, stdout_combined=None, actual_resu
 @marshal_with(AgentResponseSchema, code=200)
 @marshal_with(ErrorSchema, code=400)
 @marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=422)
 @marshal_with(ErrorSchema, code=500)
 def agent_complete(job_id, success=None, message=None):
     """
@@ -1137,6 +1144,7 @@ def agent_complete(job_id, success=None, message=None):
     - job_id: UUID string, required
     - success: bool, whether analysis succeeded, optional
     - message: completion message, optional
+    - Extra fields are ignored
     
     NOTE: Agent does NOT control job status. Only emits event.
     Pipeline orchestrator manages job lifecycle (pending -> processing -> completed).

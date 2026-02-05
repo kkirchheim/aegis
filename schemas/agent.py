@@ -26,6 +26,9 @@ class AgentThinkRequestSchema(Schema):
         allow_none=True,
         description="Current repository state (discovered_files, combined_output, executed_commands, errors, etc.)"
     )
+    
+    class Meta:
+        unknown = 'exclude'  # Ignore extra fields from agent
 
 
 class AgentLogRequestSchema(Schema):
@@ -43,6 +46,9 @@ class AgentLogRequestSchema(Schema):
         allow_none=True,
         description="Progress message from agent"
     )
+    
+    class Meta:
+        unknown = 'exclude'  # Ignore extra fields from agent
 
 
 class AgentExecutionRequestSchema(Schema):
@@ -96,6 +102,9 @@ class AgentExecutionRequestSchema(Schema):
         allow_none=True,
         description="Information about randomness in execution"
     )
+    
+    class Meta:
+        unknown = 'exclude'  # Ignore extra fields from agent
 
 
 class AgentCompleteRequestSchema(Schema):
@@ -118,6 +127,9 @@ class AgentCompleteRequestSchema(Schema):
         allow_none=True,
         description="Completion message"
     )
+    
+    class Meta:
+        unknown = 'exclude'  # Ignore extra fields from agent
 
 
 # ============================================================================
