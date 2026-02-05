@@ -46,6 +46,16 @@ Provides REST API endpoints for authentication, health checks, cache management,
 | `/api/auth/register` | POST | User registration (REST API) |
 | `/api/auth/change-password` | POST | Change user password (REST API) |
 
+### Job Management (REST API)
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/job/upload` | POST | Upload PDF for analysis |
+| `/api/job` | GET | List all jobs for current user |
+| `/api/job/<job_id>` | GET | Get job status and report |
+| `/api/job/<job_id>` | DELETE | Delete a job and related data |
+| `/api/job/<job_id>/full` | GET | Get complete job data including events, artifacts, analysis |
+
 ### Health & Cache
 
 | Route | Method | Purpose |
@@ -75,23 +85,20 @@ Provides REST API endpoints for authentication, health checks, cache management,
 
 ---
 
-## jobs.py - Job Management
+## jobs.py - Job Management Pages
 
-Handles PDF upload, job history, job details, and job lifecycle management.
+Handles page serving for job history, details, and results. **Page routes only** (GET) - job API operations are in `api.py`.
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/upload` | POST | Upload PDF for analysis |
 | `/` | GET | Home page; redirects to login if not authenticated |
 | `/history` | GET | Browse past analyses |
-| `/job/<job_id>` | GET | Get job status and report |
-| `/job/<job_id>` | DELETE | Delete a job and related data |
-| `/jobs` | GET | List all jobs for current user |
-| `/api/job/<job_id>/full` | GET | Get complete job data including events, artifacts, analysis |
 | `/reports/<job_id>` | GET | Serve job detail/report page |
 | `/results/<job_id>` | GET | Serve job results page |
 
 **Auth Required:** All except `/`
+
+**Note:** All write operations (upload, delete) and data fetching are handled by REST API endpoints in `api.py` under `/api/job/`.
 
 ---
 
@@ -134,13 +141,13 @@ Complete reference of all routes with HTTP methods, authentication requirements,
 | POST | `/api/agent/log` | api | No | Agent progress log |
 | POST | `/api/agent/execution` | api | No | Agent execution details |
 | POST | `/api/agent/complete` | api | No | Agent completion report |
-| POST | `/upload` | jobs | Yes | Upload PDF for analysis |
+| POST | `/api/job/upload` | api | Yes | Upload PDF for analysis |
+| GET | `/api/job` | api | Yes | List user jobs |
+| GET | `/api/job/<job_id>` | api | Yes | Get job status |
+| DELETE | `/api/job/<job_id>` | api | Yes | Delete job |
+| GET | `/api/job/<job_id>/full` | api | Yes | Get complete job data |
 | GET | `/` | jobs | No | Home page |
 | GET | `/history` | jobs | Yes | View job history |
-| GET | `/job/<job_id>` | jobs | Yes | Get job status |
-| DELETE | `/job/<job_id>` | jobs | Yes | Delete job |
-| GET | `/jobs` | jobs | Yes | List user jobs |
-| GET | `/api/job/<job_id>/full` | jobs | Yes | Get complete job data |
 | GET | `/reports/<job_id>` | jobs | Yes | View job report |
 | GET | `/results/<job_id>` | jobs | Yes | View job results |
 | GET | `/admin` | admin | Yes (Admin) | Admin panel |
