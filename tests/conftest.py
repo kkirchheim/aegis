@@ -57,6 +57,12 @@ def reset_config():
     original_db = Config.DATABASE
     Config.DATABASE = temp_db_path
     
+    # Reinitialize Peewee database to use the new temp database file
+    from models.database import db
+    if not db.is_closed():
+        db.close()
+    db.init(temp_db_path)
+    
     # Set SSE timeout to 2 seconds for tests (instead of default 30s)
     original_sse_timeout = os.environ.get('SSE_TIMEOUT_SECONDS')
     os.environ['SSE_TIMEOUT_SECONDS'] = '2'
@@ -153,17 +159,19 @@ def create_test_user(client, app):
     """Factory fixture to create test users."""
     def _create_user(username, email, password, is_active=True):
         with app.app_context():
+            # Use Peewee ORM to create user (compatible with require_admin decorator)
+            from models.database import User
+            
             password_hash = hash_password(password)
-            conn = get_db()
-            c = conn.cursor()
-            c.execute(
-                "INSERT INTO users (username, email, password_hash, is_active) VALUES (?, ?, ?, ?)",
-                (username, email, password_hash, 1 if is_active else 0)
+            
+            # Create user via Peewee ORM
+            user = User.create(
+                username=username,
+                email=email,
+                password_hash=password_hash,
+                is_active=is_active
             )
-            conn.commit()
-            user_id = c.lastrowid
-            conn.close()
-            return user_id
+            return user.id
     
     return _create_user
 
@@ -205,48 +213,50 @@ def authenticated_admin(client, app, create_test_user, admin_user_credentials):
 
 
 @pytest.fixture
-def admin_user(client, app, create_test_user, admin_user_credentials):
+def admin_user(client, app):
     """Create and authenticate an admin user (for integration tests).
     
     Returns a Flask test client with admin session.
+    Uses the default admin user created by create_default_admin_user.
     """
-    user_id = create_test_user(
-        admin_user_credentials['username'],
-        admin_user_credentials['email'],
-        admin_user_credentials['password'],
-        is_active=True
-    )
-    
-    # Mark user as admin in database
     with app.app_context():
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("UPDATE users SET role = ? WHERE id = ?", ('admin', user_id))
-        conn.commit()
-        conn.close()
-    
-    # Set session
-    with client.session_transaction() as sess:
-        sess['user_id'] = user_id
-        sess['username'] = admin_user_credentials['username']
+        from models.database import User
+        
+        # Get the existing admin user (created by create_default_admin_user)
+        admin_user = User.get(User.username == 'admin')
+        
+        # Set session - username='admin' makes user admin
+        with client.session_transaction() as sess:
+            sess['user_id'] = admin_user.id
+            sess['username'] = 'admin'
     
     return client
 
 
 @pytest.fixture
-def test_user(app, create_test_user, test_user_credentials):
-    """Create a test user and return their data."""
+def test_user(app, create_test_user, test_user_credentials, request):
+    """Create a test user and return their data.
+    
+    Each test gets a unique user to avoid UNIQUE constraint violations.
+    """
+    import uuid
+    
+    # Generate unique username and email for this test
+    unique_id = str(uuid.uuid4())[:8]
+    username = f"testuser_{unique_id}"
+    email = f"testuser_{unique_id}@example.com"
+    
     user_id = create_test_user(
-        test_user_credentials['username'],
-        test_user_credentials['email'],
+        username,
+        email,
         test_user_credentials['password'],
         is_active=True
     )
     
     return {
         'id': user_id,
-        'username': test_user_credentials['username'],
-        'email': test_user_credentials['email'],
+        'username': username,
+        'email': email,
         'password': test_user_credentials['password'],
         'is_active': True
     }
@@ -259,37 +269,51 @@ def test_user_creds(test_user_credentials):
 
 
 @pytest.fixture
-def inactive_user(app, create_test_user):
+def inactive_user(app, create_test_user, request):
     """Create an inactive test user and return their data."""
+    import uuid
+    
+    # Generate unique username and email to avoid UNIQUE constraint violations
+    unique_id = str(uuid.uuid4())[:8]
+    username = f"inactive_user_{unique_id}"
+    email = f"inactive_{unique_id}@example.com"
+    
     user_id = create_test_user(
-        "inactive_user",
-        "inactive@example.com",
+        username,
+        email,
         "InactivePass123!",
         is_active=False
     )
     
     return {
         'id': user_id,
-        'username': 'inactive_user',
-        'email': 'inactive@example.com',
+        'username': username,
+        'email': email,
         'is_active': False
     }
 
 
 @pytest.fixture
-def active_user(app, create_test_user):
+def active_user(app, create_test_user, request):
     """Create an active test user and return their data."""
+    import uuid
+    
+    # Generate unique username and email to avoid UNIQUE constraint violations
+    unique_id = str(uuid.uuid4())[:8]
+    username = f"active_user_{unique_id}"
+    email = f"active_{unique_id}@example.com"
+    
     user_id = create_test_user(
-        "active_user",
-        "active@example.com",
+        username,
+        email,
         "ActivePass123!",
         is_active=True
     )
     
     return {
         'id': user_id,
-        'username': 'active_user',
-        'email': 'active@example.com',
+        'username': username,
+        'email': email,
         'is_active': True
     }
 
