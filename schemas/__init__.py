@@ -1,0 +1,51 @@
+"""
+Marshmallow schemas for API documentation and validation.
+
+This package contains all Marshmallow schemas used for API documentation
+via flask-apispec. Each submodule organizes schemas by domain.
+
+Schemas exported:
+- Authentication: LoginSchema, RegisterSchema, ChangePasswordSchema, SessionSchema
+- Jobs: JobSchema, JobListSchema, JobDetailSchema, JobUploadSchema
+- Chat: ChatMessageSchema, ChatMessageResponseSchema, ChatHistorySchema
+- Results: ArtifactSchema, AspectEvaluationSchema, ExecutionResultSchema, PaperAnalysisSchema
+- Admin: UserSchema, UserListSchema, UserActionSchema
+- Common: ErrorSchema, PaginationSchema, SuccessMessageSchema
+"""
+
+from .common import ErrorSchema, PaginationSchema, SuccessMessageSchema
+from .auth import LoginSchema, RegisterSchema, ChangePasswordSchema, SessionSchema
+from .jobs import JobSchema, JobListSchema, JobDetailSchema, JobUploadSchema
+from .chat import ChatMessageSchema, ChatMessageResponseSchema, ChatHistorySchema
+from .results import ArtifactSchema, AspectEvaluationSchema, ExecutionResultSchema, PaperAnalysisSchema
+from .admin import UserSchema, UserListSchema, UserActionSchema
+
+__all__ = [
+    # Common
+    'ErrorSchema',
+    'PaginationSchema',
+    'SuccessMessageSchema',
+    # Auth
+    'LoginSchema',
+    'RegisterSchema',
+    'ChangePasswordSchema',
+    'SessionSchema',
+    # Jobs
+    'JobSchema',
+    'JobListSchema',
+    'JobDetailSchema',
+    'JobUploadSchema',
+    # Chat
+    'ChatMessageSchema',
+    'ChatMessageResponseSchema',
+    'ChatHistorySchema',
+    # Results
+    'ArtifactSchema',
+    'AspectEvaluationSchema',
+    'ExecutionResultSchema',
+    'PaperAnalysisSchema',
+    # Admin
+    'UserSchema',
+    'UserListSchema',
+    'UserActionSchema',
+]
