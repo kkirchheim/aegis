@@ -106,27 +106,25 @@ class EventDispatcher:
             f"[{event.job_id}] TRANSITION: {event.step} -> {transition.to_stage}"
         )
         
-        # Update job status if service available
-        if self.job_service:
-            from services.job_service import update_job_status
-            
-            # Build update dict
-            updates = {
-                "status": "processing" if transition.to_stage != "completed" else "completed",
-                "current_stage": transition.to_stage,
-            }
-            
-            # Use event.progress if provided (event is the ground truth)
-            if event.progress is not None:
-                updates["progress"] = event.progress
-                self.logger(f"[{event.job_id}] *** DISPATCHER PASSING progress={event.progress} to update_job_status ***")
-            else:
-                self.logger(f"[{event.job_id}] *** DISPATCHER: No progress in event, NOT setting progress field ***")
-            
-            self.logger(f"[{event.job_id}] Calling update_job_status with: {updates}")
-            update_job_status(event.job_id, **updates)
+        # ALWAYS update job status for stage transitions
+        # (this is the only place non-orchestrator code should update progress)
+        from services.job_service import update_job_status
+        
+        # Build update dict
+        updates = {
+            "status": "processing" if transition.to_stage != "completed" else "completed",
+            "current_stage": transition.to_stage,
+        }
+        
+        # Use event.progress if provided (event is the ground truth)
+        if event.progress is not None:
+            updates["progress"] = event.progress
+            self.logger(f"[{event.job_id}] *** DISPATCHER PASSING progress={event.progress} to update_job_status ***")
         else:
-            self.logger(f"[{event.job_id}] No job_service available, skipping status update")
+            self.logger(f"[{event.job_id}] *** DISPATCHER: No progress in event, NOT setting progress field ***")
+        
+        self.logger(f"[{event.job_id}] Calling update_job_status with: {updates}")
+        update_job_status(event.job_id, **updates)
     
     def _emit_to_queues(self, event: JobEvent) -> None:
         """Emit event to SSE queues for real-time updates."""
