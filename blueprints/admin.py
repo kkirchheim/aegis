@@ -37,7 +37,7 @@ def get_all_users():
     try:
         users = list(User.select().order_by(User.created_at.desc()))
         
-        return jsonify([
+        return ([
             {
                 "id": u.id,
                 "username": u.username,
@@ -48,7 +48,7 @@ def get_all_users():
             for u in users
         ])
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return ({"error": str(e)}), 500
 
 
 @admin_bp.route("/api/admin/users/<int:user_id>", methods=["PATCH"])
@@ -77,29 +77,29 @@ def update_user_status(user_id):
         is_active = data.get("is_active")
         
         if is_active is None:
-            return jsonify({"error": "is_active field required"}), 400
+            return ({"error": "is_active field required"}), 400
         
         # Verify user exists
         user = UserRepository.get_by_id(user_id)
         if not user:
-            return jsonify({"error": "User not found"}), 404
+            return ({"error": "User not found"}), 404
         
         # Prevent deactivating admin
         if user.username == 'admin' and not is_active:
-            return jsonify({"error": "Cannot deactivate admin user"}), 400
+            return ({"error": "Cannot deactivate admin user"}), 400
         
         # Update user status
         User.update(is_active=is_active).where(User.id == user_id).execute()
         
         action = 'activated' if is_active else 'deactivated'
-        return jsonify({
+        return ({
             "ok": True,
             "message": f"User {user.username} {action} successfully"
         }), 200
     except Exception as e:
         from flask import current_app
         current_app.logger.error(f"Error updating user: {e}")
-        return jsonify({"error": "Failed to update user"}), 500
+        return ({"error": "Failed to update user"}), 500
 
 
 @admin_bp.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
@@ -128,11 +128,11 @@ def delete_user(user_id):
         # Verify user exists
         user = UserRepository.get_by_id(user_id)
         if not user:
-            return jsonify({"error": "User not found"}), 404
+            return ({"error": "User not found"}), 404
         
         # Prevent deleting admin
         if user.username == 'admin':
-            return jsonify({"error": "Cannot delete admin user"}), 400
+            return ({"error": "Cannot delete admin user"}), 400
         
         # Delete user's jobs and related data
         user_jobs = list(Job.select().where(Job.user == user_id))
@@ -161,7 +161,7 @@ def delete_user(user_id):
     except Exception as e:
         from flask import current_app
         current_app.logger.error(f"Error deleting user: {e}")
-        return jsonify({"error": "Failed to delete user"}), 500
+        return ({"error": "Failed to delete user"}), 500
 
 
 @admin_bp.route("/api/admin/users/<int:user_id>/activate", methods=["POST"])
@@ -188,19 +188,19 @@ def activate_user(user_id):
         # Verify user exists
         user = UserRepository.get_by_id(user_id)
         if not user:
-            return jsonify({"error": "User not found"}), 404
+            return ({"error": "User not found"}), 404
         
         # Update user status
         User.update(is_active=True).where(User.id == user_id).execute()
         
-        return jsonify({
+        return ({
             "ok": True,
             "message": f"User {user.username} activated successfully"
         }), 200
     except Exception as e:
         from flask import current_app
         current_app.logger.error(f"Error activating user: {e}")
-        return jsonify({"error": "Failed to activate user"}), 500
+        return ({"error": "Failed to activate user"}), 500
 
 
 @admin_bp.route("/api/admin/users/<int:user_id>/deactivate", methods=["POST"])
@@ -227,23 +227,23 @@ def deactivate_user(user_id):
         # Verify user exists
         user = UserRepository.get_by_id(user_id)
         if not user:
-            return jsonify({"error": "User not found"}), 404
+            return ({"error": "User not found"}), 404
         
         # Prevent deactivating admin
         if user.username == 'admin':
-            return jsonify({"error": "Cannot deactivate admin user"}), 400
+            return ({"error": "Cannot deactivate admin user"}), 400
         
         # Update user status
         User.update(is_active=False).where(User.id == user_id).execute()
         
-        return jsonify({
+        return ({
             "ok": True,
             "message": f"User {user.username} deactivated successfully"
         }), 200
     except Exception as e:
         from flask import current_app
         current_app.logger.error(f"Error deactivating user: {e}")
-        return jsonify({"error": "Failed to deactivate user"}), 500
+        return ({"error": "Failed to deactivate user"}), 500
 
 
 @admin_bp.route("/api/admin/users/<int:user_id>/delete", methods=["POST"])
@@ -272,11 +272,11 @@ def delete_user_post(user_id):
         # Verify user exists
         user = UserRepository.get_by_id(user_id)
         if not user:
-            return jsonify({"error": "User not found"}), 404
+            return ({"error": "User not found"}), 404
         
         # Prevent deleting admin
         if user.username == 'admin':
-            return jsonify({"error": "Cannot delete admin user"}), 400
+            return ({"error": "Cannot delete admin user"}), 400
         
         # Delete user's jobs and related data
         user_jobs = list(Job.select().where(Job.user == user_id))
@@ -301,8 +301,8 @@ def delete_user_post(user_id):
         # Delete user
         User.delete_by_id(user_id)
         
-        return jsonify({"ok": True, "message": f"User {user.username} deleted successfully"}), 200
+        return ({"ok": True, "message": f"User {user.username} deleted successfully"}), 200
     except Exception as e:
         from flask import current_app
         current_app.logger.error(f"Error deleting user: {e}")
-        return jsonify({"error": "Failed to delete user"}), 500
+        return ({"error": "Failed to delete user"}), 500

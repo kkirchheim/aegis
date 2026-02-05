@@ -288,7 +288,7 @@ def health_check():
         }
     
     status_code = 200 if is_healthy else 503
-    return jsonify(response), status_code
+    return (response), status_code
 
 
 # ============================================================================
@@ -312,7 +312,7 @@ def health_check():
 def cache_stats():
     """Get cache statistics."""
     stats = get_cache_stats()
-    return jsonify(stats)
+    return (stats)
 
 
 @api_bp.route("/cache/clear", methods=["DELETE"])
@@ -334,14 +334,14 @@ def cache_clear():
     try:
         success, deleted_count = clear_cache()
         if success:
-            return jsonify({
+            return ({
                 "ok": True,
                 "message": f"Cache cleared - deleted {deleted_count} PDF files"
             })
         else:
-            return jsonify({"error": "Failed to clear cache"}), 500
+            return ({"error": "Failed to clear cache"}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return ({"error": str(e)}), 500
 
 
 # ============================================================================
@@ -410,20 +410,20 @@ def chat_with_paper(job_id):
     user_message = data.get("message", "").strip()
     
     if not user_message:
-        return jsonify({"error": "Empty message"}), 400
+        return ({"error": "Empty message"}), 400
     
     try:
         # Verify job exists and user owns it
         job = JobRepository.get(job_id)
         
         if not job:
-            return jsonify({"error": "Job not found"}), 404
+            return ({"error": "Job not found"}), 404
         
         if job.user_id != user_id:
-            return jsonify({"error": "Access denied"}), 403
+            return ({"error": "Access denied"}), 403
         
         if job.status not in ["completed", "processing"]:
-            return jsonify({"error": "Job analysis not complete"}), 400
+            return ({"error": "Job analysis not complete"}), 400
         
         # FETCH PAPER AND ANALYSIS DATA
         paper_analysis = PaperAnalysisRepository.get(job_id)
@@ -457,12 +457,12 @@ def chat_with_paper(job_id):
             )
             thread.start()
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            return ({"error": str(e)}), 500
         
-        return jsonify({"ok": True})
+        return ({"ok": True})
     
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return ({"error": str(e)}), 500
 
 
 def _build_chat_system_prompt(paper_analysis, execution_details, aspect_evaluations):
@@ -643,20 +643,20 @@ def get_chat_history_endpoint(job_id):
         
         # Check if job exists first (404) before checking permissions (403)
         if not job:
-            return jsonify({"error": "Job not found"}), 404
+            return ({"error": "Job not found"}), 404
         
         if job.user_id != user_id:
-            return jsonify({"error": "Access denied"}), 403
+            return ({"error": "Access denied"}), 403
         
         try:
             chat_session = ChatSession.get(ChatSession.job == job_id)
             history = get_chat_history(chat_session.id, limit=100)
-            return jsonify(history)
+            return (history)
         except ChatSession.DoesNotExist:
-            return jsonify([])
+            return ([])
     
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return ({"error": str(e)}), 500
 
 
 @api_bp.route("/job/<job_id>/chat/history", methods=["DELETE"])
@@ -683,10 +683,10 @@ def delete_chat_history_endpoint(job_id):
         
         # Check if job exists first (404) before checking permissions (403)
         if not job:
-            return jsonify({"error": "Job not found"}), 404
+            return ({"error": "Job not found"}), 404
         
         if job.user_id != user_id:
-            return jsonify({"error": "Access denied"}), 403
+            return ({"error": "Access denied"}), 403
         
         try:
             chat_session = ChatSession.get(ChatSession.job == job_id)
@@ -698,7 +698,7 @@ def delete_chat_history_endpoint(job_id):
         return "", 204
     
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return ({"error": str(e)}), 500
 
 
 # ============================================================================
@@ -969,20 +969,20 @@ def upload_pdf():
     
     # Manual auth check since we can't use decorator on moved function
     if 'user_id' not in session:
-        return jsonify({"error": "Unauthorized"}), 401
+        return ({"error": "Unauthorized"}), 401
     
     user_id = session['user_id']
     
     # Validate file
     if "pdf" not in request.files:
-        return jsonify({"error": "No PDF file provided"}), 400
+        return ({"error": "No PDF file provided"}), 400
     
     file = request.files["pdf"]
     if file.filename == "":
-        return jsonify({"error": "No file selected"}), 400
+        return ({"error": "No file selected"}), 400
     
     if not file.filename.lower().endswith(".pdf"):
-        return jsonify({"error": "File must be a PDF"}), 400
+        return ({"error": "File must be a PDF"}), 400
     
     # Check file size
     file.seek(0, os.SEEK_END)
@@ -990,7 +990,7 @@ def upload_pdf():
     file.seek(0)
     
     if file_size > Config.MAX_PDF_SIZE:
-        return jsonify({"error": "PDF too large (max 100MB)"}), 413
+        return ({"error": "PDF too large (max 100MB)"}), 413
     
     # Create job
     job_id = str(uuid.uuid4())
@@ -1030,7 +1030,7 @@ def upload_pdf():
     except Exception as e:
         update_job_status(job_id, "error", str(e))
     
-    return jsonify({
+    return ({
         "job_id": job_id,
         "message": "Paper uploaded successfully. Analysis starting..."
     }), 202
@@ -1053,7 +1053,7 @@ def list_jobs_api():
     """List all jobs for current user."""
     user_id = session.get('user_id')
     jobs = get_user_jobs(user_id)
-    return jsonify(jobs)
+    return (jobs)
 
 
 @api_bp.route("/job/<job_id>", methods=["GET"])
@@ -1079,10 +1079,10 @@ def get_job_detail(job_id):
     job = get_job(job_id)
     
     if not job:
-        return jsonify({"error": "Job not found"}), 404
+        return ({"error": "Job not found"}), 404
     
     if job.user_id != user_id:
-        return jsonify({"error": "Access denied"}), 403
+        return ({"error": "Access denied"}), 403
     
     response = {
         "id": job.id,
@@ -1097,7 +1097,7 @@ def get_job_detail(job_id):
     if job.error_message:
         response["error"] = job.error_message
     
-    return jsonify(response)
+    return (response)
 
 
 @api_bp.route("/job/<job_id>", methods=["DELETE"])
@@ -1123,18 +1123,18 @@ def delete_job_route(job_id):
         job = get_job(job_id)
         
         if not job:
-            return jsonify({"error": "Job not found"}), 404
+            return ({"error": "Job not found"}), 404
         
         if job.user_id != user_id:
-            return jsonify({"error": "Access denied"}), 403
+            return ({"error": "Access denied"}), 403
         
         if delete_job(job_id):
             return "", 204
         else:
-            return jsonify({"error": "Failed to delete job"}), 500
+            return ({"error": "Failed to delete job"}), 500
     
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return ({"error": str(e)}), 500
 
 
 @api_bp.route("/job/<job_id>/full", methods=["GET"])
@@ -1160,10 +1160,10 @@ def get_job_full(job_id):
     job = get_job(job_id)
     
     if not job:
-        return jsonify({"error": "Job not found"}), 404
+        return ({"error": "Job not found"}), 404
     
     if job.user_id != user_id:
-        return jsonify({"error": "Access denied"}), 403
+        return ({"error": "Access denied"}), 403
     
     # Fetch related data
     events_list = get_job_events(job_id)
@@ -1201,7 +1201,7 @@ def get_job_full(job_id):
     print(f"[{job_id}] *** API /full RESPONSE ***", file=sys.stderr)
     print(f"[{job_id}]     status={response['status']}, progress={response['progress']}, stage={response['current_stage']}, events={len(response['events'])}", file=sys.stderr)
     
-    return jsonify(response)
+    return (response)
 
 
 @api_bp.route("/job/<job_id>/events", methods=["GET"])
@@ -1241,10 +1241,10 @@ def get_job_events_polling(job_id):
     job = get_job(job_id)
     
     if not job:
-        return jsonify({"error": "Job not found"}), 404
+        return ({"error": "Job not found"}), 404
     
     if job.user_id != user_id:
-        return jsonify({"error": "Access denied"}), 403
+        return ({"error": "Access denied"}), 403
     
     # Get all events for the job
     all_events = EventRepository.list_by_job(job_id)
@@ -1275,7 +1275,7 @@ def get_job_events_polling(job_id):
                 if event_time > since_time:
                     filtered_events.append(event)
         except (ValueError, TypeError) as e:
-            return jsonify({"error": f"Invalid timestamp format: {str(e)}"}), 400
+            return ({"error": f"Invalid timestamp format: {str(e)}"}), 400
     else:
         filtered_events = all_events
     
@@ -1305,4 +1305,4 @@ def get_job_events_polling(job_id):
         "job_status": job.status
     }
     
-    return jsonify(response)
+    return (response)
