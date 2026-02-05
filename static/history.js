@@ -62,7 +62,33 @@ async function loadJobs() {
             return;
         }
         
-        allJobs = await response.json();
+        const jobs = await response.json();
+        
+        // Fetch full data for each job to get paper_analysis
+        allJobs = await Promise.all(jobs.map(async (job) => {
+            try {
+                const fullResponse = await fetch(`/api/job/${job.id}/full`);
+                if (fullResponse.ok) {
+                    const fullData = await fullResponse.json();
+                    // Merge full data with basic job info
+                    return {
+                        ...job,
+                        paper_analysis: fullData.paper_analysis,
+                        // Extract paper title and abstract from paper_analysis
+                        paper_title: fullData.paper_analysis?.title || job.pdf_filename,
+                        paper_abstract: fullData.paper_analysis?.abstract || ''
+                    };
+                }
+            } catch (error) {
+                console.warn(`Failed to fetch full data for job ${job.id}:`, error);
+            }
+            // Return basic job data if full fetch fails
+            return {
+                ...job,
+                paper_title: job.pdf_filename,
+                paper_abstract: ''
+            };
+        }));
         
         // Sort by date (newest first) by default
         allJobs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -84,11 +110,10 @@ function filterJobs() {
     const status = statusFilter.value;
     
     filteredJobs = allJobs.filter(job => {
-        // Search filter - search by title, filename, or abstract
-        const title = (job.title || '').toLowerCase();
-        const filename = (job.pdf_filename || '').toLowerCase();
-        const abstract = (job.abstract || '').toLowerCase();
-        if (search && !title.includes(search) && !filename.includes(search) && !abstract.includes(search)) {
+        // Search filter - search by paper title or abstract
+        const paperTitle = (job.paper_title || '').toLowerCase();
+        const paperAbstract = (job.paper_abstract || '').toLowerCase();
+        if (search && !paperTitle.includes(search) && !paperAbstract.includes(search)) {
             return false;
         }
         
@@ -113,8 +138,8 @@ function sortAndRender() {
         filteredJobs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     } else if (currentSort === 'name') {
         filteredJobs.sort((a, b) => {
-            const nameA = (a.title || a.pdf_filename || '').toLowerCase();
-            const nameB = (b.title || b.pdf_filename || '').toLowerCase();
+            const nameA = (a.paper_title || '').toLowerCase();
+            const nameB = (b.paper_title || '').toLowerCase();
             return nameA.localeCompare(nameB);
         });
     }
@@ -147,8 +172,10 @@ function renderJobs() {
         const statusIcon = status === 'completed' ? '✓' : status === 'failed' ? '✗' : '⏳';
         const statusBadge = status === 'completed' ? 'badge-success' : status === 'failed' ? 'badge-error' : 'badge-warning';
         
-        const paperTitle = job.title || job.pdf_filename || `Report ${job.id.substring(0, 8)}`;
-        const abstract = job.abstract ? `<p class="text-sm text-base-content/70 line-clamp-2 mt-2 mb-2">${escapeHtml(job.abstract)}</p>` : '';
+        // Display paper title from paper_analysis
+        const paperTitle = job.paper_title || `Report ${job.id.substring(0, 8)}`;
+        // Display abstract from paper_analysis
+        const abstract = job.paper_abstract ? `<p class="text-sm text-base-content/70 line-clamp-3 mt-2 mb-2">${escapeHtml(job.paper_abstract)}</p>` : '';
         const createdDate = new Date(job.created_at).toLocaleDateString();
         const createdTime = new Date(job.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         const pageCount = job.num_pages ? `📄 ${job.num_pages} page${job.num_pages !== 1 ? 's' : ''}` : '';
@@ -178,13 +205,15 @@ function renderJobs() {
                     <div class="flex justify-between items-start gap-4">
                         ${thumbnailHtml}
                         <div class="flex-1">
-                            <div class="font-semibold text-base flex items-center gap-2 mb-1">
-                                <span class="text-lg">${statusIcon}</span>
-                                <span class="truncate">${escapeHtml(paperTitle)}</span>
+                            <div class="flex items-start gap-2 mb-2">
+                                <span class="text-lg flex-shrink-0">${statusIcon}</span>
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="font-semibold text-base leading-tight mb-1 break-words">${escapeHtml(paperTitle)}</h3>
+                                </div>
                                 <span class="badge ${statusBadge} badge-sm flex-shrink-0">${status}</span>
                             </div>
                             ${abstract}
-                            <div class="text-xs text-base-content/60 flex items-center gap-3 flex-wrap">
+                            <div class="text-xs text-base-content/60 flex items-center gap-3 flex-wrap mt-2">
                                 <span>${createdDate} at ${createdTime}</span>
                                 ${pageCount ? `<span class="text-base-content/70">${pageCount}</span>` : ''}
                             </div>

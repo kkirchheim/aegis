@@ -27,41 +27,6 @@
         .btn-secondary { background-color: #ef4444; border-color: #ef4444; color: white; }
         .btn-secondary:hover { background-color: #dc2626; }
         
-        /* Progress bar - filled portion blue, unfilled gray */
-        .progress-primary { 
-            background-color: #e5e7eb; 
-        }
-        .progress-primary::-webkit-progress-bar {
-            background-color: #e5e7eb;
-        }
-        .progress-primary::-webkit-progress-value { 
-            background-color: #0068b4; 
-        }
-        .progress-primary::-moz-progress-bar { 
-            background-color: #0068b4; 
-        }
-        
-        /* Steps component */
-        .step-content { text-align: left !important; }
-        .steps .step-primary::before, .steps .step-primary::after { background-color: #0068b4 !important; }
-        
-        /* Progress bar primary color */
-        .progress-primary {
-            background-color: #0068b4 !important;
-        }
-        
-        .progress-primary::-webkit-progress-bar {
-            background-color: #0068b4 !important;
-        }
-        
-        .progress-primary::-webkit-progress-value {
-            background-color: #0068b4 !important;
-        }
-        
-        .progress-primary::-moz-progress-bar {
-            background-color: #0068b4 !important;
-        }
-        
         /* Override any violet/accent color to blue */
         .badge-accent, .btn-accent, [class*="accent"] {
             background-color: #0068b4 !important;
@@ -203,56 +168,6 @@
                     </div>
                 </div>
             </div>
-        </section>
-
-        <!-- Progress Section -->
-        <section id="progressSection" class="mb-8" style="display: none;">
-            <div class="card bg-base-100 shadow-lg">
-                <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2">
-                        <span>⚙️</span>
-                        <span>Analysis Progress</span>
-                    </h2>
-                    
-                    <div class="flex items-center gap-4 my-4">
-                        <progress id="progressFill" class="progress progress-primary flex-1" value="0" max="100"></progress>
-                        <span id="progressText" class="text-sm font-semibold text-base-content/60">0%</span>
-                    </div>
-                    
-                    <!-- Stages Timeline -->
-                    <div class="my-4 p-4 bg-base-200 rounded-lg">
-                        <div class="grid grid-cols-3 gap-4">
-                            <div id="stage1" class="flex flex-col items-center">
-                                <div class="text-2xl mb-1" id="stage1Icon">○</div>
-                                <div class="text-xs font-semibold text-center">📄 Paper</div>
-                                <div class="text-xs text-base-content/60" id="stage1Time"></div>
-                            </div>
-                            <div id="stage2" class="flex flex-col items-center">
-                                <div class="text-2xl mb-1" id="stage2Icon">○</div>
-                                <div class="text-xs font-semibold text-center">⚙️ Execution</div>
-                                <div class="text-xs text-base-content/60" id="stage2Time"></div>
-                            </div>
-                            <div id="stage3" class="flex flex-col items-center">
-                                <div class="text-2xl mb-1" id="stage3Icon">○</div>
-                                <div class="text-xs font-semibold text-center">📊 Evaluation</div>
-                                <div class="text-xs text-base-content/60" id="stage3Time"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="divider my-2"></div>
-                    
-                    <h3 class="font-semibold mb-2">Live Log</h3>
-                    <div id="progressLog" class="bg-base-200 rounded-lg p-4 font-mono text-sm max-h-96 overflow-y-auto">
-                        <div class="text-base-content/50">Waiting for analysis to start...</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Report Section -->
-        <section id="reportSection" class="mb-8" style="display: none;">
-            <div id="reportContent"></div>
         </section>
 
     </div>

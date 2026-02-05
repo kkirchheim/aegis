@@ -7,6 +7,7 @@
 let currentJob = null;
 let pollInterval = null;
 let lastStage = null;
+let lastEventCount = 0;  // Track processed events to avoid duplicates
 
 // DOM Elements - Sections
 const statusSection = document.getElementById("statusSection");
@@ -183,7 +184,7 @@ function showRelevantSections(job) {
 }
 
 function updateProgressBar(job) {
-    console.log(`[update] progressBar: progressFill=${!!progressFill}, progressText=${!!progressText}`);
+    console.log(`[update] progressBar: progressFill=${!!progressFill}, progressText=${!!progressText}, progress=${job.progress}`);
     if (!progressFill || !progressText) {
         console.warn(`[update] progressBar skipped - missing DOM elements`);
         return;
@@ -191,52 +192,90 @@ function updateProgressBar(job) {
     
     const percent = Math.round((job.progress || 0) * 100);
     progressFill.value = percent;
-    progressText.textContent = `${percent}%`;
-    console.log(`[update] progressBar: Set to ${percent}%`);
+    
+    // Show stage info along with percentage
+    const stage = job.current_stage || "pending";
+    const stageLabel = {
+        'paper_analysis': 'Analyzing Paper',
+        'code_execution': 'Executing Code',
+        'evaluation': 'Evaluating Results',
+        'completed': 'Completed',
+        'failed': 'Failed'
+    }[stage] || stage;
+    
+    progressText.textContent = `${stageLabel} (${percent}%)`;
+    console.log(`[update] progressBar: Set to ${percent}% - ${stageLabel}`);
 }
 
 function updateStages(job) {
     const stage = job.current_stage || "pending";
+    const events = job.events || [];
     
-    if (stage !== lastStage) {
-        lastStage = stage;
+    const stageMap = {
+        'paper_analysis': 'stage1',
+        'code_execution': 'stage2',
+        'evaluation': 'stage3'
+    };
+    
+    const stageEventMap = {
+        'stage1': 'paper_analysis',
+        'stage2': 'code_execution',
+        'stage3': 'evaluation'
+    };
+    
+    // Find timestamps for each stage's start event
+    const stageTimestamps = {};
+    events.forEach(event => {
+        if (event.step && Object.values(stageEventMap).includes(event.step)) {
+            const stageId = Object.keys(stageEventMap).find(k => stageEventMap[k] === event.step);
+            if (stageId && !stageTimestamps[stageId]) {
+                stageTimestamps[stageId] = event.timestamp;
+            }
+        }
+    });
+    
+    const stages = ['stage1', 'stage2', 'stage3'];
+    const stageKey = stageMap[stage];
+    let currentIndex = -1;
+    
+    if (stage === 'completed' || stage === 'failed') {
+        currentIndex = 999;
+    } else {
+        currentIndex = stages.indexOf(stageKey);
+    }
+    
+    stages.forEach((s, i) => {
+        const icon = document.getElementById(`${s}Icon`);
+        const timeEl = document.getElementById(`${s}Time`);
         
-        const stageMap = {
-            'paper_analysis': 'stage1',
-            'code_execution': 'stage2',
-            'evaluation': 'stage3'
-        };
-        
-        const stages = ['stage1', 'stage2', 'stage3'];
-        const stageKey = stageMap[stage];
-        let currentIndex = -1;
-        
-        if (stage === 'completed' || stage === 'failed') {
-            currentIndex = 999;
-        } else {
-            currentIndex = stages.indexOf(stageKey);
+        if (icon) {
+            if (i < currentIndex) {
+                icon.textContent = "✓";
+                icon.style.color = "#22c55e";
+                icon.className = "text-2xl mb-1";
+            } else if (i === currentIndex && currentIndex !== 999) {
+                icon.textContent = "▶";
+                icon.style.color = "#ffa500";
+                icon.className = "text-2xl mb-1 animate-pulse";
+            } else if (currentIndex === 999) {
+                icon.textContent = "✓";
+                icon.style.color = "#22c55e";
+                icon.className = "text-2xl mb-1";
+            } else {
+                icon.textContent = "○";
+                icon.style.color = "rgba(0,0,0,0.3)";
+                icon.className = "text-2xl mb-1";
+            }
         }
         
-        stages.forEach((s, i) => {
-            const icon = document.getElementById(`${s}Icon`);
-            if (icon) {
-                if (i < currentIndex) {
-                    icon.textContent = "✓";
-                    icon.style.color = "#22c55e";
-                } else if (i === currentIndex && currentIndex !== 999) {
-                    icon.textContent = "▶";
-                    icon.style.color = "#ffa500";
-                    icon.className = "text-2xl mb-1 animate-pulse";
-                } else if (currentIndex === 999) {
-                    icon.textContent = "✓";
-                    icon.style.color = "#22c55e";
-                } else {
-                    icon.textContent = "○";
-                    icon.style.color = "rgba(0,0,0,0.3)";
-                }
-            }
-        });
-    }
+        // Update timestamp display
+        if (timeEl && stageTimestamps[s]) {
+            const time = new Date(stageTimestamps[s]).toLocaleTimeString();
+            timeEl.textContent = time;
+        } else if (timeEl) {
+            timeEl.textContent = "";
+        }
+    });
 }
 
 function updateStatus(job) {
@@ -275,43 +314,60 @@ function updateStatus(job) {
 }
 
 function updateEventLog(job) {
-    console.log(`[update] eventLog: eventLog=${!!eventLog}, events=${job.events?.length || 0}`);
+    console.log(`[update] eventLog: eventLog=${!!eventLog}, events=${job.events?.length || 0}, lastEventCount=${lastEventCount}`);
     if (!eventLog) {
         console.warn(`[update] eventLog skipped - missing eventLog element`);
         return;
     }
     
-    // Clear and rebuild entire log from scratch
-    eventLog.innerHTML = "";
-    
-    if (!job.events || job.events.length === 0) {
+    // Initialize event log on first call
+    if (lastEventCount === 0 && (!job.events || job.events.length === 0)) {
         eventLog.innerHTML = "<div class='text-base-content/50'>No events yet</div>";
         return;
     }
     
-    // Show all events in chronological order
-    job.events.forEach(event => {
-        if (event.step && (event.step.startsWith('chat_') || event.step === 'chat_error')) {
-            return;  // Skip chat events
-        }
-        
-        const time = new Date(event.timestamp).toLocaleTimeString();
-        const stepLabel = event.step ? `[${event.step}]` : "";
-        const severityClass = {
-            'error': 'text-error',
-            'success': 'text-success',
-            'warning': 'text-warning',
-            'info': 'text-base-content/70'
-        }[event.severity] || 'text-base-content/70';
-        
-        const entry = document.createElement('div');
-        entry.className = severityClass;
-        entry.textContent = `${time} ${stepLabel} ${event.message || ""}`;
-        eventLog.appendChild(entry);
-    });
+    // Check if this is the first population or if we have new events
+    const currentEventCount = job.events ? job.events.length : 0;
     
-    if (logSection) logSection.scrollTop = logSection.scrollHeight;
-    console.log(`[update] eventLog: Rendered ${job.events.length} events`);
+    // If first time with events, clear the "No events yet" message
+    if (lastEventCount === 0 && currentEventCount > 0) {
+        eventLog.innerHTML = "";
+    }
+    
+    // Only append new events (events after lastEventCount)
+    if (currentEventCount > lastEventCount && job.events) {
+        job.events.slice(lastEventCount).forEach(event => {
+            if (event.step && (event.step.startsWith('chat_') || event.step === 'chat_error')) {
+                return;  // Skip chat events
+            }
+            
+            const time = new Date(event.timestamp).toLocaleTimeString();
+            const stepLabel = event.step ? `[${event.step}]` : "";
+            const severityClass = {
+                'error': 'text-error',
+                'success': 'text-success',
+                'warning': 'text-warning',
+                'info': 'text-base-content/70'
+            }[event.severity] || 'text-base-content/70';
+            
+            const entry = document.createElement('div');
+            entry.className = severityClass;
+            entry.textContent = `${time} ${stepLabel} ${event.message || ""}`;
+            eventLog.appendChild(entry);
+        });
+        
+        lastEventCount = currentEventCount;
+        console.log(`[update] eventLog: Appended ${currentEventCount - lastEventCount} new events`);
+    }
+    
+    // Auto-scroll to bottom only if user isn't scrolled up reading history
+    const logContainer = logSection?.querySelector('.max-h-96');
+    if (logContainer) {
+        const isAtBottom = logContainer.scrollHeight - logContainer.scrollTop <= logContainer.clientHeight + 5;
+        if (isAtBottom) {
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+    }
 }
 
 function updateMetadata(job) {
@@ -321,31 +377,41 @@ function updateMetadata(job) {
         return;
     }
     
-    const createdDate = new Date(job.created_at).toLocaleDateString();
-    const completedDate = job.completed_at ? new Date(job.completed_at).toLocaleDateString() : "—";
+    const paper = job.paper_analysis || {};
+    const abstract = paper.abstract || "No abstract available";
     
     metadataContent.innerHTML = `
-        <div class="grid grid-cols-2 gap-4">
+        <div class="space-y-4">
             <div>
-                <p class="text-sm text-base-content/60">Filename</p>
-                <p class="font-mono text-sm">${job.pdf_filename}</p>
+                <p class="text-sm text-base-content/60 font-semibold mb-2">Abstract</p>
+                <p class="text-sm leading-relaxed">${abstract}</p>
             </div>
-            <div>
-                <p class="text-sm text-base-content/60">Created</p>
-                <p class="text-sm">${createdDate}</p>
-            </div>
-            <div>
-                <p class="text-sm text-base-content/60">Completed</p>
-                <p class="text-sm">${completedDate}</p>
-            </div>
-            <div>
-                <p class="text-sm text-base-content/60">Status</p>
-                <p class="text-sm"><span class="badge badge-sm">${job.status}</span></p>
+            <div class="divider my-4"></div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <p class="text-xs text-base-content/60 uppercase tracking-wide">Filename</p>
+                    <p class="font-mono text-sm">${job.pdf_filename}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-base-content/60 uppercase tracking-wide">Created</p>
+                    <p class="text-sm">${new Date(job.created_at).toLocaleDateString()}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-base-content/60 uppercase tracking-wide">Completed</p>
+                    <p class="text-sm">${job.completed_at ? new Date(job.completed_at).toLocaleDateString() : "—"}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-base-content/60 uppercase tracking-wide">Status</p>
+                    <p class="text-sm"><span class="badge badge-sm">${job.status}</span></p>
+                </div>
             </div>
         </div>
     `;
     
-    docTitle.textContent = job.pdf_filename;
+    // Update page header with paper title if available
+    const title = paper.title || job.pdf_filename;
+    docTitle.textContent = title;
+    console.log(`[update] metadata: Set page title to "${title}"`);
 }
 
 function updateCitations(job) {
