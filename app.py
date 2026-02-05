@@ -69,25 +69,28 @@ def create_app():
     docs = FlaskApiSpec(app)
     app.logger.info("✓ API documentation initialized: /docs/ and /swagger/")
     
-    # PHASE 6: Register ONLY API endpoints for documentation
+    # PHASE 8: Filter OpenAPI spec - keep only /api/* routes and remove OPTIONS methods
     # Register all routes first, then filter to keep only /api/* endpoints
     docs.register_existing_resources()
     
-    # Remove non-API routes from the OpenAPI spec
-    # Keep ONLY /api/* paths in the documentation to exclude HTML template routes
+    # Remove non-API routes and OPTIONS methods from the OpenAPI spec
     try:
         if hasattr(docs, 'spec') and hasattr(docs.spec, '_paths'):
-            # The APISpec object stores paths in the _paths dict
-            # Build list of paths to remove (those NOT starting with /api/)
+            # Remove non-API routes (those NOT starting with /api/)
             all_paths = list(docs.spec._paths.keys())
             paths_to_remove = [path for path in all_paths if not path.startswith('/api/')]
             
-            # Remove each non-API path from the spec
             for path in paths_to_remove:
                 del docs.spec._paths[path]
             
+            # Remove OPTIONS methods from all remaining /api/* paths
+            # (OPTIONS are CORS preflight requests, not user-facing API operations)
+            for path_spec in docs.spec._paths.values():
+                if 'options' in path_spec:
+                    del path_spec['options']
+            
             api_count = len(docs.spec._paths)
-            app.logger.info(f"✓ Filtered OpenAPI spec: {api_count} /api/* routes documented ({len(paths_to_remove)} non-API routes excluded)")
+            app.logger.info(f"✓ Filtered OpenAPI spec: {api_count} /api/* routes documented, OPTIONS methods removed ({len(paths_to_remove)} non-API routes excluded)")
     except Exception as e:
         app.logger.error(f"Failed to filter OpenAPI spec: {e}")
         import traceback
