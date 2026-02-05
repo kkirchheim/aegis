@@ -1,6 +1,7 @@
 """Analysis service - PDF extraction, Claude parsing, artifact extraction."""
 
 import json
+from config import Config
 from utils.pdf_utils import extract_pdf_text
 from services.cache_service import get_cached_paper_analysis, store_paper_analysis_cache
 from models.database import PaperAnalysis
@@ -20,10 +21,12 @@ def extract_and_analyze_pdf(pdf_path, job_id, llm_provider, app_logger=None):
         # Extract PDF text
         pdf_text = extract_pdf_text(pdf_path, app_logger=app_logger)
         
-        # Check cache first
+        # Check cache first (only if caching is enabled)
         import hashlib
         pdf_hash = hashlib.md5(pdf_text.encode()).hexdigest()
-        cached_paper_info = get_cached_paper_analysis(pdf_hash)
+        cached_paper_info = None
+        if Config.ENABLE_CACHING:
+            cached_paper_info = get_cached_paper_analysis(pdf_hash)
         
         if cached_paper_info:
             if app_logger:
@@ -35,8 +38,9 @@ def extract_and_analyze_pdf(pdf_path, job_id, llm_provider, app_logger=None):
             
             paper_info = parse_paper_with_claude(pdf_text, llm_provider, app_logger)
             
-            # Cache the results
-            store_paper_analysis_cache(pdf_hash, pdf_text, paper_info)
+            # Cache the results only if caching is enabled
+            if Config.ENABLE_CACHING:
+                store_paper_analysis_cache(pdf_hash, pdf_text, paper_info)
         
         # Store in job-specific table
         store_paper_analysis(job_id, paper_info, pdf_text)

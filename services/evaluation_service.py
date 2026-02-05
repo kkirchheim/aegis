@@ -3,6 +3,7 @@
 import json
 import time
 import hashlib
+from config import Config
 from models.database import PaperAnalysis, ExecutionDetails, Artifact, Job, AspectEvaluation
 from repositories import PaperAnalysisRepository, ExecutionDetailsRepository, AspectEvaluationRepository, JobRepository
 from services.cache_service import get_cached_evaluation, store_evaluation_cache
@@ -80,7 +81,10 @@ def evaluate_reproducibility_aspects(job_id, llm_provider, app_logger=None, emit
         paper_hash = paper_analysis.get("pdf_hash") or hashlib.md5(paper_analysis.get("extracted_text", "").encode()).hexdigest()
         code_hash = hashlib.md5(execution_details.get("stdout_combined", "").encode()).hexdigest()
         
-        cached_evaluation = get_cached_evaluation(paper_hash, code_hash)
+        # Check cache only if caching is enabled
+        cached_evaluation = None
+        if Config.ENABLE_CACHING:
+            cached_evaluation = get_cached_evaluation(paper_hash, code_hash)
         
         if cached_evaluation:
             if app_logger:
@@ -117,8 +121,9 @@ def evaluate_reproducibility_aspects(job_id, llm_provider, app_logger=None, emit
                 else:
                     raise ValueError("Could not parse evaluation response")
             
-            # Cache the results
-            store_evaluation_cache(paper_hash, code_hash, evaluation_results)
+            # Cache the results only if caching is enabled
+            if Config.ENABLE_CACHING:
+                store_evaluation_cache(paper_hash, code_hash, evaluation_results)
         
         # Store evaluation results using Peewee ORM
         for eval_item in evaluation_results.get("evaluations", []):
