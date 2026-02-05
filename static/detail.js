@@ -89,15 +89,15 @@ async function pollOnce() {
         
         console.log(`[polling] Received: status=${job.status}, progress=${job.progress}, stage=${job.current_stage}, events=${job.events.length}`);
         
-        // Update all UI components from this single response
-        updateProgressBar(job);
-        updateStages(job);
-        updateStatus(job);
-        updateEventLog(job);
-        updateMetadata(job);
-        updateCitations(job);
-        updateArtifacts(job);
-        updateAspects(job);
+        // Update all UI components - each in its own try-catch so failures don't stop others
+        try { updateProgressBar(job); } catch (e) { console.error(`[update] progressBar failed:`, e); }
+        try { updateStages(job); } catch (e) { console.error(`[update] stages failed:`, e); }
+        try { updateStatus(job); } catch (e) { console.error(`[update] status failed:`, e); }
+        try { updateEventLog(job); } catch (e) { console.error(`[update] eventLog failed:`, e); }
+        try { updateMetadata(job); } catch (e) { console.error(`[update] metadata failed:`, e); }
+        try { updateCitations(job); } catch (e) { console.error(`[update] citations failed:`, e); }
+        try { updateArtifacts(job); } catch (e) { console.error(`[update] artifacts failed:`, e); }
+        try { updateAspects(job); } catch (e) { console.error(`[update] aspects failed:`, e); }
         
         // Stop polling when complete
         if (job.status === "completed" || job.status === "failed") {
@@ -105,7 +105,7 @@ async function pollOnce() {
         }
         
     } catch (error) {
-        console.error(`[polling] Error:`, error);
+        console.error(`[polling] Fetch error:`, error);
     }
 }
 
@@ -260,7 +260,16 @@ function updateCitations(job) {
     if (!citationsContent || !citationCount) return;
     
     const paper = job.paper_analysis || {};
-    const citations = paper.citations ? JSON.parse(paper.citations) : [];
+    
+    // Handle both JSON string and already-parsed array
+    let citations = [];
+    if (paper.citations) {
+        if (typeof paper.citations === 'string') {
+            citations = JSON.parse(paper.citations);
+        } else {
+            citations = paper.citations;
+        }
+    }
     
     citationCount.textContent = citations.length;
     
@@ -294,7 +303,9 @@ function updateAspects(job) {
     if (!aspectsContent) return;
     
     const report = job.report || {};
-    const aspects = report.aspects || [];
+    
+    // Handle both old field name (aspects) and new (aspect_evaluations)
+    let aspects = report.aspect_evaluations || report.aspects || [];
     
     if (aspects.length === 0) {
         aspectsContent.innerHTML = "<p class='text-base-content/50'>No evaluation aspects</p>";
@@ -303,8 +314,8 @@ function updateAspects(job) {
     
     aspectsContent.innerHTML = aspects
         .map(a => {
-            const icon = a.status === "success" ? "✓" : a.status === "failed" ? "✗" : "?";
-            const color = a.status === "success" ? "text-success" : a.status === "failed" ? "text-error" : "text-warning";
+            const icon = a.status === "pass" ? "✓" : a.status === "fail" ? "✗" : "?";
+            const color = a.status === "pass" ? "text-success" : a.status === "fail" ? "text-error" : "text-warning";
             return `<div class="text-sm"><span class="${color}">${icon}</span> ${a.name}</div>`;
         })
         .join("");
