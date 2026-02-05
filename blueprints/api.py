@@ -135,6 +135,63 @@ def api_register():
         return jsonify({"error": str(e)}), 500
 
 
+@api_bp.route("/auth/change-password", methods=["POST"])
+@require_auth
+def api_change_password():
+    """
+    REST API endpoint for changing user password.
+    
+    Request body (JSON):
+    {
+        "old_password": "current_password",
+        "new_password": "new_password",
+        "confirm_password": "new_password"
+    }
+    
+    Returns:
+    - 200: {"ok": True, "message": "Password changed successfully"}
+    - 400: {"error": "..."}
+    - 401: {"error": "Current password is incorrect"}
+    - 404: {"error": "User not found"}
+    - 500: {"error": "Failed to update password"}
+    """
+    from services.auth_service import get_user_by_id, verify_password, update_password
+    
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json() or {}
+        
+        old_password = data.get("old_password", "").strip()
+        new_password = data.get("new_password", "").strip()
+        confirm_password = data.get("confirm_password", "").strip()
+        
+        # Validation
+        if not old_password or not new_password or not confirm_password:
+            return jsonify({"error": "All fields are required"}), 400
+        
+        if len(new_password) < 8:
+            return jsonify({"error": "New password must be at least 8 characters"}), 400
+        
+        if new_password != confirm_password:
+            return jsonify({"error": "New passwords don't match"}), 400
+        
+        # Get user and verify old password
+        user = get_user_by_id(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        if not verify_password(old_password, user.password_hash):
+            return jsonify({"error": "Current password is incorrect"}), 401
+        
+        # Update password
+        if not update_password(user_id, new_password):
+            return jsonify({"error": "Failed to update password"}), 500
+        
+        return jsonify({"ok": True, "message": "Password changed successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ============================================================================
 # Health Check Endpoint
 # ============================================================================

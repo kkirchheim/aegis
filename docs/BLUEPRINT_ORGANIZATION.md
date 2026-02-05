@@ -16,9 +16,9 @@ We use multiple blueprints to maintain separation of concerns, improve code orga
 
 ---
 
-## auth.py - Authentication
+## auth.py - Authentication Pages
 
-Handles user registration, login, logout, and password management. **Page routes only** (GET) - API endpoints are in `api.py`.
+Handles user registration, login, logout, and password management pages. **Page routes only** (GET) - API endpoints are in `api.py`.
 
 | Route | Method | Purpose |
 |-------|--------|---------|
@@ -26,12 +26,11 @@ Handles user registration, login, logout, and password management. **Page routes
 | `/login` | GET | User login page |
 | `/logout` | GET, POST | Clears session and redirects to login |
 | `/profile` | GET | Display user profile with account information |
-| `/change-password` | GET | Change password page |
-| `/api/change-password` | POST | Change password endpoint |
+| `/change-password` | GET | Change password form page |
 
-**Auth Required:** All routes except `/register` and `/login`
+**Auth Required:** `/logout`, `/profile`, `/change-password`
 
-**Note:** User registration and login are handled by REST API endpoints in `api.py` at `/api/auth/register` and `/api/auth/login`.
+**Note:** All write operations are handled by REST API endpoints in `api.py` under `/api/auth/`.
 
 ---
 
@@ -45,6 +44,7 @@ Provides REST API endpoints for authentication, health checks, cache management,
 |-------|--------|---------|
 | `/api/auth/login` | POST | User login (REST API) |
 | `/api/auth/register` | POST | User registration (REST API) |
+| `/api/auth/change-password` | POST | Change user password (REST API) |
 
 ### Health & Cache
 
@@ -123,7 +123,7 @@ Complete reference of all routes with HTTP methods, authentication requirements,
 | GET, POST | `/logout` | auth | Yes | User logout |
 | GET | `/profile` | auth | Yes | User profile page |
 | GET | `/change-password` | auth | Yes | Change password form |
-| POST | `/api/change-password` | auth | Yes | Update password |
+| POST | `/api/auth/change-password` | api | Yes | Update password (REST API) |
 | GET | `/api/health` | api | No | Health check |
 | GET | `/api/cache/stats` | api | Yes (Admin) | Cache statistics |
 | DELETE | `/api/cache/clear` | api | Yes (Admin) | Clear cache |

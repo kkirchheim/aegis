@@ -115,19 +115,32 @@ def create_app():
         """About page."""
         return render_template("about.html")
     
-    # Error handlers
+    # Error handlers with content negotiation
     @app.errorhandler(404)
     def not_found(error):
-        """Handle 404 errors."""
-        from flask import jsonify
-        return jsonify({"error": "Not found"}), 404
+        """Handle 404 errors with content negotiation."""
+        from flask import jsonify, request
+        
+        # If request came from API (/api/*) or wants JSON, return JSON
+        if request.path.startswith("/api") or request.accept_mimetypes.get('application/json'):
+            return jsonify({"error": "Not found"}), 404
+        
+        # Otherwise, render HTML error page
+        return render_template("404.html"), 404
     
     @app.errorhandler(500)
     def server_error(error):
-        """Handle 500 errors."""
-        from flask import jsonify
+        """Handle 500 errors with content negotiation."""
+        from flask import jsonify, request
+        
         app.logger.error(f"Server error: {error}")
-        return jsonify({"error": "Internal server error"}), 500
+        
+        # If request came from API (/api/*) or wants JSON, return JSON
+        if request.path.startswith("/api") or request.accept_mimetypes.get('application/json'):
+            return jsonify({"error": "Internal server error"}), 500
+        
+        # Otherwise, render HTML error page
+        return render_template("500.html"), 500
     
     return app
 

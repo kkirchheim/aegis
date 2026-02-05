@@ -136,8 +136,8 @@ class TestUnauthenticatedAccessToProtectedRoutes:
         assert response.status_code in [301, 302, 303, 307, 308, 401]
     
     def test_unauthenticated_access_to_change_password_api(self, client):
-        """POST /api/change-password without auth should return 401."""
-        response = client.post('/api/change-password', json={
+        """POST /api/auth/change-password without auth should return 401."""
+        response = client.post('/api/auth/change-password', json={
             "old_password": "test",
             "new_password": "test123",
             "confirm_password": "test123"

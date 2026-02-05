@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 Not Found - Reproducibility Checker</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.0.0/dist/full.min.css" rel="stylesheet" type="text/css" />
+</head>
+<body class="bg-base-100">
+    {% include "navbar.html" %}
+
+    <div class="flex items-center justify-center min-h-[calc(100vh-80px)]">
+        <div class="card w-96 bg-base-200 shadow-lg text-center">
+            <div class="card-body">
+                <div class="flex justify-center mb-4">
+                    <span class="text-6xl">⚠️</span>
+                </div>
+                
+                <h1 class="text-4xl font-bold text-error mb-2">404</h1>
+                <h2 class="text-2xl font-semibold mb-4">Page Not Found</h2>
+                
+                <p class="text-base-content/70 mb-6">
+                    The page you're looking for doesn't exist. It may have been moved or deleted.
+                </p>
+                
+                <div class="flex gap-2 justify-center">
+                    <a href="/" class="btn btn-primary">
+                        <span>🏠</span>
+                        <span>Go Home</span>
+                    </a>
+                    <a href="/history" class="btn btn-secondary">
+                        <span>📊</span>
+                        <span>View History</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load theme from localStorage
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.querySelector('html').setAttribute('data-theme', savedTheme);
+
+        // Theme toggle
+        function toggleTheme() {
+            const html = document.querySelector('html');
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+    </script>
+</body>
+</html>
