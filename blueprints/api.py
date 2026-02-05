@@ -90,6 +90,11 @@ def api_login(username, password):
 
 
 @api_bp.route("/auth/register", methods=["POST"])
+@use_kwargs(RegisterSchema, location="json")
+@marshal_with(SessionSchema, code=201)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=409)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     tags=["Authentication"],
     description="Register a new user account",
@@ -100,87 +105,55 @@ def api_login(username, password):
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(SessionSchema, code=201)
-def api_register():
+def api_register(username, email, password, confirm_password):
     """
     REST API endpoint for user registration.
     
-    Request body (JSON):
-    {
-        "username": "user",
-        "email": "user@example.com",
-        "password": "password",
-        "confirm_password": "password"
-    }
+    Input validated by RegisterSchema (@use_kwargs):
+    - username: 3-50 chars, required
+    - email: valid email, required
+    - password: 8-100 chars, required
+    - confirm_password: must match password, required
     
     Returns:
     - 201: {"message": "Account created...", "redirect": "/login"}
     - 400: {"error": "..."}
+    - 409: {"error": "Username or email already exists"}
     - 500: {"error": "Failed to create account"}
     """
     from services.auth_service import user_exists, create_user
-    from utils.validators import (
-        validate_username, validate_email, validate_password, validate_passwords_match
-    )
     
     try:
-        try:
-            data = request.json or {}
-        except Exception as e:
-            return jsonify({"error": "Invalid JSON in request body"}), 400
-        
-        username = data.get("username", "")
-        email = data.get("email", "").strip()
-        password = data.get("password", "")
-        confirm_password = data.get("confirm_password", "")
-        
-        # Type validation - username and password should be strings
-        if not isinstance(username, str):
-            return jsonify({"error": "Username must be a string"}), 400
-        if not isinstance(password, str):
-            return jsonify({"error": "Password must be a string"}), 400
-        if not isinstance(confirm_password, str):
-            return jsonify({"error": "Confirm password must be a string"}), 400
-        
-        username = username.strip()
-        
-        # Validate inputs
-        valid, error = validate_username(username)
-        if not valid:
-            return jsonify({"error": error}), 400
-        
-        valid, error = validate_email(email)
-        if not valid:
-            return jsonify({"error": error}), 400
-        
-        valid, error = validate_password(password)
-        if not valid:
-            return jsonify({"error": error}), 400
-        
-        valid, error = validate_passwords_match(password, confirm_password)
-        if not valid:
-            return jsonify({"error": error}), 400
-        
+        # @use_kwargs already validated all inputs
         # Check if user exists
         if user_exists(username, email):
-            return jsonify({"error": "Username or email already exists"}), 409
+            return {"error": "Username or email already exists"}, 409
+        
+        # Check password confirmation (Marshmallow validates format, we check match)
+        if password != confirm_password:
+            return {"error": "Passwords do not match"}, 400
         
         # Create user
         user_id = create_user(username, email, password)
         if not user_id:
-            return jsonify({"error": "Failed to create account"}), 500
+            return {"error": "Failed to create account"}, 500
         
-        return jsonify({
+        return {
             "message": "Account created. Awaiting activation by admin.",
             "redirect": "/login"
-        }), 201
+        }, 201
     
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return {"error": str(e)}, 500
 
 
 @api_bp.route("/auth/change-password", methods=["POST"])
 @require_auth
+@use_kwargs(ChangePasswordSchema, location="json")
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=401)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     tags=["Authentication"],
     description="Change the password for the authenticated user",
@@ -193,16 +166,14 @@ def api_register():
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-def api_change_password():
+def api_change_password(old_password, new_password, confirm_password):
     """
     REST API endpoint for changing user password.
     
-    Request body (JSON):
-    {
-        "old_password": "current_password",
-        "new_password": "new_password",
-        "confirm_password": "new_password"
-    }
+    Input validated by ChangePasswordSchema (@use_kwargs):
+    - old_password: required
+    - new_password: 8-100 chars, required
+    - confirm_password: must match new_password, required
     
     Returns:
     - 204: No Content (success)
@@ -215,37 +186,27 @@ def api_change_password():
     
     try:
         user_id = session.get('user_id')
-        data = request.get_json() or {}
         
-        old_password = data.get("old_password", "").strip()
-        new_password = data.get("new_password", "").strip()
-        confirm_password = data.get("confirm_password", "").strip()
-        
-        # Validation
-        if not old_password or not new_password or not confirm_password:
-            return jsonify({"error": "All fields are required"}), 400
-        
-        if len(new_password) < 8:
-            return jsonify({"error": "New password must be at least 8 characters"}), 400
-        
+        # @use_kwargs already validated inputs
+        # Check password confirmation (Marshmallow validates format, we check match)
         if new_password != confirm_password:
-            return jsonify({"error": "New passwords don't match"}), 400
+            return {"error": "New passwords don't match"}, 400
         
         # Get user and verify old password
         user = get_user_by_id(user_id)
         if not user:
-            return jsonify({"error": "User not found"}), 404
+            return {"error": "User not found"}, 404
         
         if not verify_password(old_password, user.password_hash):
-            return jsonify({"error": "Current password is incorrect"}), 401
+            return {"error": "Current password is incorrect"}, 401
         
         # Update password
         if not update_password(user_id, new_password):
-            return jsonify({"error": "Failed to update password"}), 500
+            return {"error": "Failed to update password"}, 500
         
         return "", 204
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return {"error": str(e)}, 500
 
 
 # ============================================================================
