@@ -34,9 +34,9 @@ def login_page():
 @auth_bp.route("/logout", methods=["POST", "GET"])
 @require_auth
 def logout():
-    """User logout - clears session and returns 204 No Content."""
+    """User logout - clears session and redirects to login page."""
     session.clear()
-    return "", 204
+    return redirect("/login")
 
 
 @auth_bp.route("/profile")
