@@ -17,3 +17,29 @@
 .log .text-warning {
     @apply text-warning;
 }
+
+/* Chat message styles */
+.chat-message {
+    padding: 8px 12px;
+    margin: 4px 0;
+    border-radius: 6px;
+    word-wrap: break-word;
+    display: flex;
+    justify-content: flex-start;
+}
+
+.user-message {
+    background-color: #e3f2fd;
+    justify-content: flex-end;
+    color: #1565c0;
+}
+
+.user-message .message-content {
+    text-align: right;
+}
+
+.assistant-message {
+    background-color: #f5f5f5;
+    justify-content: flex-start;
+    color: #424242;
+}

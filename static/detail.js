@@ -179,6 +179,11 @@ function showRelevantSections(job) {
         const show = job.status === "completed";
         chatSection.style.display = show ? "block" : "none";
         console.log(`[sections] chatSection: ${show ? "shown" : "hidden"} (status=${job.status})`);
+        
+        // Load chat history when chat section is shown
+        if (show) {
+            loadChatHistory();
+        }
     }
 }
 
@@ -337,8 +342,18 @@ function updateEventLog(job) {
     if (currentEventCount > lastEventCount && job.events) {
         const newEventsCount = currentEventCount - lastEventCount;
         job.events.slice(lastEventCount).forEach(event => {
+            // Handle chat events separately
             if (event.step && (event.step.startsWith('chat_') || event.step === 'chat_error')) {
-                return;  // Skip chat events
+                if (event.step === 'chat_response' || event.step === 'chat_complete') {
+                    // Add assistant response to chat
+                    if (event.message) {
+                        addChatMessage('assistant', event.message);
+                    }
+                } else if (event.step === 'chat_error') {
+                    // Add error message to chat
+                    addChatMessage('assistant', `Error: ${event.message || 'Failed to process message'}`);
+                }
+                return;  // Don't add chat events to event log
             }
             
             const time = new Date(event.timestamp).toLocaleTimeString();
@@ -527,14 +542,151 @@ function deleteJob() {
         .catch(err => alert("Delete failed: " + err.message));
 }
 
-function sendChat() {
-    const message = chatInput?.value.trim();
-    if (!message) return;
-    
-    // TODO: Implement chat
-    console.log("Chat not yet implemented");
+// ============================================================================
+// Chat Helper Functions
+// ============================================================================
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
-function clearChat() {
-    if (chatHistory) chatHistory.innerHTML = "";
+function addChatMessage(role, content) {
+    if (!chatHistory) {
+        console.error('Chat history element not found');
+        return;
+    }
+    
+    // Clear initial placeholder if this is first message
+    if (chatHistory.innerHTML.trim().includes("Ask questions about the paper's reproducibility")) {
+        chatHistory.innerHTML = '';
+    }
+    
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `chat-message ${role}-message`;
+    msgDiv.innerHTML = `<div class="message-content">${escapeHtml(content)}</div>`;
+    
+    chatHistory.appendChild(msgDiv);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+async function loadChatHistory() {
+    if (!JOB_ID) return;
+    
+    if (!chatHistory) {
+        console.error('Chat history element not found');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/job/${JOB_ID}/chat/history`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to load chat history:', response.status);
+            return;
+        }
+        
+        const messages = await response.json();
+        
+        // Clear existing messages
+        chatHistory.innerHTML = '';
+        
+        // Add each historical message
+        messages.forEach(msg => {
+            addChatMessage(msg.role, msg.content);
+        });
+        
+        // Scroll to bottom
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+    } catch (error) {
+        console.error('Error loading chat history:', error);
+    }
+}
+
+async function sendChat() {
+    const message = chatInput?.value.trim();
+    if (!message) {
+        alert('Message cannot be empty');
+        return;
+    }
+    
+    if (!JOB_ID) {
+        console.error('Job ID not set for chat');
+        return;
+    }
+    
+    if (!chatHistory) {
+        console.error('Chat history element not found');
+        return;
+    }
+    
+    try {
+        // Add user message to display immediately
+        addChatMessage('user', message);
+        
+        // Clear input
+        chatInput.value = '';
+        
+        // Send to API
+        const response = await fetch(`/api/job/${JOB_ID}/chat`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'include',
+            body: JSON.stringify({message: message})
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            addChatMessage('assistant', `Error: ${error.error || 'Failed to send message'}`);
+            return;
+        }
+        
+        // Handle response
+        const text = await response.text();
+        if (text) {
+            try {
+                const data = JSON.parse(text);
+                addChatMessage('assistant', data.message || data.response || 'Message sent');
+            } catch (e) {
+                // Plain text response or empty
+                if (text.length > 0) {
+                    addChatMessage('assistant', text);
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Chat error:', error);
+        addChatMessage('assistant', 'Failed to send message: ' + error.message);
+    }
+}
+
+async function clearChat() {
+    if (!confirm('Clear all chat history?')) return;
+    
+    if (!JOB_ID) {
+        console.error('Job ID not set for chat');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/job/${JOB_ID}/chat/history`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            if (chatHistory) {
+                chatHistory.innerHTML = '<div class="text-center text-base-content/60 text-sm">Ask questions about the paper\'s reproducibility...</div>';
+            }
+            console.log('Chat history cleared');
+        } else {
+            alert('Failed to clear chat history');
+        }
+    } catch (error) {
+        console.error('Error clearing chat:', error);
+        alert('Failed to clear chat history');
+    }
 }
