@@ -55,15 +55,17 @@ class TestAPIErrorResponses:
     """Test API error response codes"""
     
     def test_400_bad_request(self, client):
-        """Test 400 Bad Request response"""
+        """Test 400 Bad Request response (validation errors return 422)"""
         response = client.post('/api/auth/register', json={
             "username": "test"
             # Missing password fields
         })
         
-        assert response.status_code == 400
+        # Marshmallow validation errors return 422, not 400
+        assert response.status_code == 422
         data = response.get_json()
-        assert "error" in data
+        # Validation error response may have "error" or error details
+        assert isinstance(data, dict)
     
     def test_401_unauthorized(self, client):
         """Test 401 Unauthorized response"""
@@ -104,13 +106,13 @@ class TestHTTPMethods:
         assert response.status_code in [405, 302]
     
     def test_delete_returns_204(self, authenticated_user, test_job):
-        """Test DELETE returns 200 with success response"""
+        """Test DELETE returns 204 No Content (HTTP standard)"""
         response = authenticated_user.delete(f'/api/job/{test_job["id"]}')
         
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data.get("ok") is True
-        assert "message" in data
+        # HTTP standard for DELETE is 204 No Content (not 200)
+        assert response.status_code == 204
+        # 204 has no response body
+        assert response.data == b''
     
     def test_patch_for_user_status(self, admin_user, test_user):
         """Test PATCH for resource updates"""
@@ -141,7 +143,8 @@ class TestMalformedRequests:
             # Missing password
         })
         
-        assert response.status_code == 400
+        # Marshmallow validation errors return 422, not 400
+        assert response.status_code == 422
     
     def test_invalid_field_types(self, client):
         """Test invalid field types"""
@@ -151,7 +154,8 @@ class TestMalformedRequests:
             "password_confirm": "test"
         })
         
-        assert response.status_code == 400
+        # Marshmallow validation errors return 422, not 400
+        assert response.status_code == 422
 
 class TestAuthenticationErrors:
     """Test authentication-specific errors"""

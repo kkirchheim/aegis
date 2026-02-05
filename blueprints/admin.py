@@ -45,7 +45,7 @@ def get_all_users():
                     "username": u.username,
                     "email": u.email,
                     "is_active": u.is_active,
-                    "created_at": u.created_at.isoformat() if u.created_at else None
+                    "created_at": u.created_at  # Let Marshmallow serialize datetime
                 }
                 for u in users
             ],
