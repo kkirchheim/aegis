@@ -495,6 +495,7 @@ INSTRUCTIONS:
 - Be honest about limitations and gaps in reproducibility
 - Explain technical concepts when needed
 - Suggest improvements or troubleshooting when appropriate
+- IMPORTANT: Use PLAIN TEXT ONLY. Do NOT use markdown formatting (no bold, no italic, no headers, no code blocks, no bullet lists). Write responses as simple readable paragraphs with line breaks where appropriate.
 """
     
     return system_prompt
