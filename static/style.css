@@ -18,28 +18,49 @@
     @apply text-warning;
 }
 
+/* Chat container */
+#chatHistory {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 8px;
+    border-radius: 4px;
+    margin: 8px 0;
+    background-color: #f9f9f9;
+}
+
 /* Chat message styles */
 .chat-message {
-    padding: 8px 12px;
-    margin: 4px 0;
-    border-radius: 6px;
-    word-wrap: break-word;
+    margin: 6px 0;
     display: flex;
-    justify-content: flex-start;
+    word-wrap: break-word;
 }
 
-.user-message {
-    background-color: #e3f2fd;
+/* User message - primary color (blue) box, right-aligned */
+.chat-message.user-message {
     justify-content: flex-end;
-    color: #1565c0;
 }
 
-.user-message .message-content {
-    text-align: right;
+.chat-message.user-message .message-content {
+    background-color: #2196F3; /* Primary blue */
+    color: white;
+    padding: 10px 14px;
+    border-radius: 12px;
+    max-width: 70%;
+    word-wrap: break-word;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
-.assistant-message {
-    background-color: #f5f5f5;
+/* Assistant message - light gray box, left-aligned */
+.chat-message.assistant-message {
     justify-content: flex-start;
-    color: #424242;
+}
+
+.chat-message.assistant-message .message-content {
+    background-color: #e8e8e8;
+    color: #333;
+    padding: 10px 14px;
+    border-radius: 12px;
+    max-width: 70%;
+    word-wrap: break-word;
 }

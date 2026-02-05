@@ -9,6 +9,10 @@ let pollInterval = null;
 let lastStage = null;
 let lastEventCount = 0;  // Track processed events to avoid duplicates
 
+// Chat polling variables
+let chatPollingInterval = null;
+let lastChatMessageCount = 0;  // Track processed chat messages to avoid duplicates
+
 // DOM Elements - Sections
 const statusSection = document.getElementById("statusSection");
 const progressSection = document.getElementById("progressSection");
@@ -64,6 +68,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 window.addEventListener("beforeunload", () => {
     stopPolling();
+    stopChatPolling();
 });
 
 // ============================================================================
@@ -81,6 +86,73 @@ function stopPolling() {
         clearInterval(pollInterval);
         pollInterval = null;
         console.log(`[polling] Stopped`);
+    }
+}
+
+// ============================================================================
+// Independent Chat Polling (500ms) - Separate from Job Polling
+// ============================================================================
+
+function startChatPolling() {
+    console.log(`[chat-polling] Starting independent chat polling every 500ms`);
+    
+    // Clear existing interval if any
+    if (chatPollingInterval) {
+        clearInterval(chatPollingInterval);
+    }
+    
+    // Poll every 500ms (faster than job polling since it's just fetching history)
+    chatPollingInterval = setInterval(async () => {
+        if (!JOB_ID) {
+            stopChatPolling();
+            return;
+        }
+        
+        const chatSection = document.getElementById('chatSection');
+        // Only poll if chat section is visible
+        if (!chatSection || chatSection.style.display === 'none') {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/job/${JOB_ID}/chat/history`, {
+                credentials: 'include'
+            });
+            if (!response.ok) return;
+            
+            const messages = await response.json();
+            updateChatMessages(messages);
+        } catch (error) {
+            console.error('[chat-polling] Chat polling error:', error);
+        }
+    }, 500); // Poll every 500ms
+}
+
+function stopChatPolling() {
+    if (chatPollingInterval) {
+        clearInterval(chatPollingInterval);
+        chatPollingInterval = null;
+        console.log(`[chat-polling] Stopped`);
+    }
+}
+
+function updateChatMessages(messages) {
+    const chatMessages = document.getElementById('chatHistory');
+    if (!chatMessages) {
+        console.warn('[chat-polling] chatHistory element not found');
+        return;
+    }
+    
+    const currentMessages = chatMessages.querySelectorAll('.chat-message');
+    
+    // Only update if new messages arrived
+    if (messages.length > currentMessages.length) {
+        console.log(`[chat-polling] Found ${messages.length - currentMessages.length} new messages`);
+        const newMessages = messages.slice(currentMessages.length);
+        newMessages.forEach(msg => {
+            addChatMessage(msg.role, msg.content);
+        });
+        lastChatMessageCount = messages.length;
     }
 }
 
@@ -180,9 +252,12 @@ function showRelevantSections(job) {
         chatSection.style.display = show ? "block" : "none";
         console.log(`[sections] chatSection: ${show ? "shown" : "hidden"} (status=${job.status})`);
         
-        // Load chat history when chat section is shown
+        // Load chat history and start polling when chat section is shown
         if (show) {
             loadChatHistory();
+            startChatPolling();  // Start independent chat polling
+        } else {
+            stopChatPolling();  // Stop polling when chat is hidden
         }
     }
 }
