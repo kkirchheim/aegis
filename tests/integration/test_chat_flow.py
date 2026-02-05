@@ -36,9 +36,9 @@ class TestChatSendMessage:
         
         assert response.status_code == 404
     
-    def test_chat_requires_auth(self, client, test_job):
+    def test_chat_requires_auth(self, client, auth_test_job):
         """Test chat requires authentication"""
-        response = client.post(f'/api/job/{test_job["id"]}/chat', json={
+        response = client.post(f'/api/job/{auth_test_job["id"]}/chat', json={
             "message": "Test"
         })
         
@@ -75,9 +75,9 @@ class TestChatHistory:
         
         assert response.status_code == 404
     
-    def test_history_requires_auth(self, client, test_job):
+    def test_history_requires_auth(self, client, auth_test_job):
         """Test history requires authentication"""
-        response = client.get(f'/api/job/{test_job["id"]}/chat/history')
+        response = client.get(f'/api/job/{auth_test_job["id"]}/chat/history')
         
         assert response.status_code == 401
 
@@ -111,9 +111,9 @@ class TestChatClear:
         
         assert response.status_code == 404
     
-    def test_clear_requires_auth(self, client, test_job):
+    def test_clear_requires_auth(self, client, auth_test_job):
         """Test clear requires authentication"""
-        response = client.delete(f'/api/job/{test_job["id"]}/chat/history')
+        response = client.delete(f'/api/job/{auth_test_job["id"]}/chat/history')
         
         assert response.status_code == 401
 

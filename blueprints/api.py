@@ -426,7 +426,11 @@ def get_chat_history_endpoint(job_id):
     try:
         job = JobRepository.get(job_id)
         
-        if not job or job.user_id != user_id:
+        # Check if job exists first (404) before checking permissions (403)
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+        
+        if job.user_id != user_id:
             return jsonify({"error": "Access denied"}), 403
         
         try:
@@ -449,7 +453,11 @@ def delete_chat_history_endpoint(job_id):
     try:
         job = JobRepository.get(job_id)
         
-        if not job or job.user_id != user_id:
+        # Check if job exists first (404) before checking permissions (403)
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+        
+        if job.user_id != user_id:
             return jsonify({"error": "Access denied"}), 403
         
         try:
@@ -458,7 +466,8 @@ def delete_chat_history_endpoint(job_id):
         except ChatSession.DoesNotExist:
             pass
         
-        return jsonify({"ok": True, "message": "Chat history cleared"})
+        # Return 204 No Content for successful deletion
+        return "", 204
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -670,7 +670,7 @@ startxref
 
 
 @pytest.fixture
-def other_user(client, app, create_test_user):
+def other_user(app, create_test_user):
     """Create and authenticate a second test user for multi-user testing."""
     user_id = create_test_user(
         "otheruser",
@@ -679,12 +679,15 @@ def other_user(client, app, create_test_user):
         is_active=True
     )
     
+    # Create a separate client for the other user (not the shared 'client' fixture)
+    other_client = app.test_client()
+    
     # Set session for second user
-    with client.session_transaction() as sess:
+    with other_client.session_transaction() as sess:
         sess['user_id'] = user_id
         sess['username'] = "otheruser"
     
-    return client
+    return other_client
 
 
 @pytest.fixture
@@ -694,7 +697,7 @@ def test_job(authenticated_user, create_test_job, app):
         with authenticated_user.session_transaction() as sess:
             user_id = sess.get('user_id')
         
-        job = create_test_job(user_id=user_id)
+        job = create_test_job(user_id=user_id, status="completed", current_stage="analysis")
         
         # Return job as dictionary with id
         return {
@@ -714,7 +717,7 @@ def test_job_with_chat(authenticated_user, create_test_job, app):
         with authenticated_user.session_transaction() as sess:
             user_id = sess.get('user_id')
         
-        job = create_test_job(user_id=user_id)
+        job = create_test_job(user_id=user_id, status="completed", current_stage="analysis")
         
         # Create a chat session for this job
         chat_session = ChatSession.create(job=job)
@@ -732,6 +735,45 @@ def test_job_with_chat(authenticated_user, create_test_job, app):
         )
         
         # Return job as dictionary with id
+        return {
+            "id": str(job.id),
+            "user_id": job.user_id,
+            "status": job.status,
+            "current_stage": job.current_stage,
+        }
+
+
+@pytest.fixture
+def auth_test_job(app, create_test_user):
+    """Create a test job for auth testing (independent of test client).
+    
+    This fixture creates a job owned by a separate user and doesn't affect
+    the test client's session, allowing auth tests to properly test 401 responses.
+    """
+    import uuid
+    from models.database import Job
+    
+    # Create a separate test user for this job
+    user_id = create_test_user(
+        f"authtest{uuid.uuid4().hex[:8]}",
+        f"authtest{uuid.uuid4().hex[:8]}@example.com",
+        "TestPassword123!",
+        is_active=True
+    )
+    
+    with app.app_context():
+        # Create job for the separate user
+        job_id = str(uuid.uuid4())
+        job = Job.create(
+            id=job_id,
+            user_id=user_id,
+            status="completed",
+            current_stage="analysis",
+            pdf_path="/test/path/paper.pdf",
+            pdf_filename="paper.pdf",
+            progress=1.0,
+        )
+        
         return {
             "id": str(job.id),
             "user_id": job.user_id,
