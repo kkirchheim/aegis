@@ -32,17 +32,6 @@ def login_page():
 
 
 @auth_bp.route("/logout", methods=["POST", "GET"])
-@doc(
-    description="Logout user and clear session",
-    tags=["Authentication"],
-    responses={
-        204: None,
-        401: ErrorSchema(),
-        500: ErrorSchema()
-    },
-    security=[{"api_key": []}]
-)
-@marshal_with(None, code=204)
 @require_auth
 def logout():
     """User logout - clears session and returns 204 No Content."""
@@ -93,19 +82,6 @@ def change_password_page():
 
 
 @auth_bp.route("/change-password", methods=["POST"])
-@doc(
-    description="Change user password",
-    tags=["Authentication"],
-    responses={
-        204: None,
-        400: ErrorSchema(),
-        401: ErrorSchema(),
-        500: ErrorSchema()
-    },
-    security=[{"api_key": []}]
-)
-@use_kwargs(ChangePasswordSchema, location="json")
-@marshal_with(None, code=204)
 @require_auth
 def change_password():
     """User change password - JSON-based endpoint."""
@@ -150,18 +126,6 @@ def change_password():
 
 
 @auth_bp.route("/login", methods=["POST"])
-@doc(
-    description="Authenticate user with username and password",
-    tags=["Authentication"],
-    responses={
-        200: SessionSchema(),
-        400: ErrorSchema(),
-        401: ErrorSchema(),
-        500: ErrorSchema()
-    }
-)
-@use_kwargs(LoginSchema, location="form")
-@marshal_with(SessionSchema, code=200)
 def login_form():
     """User login - form-based endpoint."""
     try:
@@ -191,17 +155,6 @@ def login_form():
 
 
 @auth_bp.route("/register", methods=["POST"])
-@doc(
-    description="Register a new user account",
-    tags=["Authentication"],
-    responses={
-        201: UserSchema(),
-        400: ErrorSchema(),
-        500: ErrorSchema()
-    }
-)
-@use_kwargs(RegisterSchema, location="form")
-@marshal_with(UserSchema, code=201)
 def register_form():
     """User registration - form-based endpoint."""
     try:

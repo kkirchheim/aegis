@@ -69,10 +69,29 @@ def create_app():
     docs = FlaskApiSpec(app)
     app.logger.info("✓ API documentation initialized: /docs/ and /swagger/")
     
-    # PHASE 6: Full endpoint registration requires schema format fixes
-    # TODO: Refactor @doc decorators to use proper FlaskApiSpec format for schema responses
-    # docs.register_existing_resources()
-    # For now, all endpoints are documented but not auto-registered in the OpenAPI spec
+    # PHASE 6: Register ONLY API endpoints for documentation
+    # Register all routes first, then filter to keep only /api/* endpoints
+    docs.register_existing_resources()
+    
+    # Remove non-API routes from the OpenAPI spec
+    # Keep ONLY /api/* paths in the documentation to exclude HTML template routes
+    try:
+        if hasattr(docs, 'spec') and hasattr(docs.spec, '_paths'):
+            # The APISpec object stores paths in the _paths dict
+            # Build list of paths to remove (those NOT starting with /api/)
+            all_paths = list(docs.spec._paths.keys())
+            paths_to_remove = [path for path in all_paths if not path.startswith('/api/')]
+            
+            # Remove each non-API path from the spec
+            for path in paths_to_remove:
+                del docs.spec._paths[path]
+            
+            api_count = len(docs.spec._paths)
+            app.logger.info(f"✓ Filtered OpenAPI spec: {api_count} /api/* routes documented ({len(paths_to_remove)} non-API routes excluded)")
+    except Exception as e:
+        app.logger.error(f"Failed to filter OpenAPI spec: {e}")
+        import traceback
+        app.logger.error(traceback.format_exc())
     
     # Configure security schemes for API documentation
     docs.spec.components.security_scheme("sessionAuth", {

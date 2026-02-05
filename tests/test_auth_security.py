@@ -207,8 +207,8 @@ class TestUnauthenticatedAccessToProtectedRoutes:
         assert response.status_code == 401
     
     def test_unauthenticated_access_to_events_sse(self, client):
-        """GET /events/<id> without auth should return 401."""
-        response = client.get('/events/test-job-id')
+        """GET /api/job/<id>/events without auth should return 401."""
+        response = client.get('/api/job/test-job-id/events')
         assert response.status_code == 401
 
 
@@ -398,7 +398,7 @@ class TestCrossUserAccessControl:
             sess['user_id'] = 1
             sess['username'] = 'testuser1'
         
-        response = user1_session.get('/events/job-user2-events')
+        response = user1_session.get('/api/job/job-user2-events/events')
         assert response.status_code == 403
 
 

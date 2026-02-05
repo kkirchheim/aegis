@@ -13,7 +13,10 @@ Schemas exported:
 - Common: ErrorSchema, PaginationSchema, SuccessMessageSchema
 """
 
-from .common import ErrorSchema, PaginationSchema, SuccessMessageSchema
+from .common import (
+    ErrorSchema, PaginationSchema, SuccessMessageSchema,
+    EventSchema, HealthResponseSchema, CacheStatsResponseSchema, UploadJobResponseSchema
+)
 from .auth import LoginSchema, RegisterSchema, ChangePasswordSchema, SessionSchema
 from .jobs import JobSchema, JobListSchema, JobDetailSchema, JobUploadSchema
 from .chat import ChatMessageSchema, ChatMessageResponseSchema, ChatHistorySchema
@@ -25,6 +28,10 @@ __all__ = [
     'ErrorSchema',
     'PaginationSchema',
     'SuccessMessageSchema',
+    'EventSchema',
+    'HealthResponseSchema',
+    'CacheStatsResponseSchema',
+    'UploadJobResponseSchema',
     # Auth
     'LoginSchema',
     'RegisterSchema',

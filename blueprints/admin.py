@@ -12,6 +12,7 @@ admin_bp = Blueprint('admin', __name__)
 
 @admin_bp.route("/admin")
 @require_admin
+@doc(hidden=True)
 def admin_panel():
     """Admin panel page - list all users."""
     return render_template("admin.html")

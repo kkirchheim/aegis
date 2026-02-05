@@ -2,6 +2,7 @@
 
 import threading
 from flask import Blueprint, render_template, session, redirect, jsonify, request
+from flask_apispec import doc
 from utils.decorators import require_auth
 from services.job_service import get_job, get_user_jobs, delete_job
 from services.event_dispatcher import EventDispatcher
@@ -107,31 +108,3 @@ def delete_job_endpoint(job_id):
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-@jobs_bp.route("/events/<job_id>", methods=["GET"])
-@require_auth
-def events_endpoint(job_id):
-    """Server-Sent Events endpoint for job progress."""
-    user_id = session.get('user_id')
-    
-    job = get_job(job_id)
-    
-    if not job:
-        return jsonify({"error": "Job not found"}), 404
-    
-    if job.user_id != user_id:
-        return jsonify({"error": "Access denied"}), 403
-    
-    # Return streaming response with events
-    def generate():
-        """Generate SSE events for job progress."""
-        # Get events from dispatcher
-        for event in _dispatcher.get_events(job_id):
-            yield f"data: {event}\n\n"
-    
-    return generate(), 200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'X-Accel-Buffering': 'no'
-    }

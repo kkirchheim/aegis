@@ -21,7 +21,8 @@ from schemas import (
     JobSchema, JobListSchema, JobDetailSchema, ErrorSchema,
     ChatMessageSchema, ChatMessageResponseSchema, ChatHistorySchema,
     LoginSchema, RegisterSchema, ChangePasswordSchema, SessionSchema, UserSchema,
-    SuccessMessageSchema
+    SuccessMessageSchema, EventSchema, HealthResponseSchema, CacheStatsResponseSchema,
+    UploadJobResponseSchema
 )
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -30,12 +31,20 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 # ============================================================================
 # Authentication API Endpoints (Separated from page routes)
 # ============================================================================
+# OpenAPI Tags: "Authentication"
 
 @api_bp.route("/auth/login", methods=["POST"])
-@doc(tags=["Authentication"], 
-     description="User login endpoint. Authenticates a user with username and password.",
-     responses={200: SessionSchema(), 400: ErrorSchema(), 401: ErrorSchema()})
-@use_kwargs(LoginSchema, location="json")
+@doc(
+    tags=["Authentication"],
+    description="Authenticate a user with username and password",
+    responses={
+        200: {"description": "Login successful", "schema": SessionSchema()},
+        400: {"description": "Bad request - missing or invalid credentials", "schema": ErrorSchema()},
+        401: {"description": "Unauthorized - invalid username or password", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - account not activated", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
 @marshal_with(SessionSchema, code=200)
 def api_login():
     """
@@ -87,11 +96,17 @@ def api_login():
 
 
 @api_bp.route("/auth/register", methods=["POST"])
-@doc(tags=["Authentication"],
-     description="User registration endpoint. Creates a new user account with username, email, and password.",
-     responses={201: UserSchema(), 400: ErrorSchema(), 409: ErrorSchema()})
-@use_kwargs(RegisterSchema, location="json")
-@marshal_with(UserSchema, code=201)
+@doc(
+    tags=["Authentication"],
+    description="Register a new user account",
+    responses={
+        201: {"description": "Account created successfully", "schema": SessionSchema()},
+        400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
+        409: {"description": "Conflict - username or email already exists", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+@marshal_with(SessionSchema, code=201)
 def api_register():
     """
     REST API endpoint for user registration.
@@ -171,13 +186,19 @@ def api_register():
 
 
 @api_bp.route("/auth/change-password", methods=["POST"])
-@doc(tags=["Authentication"],
-     description="Change user password endpoint. Requires session authentication. Validates old password and updates to new password.",
-     security=[{"sessionAuth": []}],
-     responses={204: None, 400: ErrorSchema, 401: ErrorSchema()})
-@use_kwargs(ChangePasswordSchema, location="json")
-@marshal_with(None, code=204)
 @require_auth
+@doc(
+    tags=["Authentication"],
+    description="Change the password for the authenticated user",
+    security=[{"sessionAuth": []}],
+    responses={
+        204: {"description": "Password changed successfully"},
+        400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
+        401: {"description": "Unauthorized - current password incorrect", "schema": ErrorSchema()},
+        404: {"description": "User not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
 def api_change_password():
     """
     REST API endpoint for changing user password.
@@ -234,12 +255,20 @@ def api_change_password():
 
 
 # ============================================================================
-# Health Check Endpoint
+# System Endpoints
 # ============================================================================
+# OpenAPI Tags: "System"
 
 @api_bp.route("/health", methods=["GET"])
-@doc(description="Health check endpoint - verify system is operational", tags=["System"], responses={200: SuccessMessageSchema(), 500: ErrorSchema, 503: ErrorSchema()})
-@marshal_with(SuccessMessageSchema(), code=200)
+@doc(
+    tags=["System"],
+    description="Health check endpoint - returns system status",
+    responses={
+        200: {"description": "System is healthy", "schema": HealthResponseSchema()},
+        503: {"description": "Service unavailable", "schema": HealthResponseSchema()}
+    }
+)
+@marshal_with(HealthResponseSchema, code=200)
 def health_check():
     """
     Health check endpoint.
@@ -308,7 +337,18 @@ def health_check():
 
 @api_bp.route("/cache/stats", methods=["GET"])
 @require_admin
-@doc(description="Get cache statistics", tags=["System"], security=[{"sessionAuth": []}], responses={200: "Cache statistics", 401: ErrorSchema, 403: ErrorSchema, 500: ErrorSchema()})
+@doc(
+    tags=["System"],
+    description="Get cache statistics (admin only)",
+    security=[{"sessionAuth": []}],
+    responses={
+        200: {"description": "Cache statistics retrieved", "schema": CacheStatsResponseSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - admin access required", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+@marshal_with(CacheStatsResponseSchema, code=200)
 def cache_stats():
     """Get cache statistics."""
     stats = get_cache_stats()
@@ -317,6 +357,18 @@ def cache_stats():
 
 @api_bp.route("/cache/clear", methods=["DELETE"])
 @require_admin
+@doc(
+    tags=["System"],
+    description="Clear all cached data (admin only)",
+    security=[{"sessionAuth": []}],
+    responses={
+        200: {"description": "Cache cleared successfully", "schema": SuccessMessageSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - admin access required", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+@marshal_with(SuccessMessageSchema, code=200)
 def cache_clear():
     """Clear all cached data."""
     try:
@@ -335,6 +387,7 @@ def cache_clear():
 # ============================================================================
 # Chat API
 # ============================================================================
+# OpenAPI Tags: "Chat"
 
 def get_or_create_chat_session(job_id):
     """Get or create chat session."""
@@ -373,21 +426,19 @@ def get_chat_history(session_id, limit=20):
 @api_bp.route("/job/<job_id>/chat", methods=["POST"])
 @require_auth
 @doc(
-    description="Chat with paper analysis",
     tags=["Chat"],
+    description="Send a message to chat with paper analysis",
     security=[{"sessionAuth": []}],
     params={"job_id": {"description": "Job ID", "in": "path"}},
     responses={
-        200: {"schema": ChatMessageResponseSchema()},
-        400: {"schema": ErrorSchema()},
-        401: {"schema": ErrorSchema()},
-        403: {"schema": ErrorSchema()},
-        404: {"schema": ErrorSchema()},
-        500: {"schema": ErrorSchema()},
+        200: {"description": "Message sent successfully", "schema": SuccessMessageSchema()},
+        400: {"description": "Bad request - empty message", "schema": ErrorSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
+        404: {"description": "Job not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@use_kwargs(ChatMessageSchema, location="json")
-@marshal_with(ChatMessageResponseSchema, code=200)
 def chat_with_paper(job_id):
     """Chat with paper analysis."""
     from services.llm_service import init_llm_provider
@@ -610,16 +661,16 @@ def _generate_chat_response(job_id, session_id, messages, llm_provider, emit_eve
 @api_bp.route("/job/<job_id>/chat/history", methods=["GET"])
 @require_auth
 @doc(
-    description="Get chat history for a job",
     tags=["Chat"],
+    description="Get chat history for a job",
     security=[{"sessionAuth": []}],
     params={"job_id": {"description": "Job ID", "in": "path"}},
     responses={
-        200: {"schema": ChatHistorySchema()},
-        401: {"schema": ErrorSchema()},
-        403: {"schema": ErrorSchema()},
-        404: {"schema": ErrorSchema()},
-        500: {"schema": ErrorSchema()},
+        200: {"description": "Chat history retrieved", "schema": ChatHistorySchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
+        404: {"description": "Job not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
 @marshal_with(ChatHistorySchema, code=200)
@@ -651,19 +702,18 @@ def get_chat_history_endpoint(job_id):
 @api_bp.route("/job/<job_id>/chat/history", methods=["DELETE"])
 @require_auth
 @doc(
-    description="Delete chat history for a job",
     tags=["Chat"],
+    description="Delete chat history for a job",
     security=[{"sessionAuth": []}],
     params={"job_id": {"description": "Job ID", "in": "path"}},
     responses={
         204: {"description": "Chat history deleted successfully"},
-        401: {"schema": ErrorSchema()},
-        403: {"schema": ErrorSchema()},
-        404: {"schema": ErrorSchema()},
-        500: {"schema": ErrorSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
+        404: {"description": "Job not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(None, code=204)
 def delete_chat_history_endpoint(job_id):
     """Delete chat history."""
     user_id = session.get('user_id')
@@ -694,10 +744,10 @@ def delete_chat_history_endpoint(job_id):
 # ============================================================================
 # Agent API - Backend provides reasoning to Docker agent
 # ============================================================================
+# OpenAPI Tags: "Internal"
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/think", methods=["POST"])
-@doc(description="Agent callback to request next action", hidden=True, tags=["Internal"])
 def agent_think():
     """
     Agent calls this to ask for next action.
@@ -812,7 +862,6 @@ RESPONSE FORMAT (JSON only):
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/log", methods=["POST"])
-@doc(description="Agent callback to log progress", hidden=True, tags=["Internal"])
 def agent_log():
     """Agent logs progress.
     
@@ -845,7 +894,6 @@ def agent_log():
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/execution", methods=["POST"])
-@doc(description="Agent callback to store execution details", hidden=True, tags=["Internal"])
 def agent_execution():
     """
     Agent stores execution details.
@@ -889,7 +937,6 @@ def agent_execution():
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/complete", methods=["POST"])
-@doc(description="Agent callback to report completion", hidden=True, tags=["Internal"])
 def agent_complete():
     """
     Agent reports completion.
@@ -935,10 +982,22 @@ def agent_complete():
 # ============================================================================
 # Job Management API
 # ============================================================================
+# OpenAPI Tags: "Jobs"
 
 @api_bp.route("/job/upload", methods=["POST"])
-@doc(description="Upload a PDF file for paper reproducibility analysis", tags=["Jobs"], security=[{"sessionAuth": []}], responses={202: "Job created and analysis started", 400: ErrorSchema, 401: ErrorSchema, 413: ErrorSchema, 500: ErrorSchema()})
-@marshal_with(JobSchema, code=202)
+@doc(
+    tags=["Jobs"],
+    description="Upload a PDF paper for analysis",
+    security=[{"sessionAuth": []}],
+    responses={
+        202: {"description": "PDF uploaded successfully, analysis starting", "schema": UploadJobResponseSchema()},
+        400: {"description": "Bad request - no file or invalid file", "schema": ErrorSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        413: {"description": "Payload too large - PDF exceeds max size", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+@marshal_with(UploadJobResponseSchema, code=202)
 def upload_pdf():
     """Upload PDF for analysis."""
     from services.llm_service import init_llm_provider
@@ -1019,7 +1078,16 @@ def upload_pdf():
 
 @api_bp.route("/job", methods=["GET"])
 @require_auth
-@doc(description="List all jobs for the current user", tags=["Jobs"], security=[{"sessionAuth": []}], responses={200: "List of jobs retrieved successfully", 401: ErrorSchema, 500: ErrorSchema()})
+@doc(
+    tags=["Jobs"],
+    description="List all jobs for the authenticated user",
+    security=[{"sessionAuth": []}],
+    responses={
+        200: {"description": "List of jobs retrieved successfully", "schema": JobListSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
 @marshal_with(JobListSchema, code=200)
 def list_jobs_api():
     """List all jobs for current user."""
@@ -1030,8 +1098,20 @@ def list_jobs_api():
 
 @api_bp.route("/job/<job_id>", methods=["GET"])
 @require_auth
-@doc(description="Get job status and report by job ID", tags=["Jobs"], security=[{"sessionAuth": []}], params={"job_id": {"description": "Unique identifier for the job", "in": "path", "type": "string", "required": True}}, responses={200: "Job details retrieved successfully", 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema()})
-@marshal_with(JobDetailSchema, code=200)
+@doc(
+    tags=["Jobs"],
+    description="Get job status and report",
+    security=[{"sessionAuth": []}],
+    params={"job_id": {"description": "Job ID", "in": "path"}},
+    responses={
+        200: {"description": "Job details retrieved successfully", "schema": JobSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
+        404: {"description": "Job not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+@marshal_with(JobSchema, code=200)
 def get_job_detail(job_id):
     """Get job status and report."""
     user_id = session.get('user_id')
@@ -1062,8 +1142,19 @@ def get_job_detail(job_id):
 
 @api_bp.route("/job/<job_id>", methods=["DELETE"])
 @require_auth
-@doc(description="Delete a job by job ID", tags=["Jobs"], security=[{"sessionAuth": []}], params={"job_id": {"description": "Unique identifier for the job", "in": "path", "type": "string", "required": True}}, responses={204: "Job deleted successfully", 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema()})
-@marshal_with(None, code=204)
+@doc(
+    tags=["Jobs"],
+    description="Delete a job",
+    security=[{"sessionAuth": []}],
+    params={"job_id": {"description": "Job ID", "in": "path"}},
+    responses={
+        204: {"description": "Job deleted successfully"},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
+        404: {"description": "Job not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
 def delete_job_route(job_id):
     """Delete a job."""
     try:
@@ -1088,7 +1179,19 @@ def delete_job_route(job_id):
 
 @api_bp.route("/job/<job_id>/full", methods=["GET"])
 @require_auth
-@doc(description="Get complete job data including all details, events, artifacts, and analysis", tags=["Jobs"], security=[{"sessionAuth": []}], params={"job_id": {"description": "Unique identifier for the job", "in": "path", "type": "string", "required": True}}, responses={200: "Full job details retrieved successfully", 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema()})
+@doc(
+    tags=["Jobs"],
+    description="Get full job data including details, events, and analysis",
+    security=[{"sessionAuth": []}],
+    params={"job_id": {"description": "Job ID", "in": "path"}},
+    responses={
+        200: {"description": "Full job data retrieved successfully", "schema": JobDetailSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
+        404: {"description": "Job not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
 @marshal_with(JobDetailSchema, code=200)
 def get_job_full(job_id):
     """Get full job data including all details."""
@@ -1143,12 +1246,23 @@ def get_job_full(job_id):
 
 @api_bp.route("/job/<job_id>/events", methods=["GET"])
 @require_auth
-@doc(description="SSE-compatible endpoint for streaming job events with optional timestamp filtering", 
-     tags=["Jobs"], 
-     security=[{"sessionAuth": []}],
-     params={"job_id": {"description": "Unique identifier for the job", "in": "path", "type": "string", "required": True},
-             "since": {"description": "ISO format timestamp to get events after this time (optional)", "in": "query", "type": "string", "required": False}},
-     responses={200: "Events retrieved successfully", 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema()})
+@doc(
+    tags=["Jobs"],
+    description="Get events for a job with optional timestamp filtering",
+    security=[{"sessionAuth": []}],
+    params={
+        "job_id": {"description": "Job ID", "in": "path"},
+        "since": {"description": "ISO format timestamp to get events after this time (optional)", "in": "query"}
+    },
+    responses={
+        200: {"description": "Job events retrieved successfully", "schema": {"type": "object", "properties": {"events": {"type": "array"}, "completed": {"type": "boolean"}, "job_status": {"type": "string"}}}},
+        400: {"description": "Bad request - invalid timestamp format", "schema": ErrorSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
+        404: {"description": "Job not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
 def get_job_events_polling(job_id):
     """Get events for a job with optional timestamp filtering.
     
