@@ -1423,18 +1423,19 @@ def delete_job_route(job_id):
 
 
 @api_bp.route("/job/<job_id>/full", methods=["GET"])
-@require_auth
 @marshal_with(JobDetailSchema, code=200)
+@marshal_with(ErrorSchema, code=401)
 @marshal_with(ErrorSchema, code=403)
 @marshal_with(ErrorSchema, code=404)
 @marshal_with(ErrorSchema, code=500)
 @doc(
     tags=["Jobs"],
     description="Get full job data including details, events, and analysis",
-    security=[{"sessionAuth": []}],
+    security=[{"sessionAuth": []}, {"apiKey": []}],
     params={"job_id": {"description": "Job ID", "in": "path"}},
     responses={
         200: {"description": "Full job data retrieved successfully", "schema": JobDetailSchema()},
+        401: {"description": "Unauthorized - invalid API key or missing session", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
@@ -1442,8 +1443,28 @@ def delete_job_route(job_id):
 )
 def get_job_full(job_id):
     """Get full job data including all details."""
+    from utils.api_key_utils import verify_api_key, InvalidAPIKeyError
+    from flask import current_app
+    
     try:
-        user_id = session.get('user_id')
+        # Manual auth check - support both session cookie and API key
+        user_id = None
+        
+        # Try session cookie first
+        if 'user_id' in session:
+            user_id = session['user_id']
+        else:
+            # Try API key from Authorization header
+            auth_header = request.headers.get('Authorization', '')
+            if auth_header.startswith('ApiKey '):
+                api_key = auth_header[7:]  # Remove "ApiKey " prefix
+                try:
+                    user_id = verify_api_key(api_key)
+                except (InvalidAPIKeyError, Exception):
+                    pass
+        
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
         
         job = get_job(job_id)
         
