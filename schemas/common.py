@@ -1,11 +1,13 @@
 """
-Common Marshmallow schemas for API responses.
+Common Marshmallow schemas for API requests and responses.
 
-This module contains reusable schemas for standardized API response formats
-including error responses, pagination metadata, and success messages.
+This module contains reusable schemas for:
+- Input validation (requests)
+- Output serialization (responses)
+- Error responses, pagination metadata, and success messages
 """
 
-from marshmallow import Schema, fields, validate
+from marshmallow import Schema, fields, validate, ValidationError
 
 
 class ErrorSchema(Schema):
@@ -149,3 +151,14 @@ class UploadJobResponseSchema(Schema):
         allow_none=True,
         description="Status message"
     )
+
+
+# ============================================================================
+# INPUT VALIDATION SCHEMAS (for @use_kwargs)
+# ============================================================================
+# Note: Input schemas are defined in their respective modules:
+# - auth.py: LoginSchema, RegisterSchema, ChangePasswordSchema
+# - admin.py: UpdateUserStatusSchema (to be added)
+# - chat.py: ChatMessageSchema (to be added)
+# 
+# They are imported and re-exported in __init__.py for centralized access

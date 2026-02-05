@@ -1,6 +1,6 @@
 """Marshmallow schemas for admin operations."""
 
-from marshmallow import Schema, fields
+from marshmallow import Schema, fields, validate
 
 
 class UserSchema(Schema):
@@ -49,3 +49,20 @@ class UserActionSchema(Schema):
     ok = fields.Bool(allow_none=True)
     message = fields.Str(allow_none=True)
     user_id = fields.Int(allow_none=True)
+
+
+# ============================================================================
+# INPUT VALIDATION SCHEMAS
+# ============================================================================
+
+class UpdateUserStatusSchema(Schema):
+    """Schema for updating user status (activate/deactivate).
+    
+    Attributes:
+        is_active (bool): Whether user account is active (required)
+    """
+    
+    is_active = fields.Bool(
+        required=True,
+        description="Whether user account is active"
+    )

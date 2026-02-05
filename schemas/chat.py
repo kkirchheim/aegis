@@ -5,7 +5,7 @@ This module provides schemas for chat message handling, including
 message submission, response formatting, and conversation history.
 """
 
-from marshmallow import Schema, fields
+from marshmallow import Schema, fields, validate
 
 
 class ChatMessageSchema(Schema):
@@ -50,4 +50,23 @@ class ChatHistorySchema(Schema):
     total = fields.Int(
         allow_none=True,
         description="Total number of messages in the history"
+    )
+
+
+# ============================================================================
+# INPUT VALIDATION SCHEMAS
+# ============================================================================
+
+class ChatMessageRequestSchema(Schema):
+    """
+    Schema for validating incoming chat messages.
+    
+    Attributes:
+        message (str): Chat message content (1-5000 chars, required)
+    """
+    
+    message = fields.Str(
+        required=True,
+        validate=validate.Length(min=1, max=5000),
+        description="Chat message (1-5000 characters)"
     )

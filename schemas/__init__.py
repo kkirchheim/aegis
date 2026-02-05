@@ -19,9 +19,9 @@ from .common import (
 )
 from .auth import LoginSchema, RegisterSchema, ChangePasswordSchema, SessionSchema
 from .jobs import JobSchema, JobListSchema, JobDetailSchema, JobUploadSchema
-from .chat import ChatMessageSchema, ChatMessageResponseSchema, ChatHistorySchema
+from .chat import ChatMessageSchema, ChatMessageResponseSchema, ChatHistorySchema, ChatMessageRequestSchema
 from .results import ArtifactSchema, AspectEvaluationSchema, ExecutionResultSchema, PaperAnalysisSchema
-from .admin import UserSchema, UserListSchema, UserActionSchema
+from .admin import UserSchema, UserListSchema, UserActionSchema, UpdateUserStatusSchema
 
 __all__ = [
     # Common
@@ -32,7 +32,7 @@ __all__ = [
     'HealthResponseSchema',
     'CacheStatsResponseSchema',
     'UploadJobResponseSchema',
-    # Auth
+    # Auth (Response & Input)
     'LoginSchema',
     'RegisterSchema',
     'ChangePasswordSchema',
@@ -42,17 +42,19 @@ __all__ = [
     'JobListSchema',
     'JobDetailSchema',
     'JobUploadSchema',
-    # Chat
+    # Chat (Response & Input)
     'ChatMessageSchema',
     'ChatMessageResponseSchema',
     'ChatHistorySchema',
+    'ChatMessageRequestSchema',
     # Results
     'ArtifactSchema',
     'AspectEvaluationSchema',
     'ExecutionResultSchema',
     'PaperAnalysisSchema',
-    # Admin
+    # Admin (Response & Input)
     'UserSchema',
     'UserListSchema',
     'UserActionSchema',
+    'UpdateUserStatusSchema',
 ]
