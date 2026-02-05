@@ -7,6 +7,8 @@ This conftest.py provides:
 3. Flask test client with proper setup/teardown
 4. Session fixtures for authenticated tests
 5. User management fixtures
+6. Pytest markers for test categorization
+7. Common test fixtures for DRY testing
 """
 
 import sys
@@ -18,6 +20,20 @@ import tempfile
 # Set dummy API key for testing to avoid import-time errors
 if not os.getenv("ANTHROPIC_API_KEY"):
     os.environ["ANTHROPIC_API_KEY"] = "sk-test-dummy-key-for-pytest"
+
+
+# ============================================================================
+# PYTEST MARKERS CONFIGURATION
+# ============================================================================
+def pytest_configure(config):
+    """Register pytest markers for test categorization."""
+    config.addinivalue_line("markers", "unit: mark test as unit test (fast, mocked dependencies)")
+    config.addinivalue_line("markers", "integration: mark test as integration test (slower, real services)")
+    config.addinivalue_line("markers", "slow: mark test as slow (skip with -m 'not slow')")
+    config.addinivalue_line("markers", "db: mark test as database test (requires database)")
+    config.addinivalue_line("markers", "api: mark test as API endpoint test")
+    config.addinivalue_line("markers", "auth: mark test as authentication test")
+    config.addinivalue_line("markers", "event: mark test as event/streaming test")
 
 # Add parent directory to path so 'app' module can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
