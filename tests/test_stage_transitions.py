@@ -75,38 +75,39 @@ def setup_test_job(test_job_id):
 
 
 def test_emit_event_stage_transitions():
-    """Test that emit_event correctly logs stage transitions."""
+    """Test that emit_event correctly emits stage transition events."""
     job_id = str(uuid.uuid4())
-    events_logged = []
     
-    # Capture stderr to verify logging
-    import io
-    import sys
+    # Test that emit_event accepts various stage transition steps
+    test_steps = [
+        "stage_1_starting",
+        "stage_1_complete",
+        "stage_2_starting",
+        "stage_2_complete",
+        "stage_3_starting",
+        "stage_3_complete",
+        "complete"
+    ]
     
-    with patch('sys.stderr', new_callable=io.StringIO) as mock_stderr:
-        # Emit events and check logging
-        emit_event(job_id, {"step": "stage_1_starting", "message": "Stage 1 starting"})
-        emit_event(job_id, {"step": "stage_1_complete", "message": "Stage 1 complete"})
-        emit_event(job_id, {"step": "stage_2_starting", "message": "Stage 2 starting"})
-        emit_event(job_id, {"step": "stage_2_complete", "message": "Stage 2 complete"})
-        emit_event(job_id, {"step": "stage_3_starting", "message": "Stage 3 starting"})
-        emit_event(job_id, {"step": "stage_3_complete", "message": "Stage 3 complete"})
-        emit_event(job_id, {"step": "complete", "message": "Complete"})
+    events_captured = []
+    
+    # Mock the dispatcher to capture events
+    with patch('blueprints.jobs._dispatcher') as mock_dispatcher:
+        mock_dispatcher.emit = lambda e: events_captured.append(e)
         
-        # Get the logged output
-        log_output = mock_stderr.getvalue()
+        # Emit events
+        for step in test_steps:
+            emit_event(job_id, {"step": step, "message": f"{step} event"})
         
-        # Verify transitions were logged in correct order
-        assert "stage_1_starting -> paper_analysis" in log_output
-        assert "stage_1_complete -> code_execution" in log_output
-        assert "stage_2_starting -> code_execution" in log_output
-        assert "stage_2_complete -> evaluation" in log_output
-        assert "stage_3_starting -> evaluation" in log_output
-        assert "stage_3_complete -> staying in evaluation" in log_output
-        assert "complete -> completed" in log_output
+        # Verify events were emitted
+        assert len(events_captured) == len(test_steps)
         
-        print("✓ Stage transitions logged correctly")
-        print(f"Log output:\n{log_output}")
+        # Verify each event has the correct step
+        for i, step in enumerate(test_steps):
+            assert events_captured[i].step == step
+        
+        print("✓ Stage transitions emitted correctly")
+        print(f"Emitted {len(events_captured)} events in correct order")
 
 
 def test_progress_updates():

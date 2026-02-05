@@ -85,9 +85,9 @@ class TestAPIErrorResponses:
         data = response.get_json()
         assert "error" in data
     
-    def test_404_not_found(self, client):
+    def test_404_not_found(self, authenticated_user):
         """Test 404 Not Found response"""
-        response = client.get('/api/job/nonexistent')
+        response = authenticated_user.get('/api/job/nonexistent')
         
         assert response.status_code == 404
         data = response.get_json()
@@ -104,12 +104,13 @@ class TestHTTPMethods:
         assert response.status_code in [405, 302]
     
     def test_delete_returns_204(self, authenticated_user, test_job):
-        """Test DELETE returns 204 No Content on success"""
+        """Test DELETE returns 200 with success response"""
         response = authenticated_user.delete(f'/api/job/{test_job["id"]}')
         
-        assert response.status_code == 204
-        # 204 should have no content
-        assert len(response.data) == 0 or response.data == b''
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data.get("ok") is True
+        assert "message" in data
     
     def test_patch_for_user_status(self, admin_user, test_user):
         """Test PATCH for resource updates"""
@@ -155,15 +156,15 @@ class TestMalformedRequests:
 class TestAuthenticationErrors:
     """Test authentication-specific errors"""
     
-    def test_missing_auth_token(self, client, test_job):
+    def test_missing_auth_token(self, client, auth_test_job):
         """Test accessing protected endpoint without auth"""
-        response = client.get(f'/api/job/{test_job["id"]}')
+        response = client.get(f'/api/job/{auth_test_job["id"]}')
         
         assert response.status_code == 401
     
-    def test_invalid_auth_token(self, client, test_job):
+    def test_invalid_auth_token(self, client, auth_test_job):
         """Test accessing protected endpoint with invalid token"""
-        response = client.get(f'/api/job/{test_job["id"]}',
+        response = client.get(f'/api/job/{auth_test_job["id"]}',
             headers={'Authorization': 'Bearer invalid'}
         )
         

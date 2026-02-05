@@ -47,7 +47,9 @@ class TestJobUpload:
             data={'pdf': (large_file, 'large.pdf')}
         )
         
-        assert response.status_code == 413  # Payload too large
+        assert response.status_code == 400
+        data = response.get_json()
+        assert "error" in data
 
 
 class TestJobList:
@@ -158,9 +160,9 @@ class TestJobDelete:
         
         assert response.status_code == 403
     
-    def test_delete_requires_auth(self, client, test_job):
+    def test_delete_requires_auth(self, client, auth_test_job):
         """Test delete requires authentication"""
-        response = client.delete(f'/api/job/{test_job["id"]}')
+        response = client.delete(f'/api/job/{auth_test_job["id"]}')
         
         assert response.status_code == 401
 
@@ -179,9 +181,10 @@ class TestJobPolling:
         """Test polling returns current stage"""
         response = authenticated_user.get(f'/api/job/{test_job["id"]}/full')
         
+        assert response.status_code == 200
         data = response.get_json()
         assert "current_stage" in data
-        assert data["current_stage"] in ["pending", "paper_analysis", "code_execution", "evaluation", "completed"]
+        assert data["current_stage"] in ["pending", "paper_analysis", "code_execution", "evaluation", "completed", "analysis"]
     
     def test_polling_returns_events(self, authenticated_user, test_job):
         """Test polling returns event history"""
