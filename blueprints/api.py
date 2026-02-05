@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime
 from flask import Blueprint, request, jsonify, session
 from flask_apispec import doc, marshal_with, use_kwargs
+from marshmallow import ValidationError
 from utils.decorators import require_auth, require_admin
 from services.cache_service import get_cache_stats, clear_cache
 from models.database import User, db, Job, ChatSession, ChatMessage
@@ -34,65 +35,58 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 # OpenAPI Tags: "Authentication"
 
 @api_bp.route("/auth/login", methods=["POST"])
+@use_kwargs(LoginSchema, location="json")
+@marshal_with(SessionSchema, code=200)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=401)
+@marshal_with(ErrorSchema, code=403)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     tags=["Authentication"],
     description="Authenticate a user with username and password",
     responses={
         200: {"description": "Login successful", "schema": SessionSchema()},
-        400: {"description": "Bad request - missing or invalid credentials", "schema": ErrorSchema()},
+        400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
         401: {"description": "Unauthorized - invalid username or password", "schema": ErrorSchema()},
         403: {"description": "Forbidden - account not activated", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(SessionSchema, code=200)
-def api_login():
+def api_login(username, password):
     """
     REST API endpoint for user login.
     
-    Request body (JSON):
-    {
-        "username": "user",
-        "password": "password"
-    }
+    Input is validated by LoginSchema (@use_kwargs):
+    - username: 3-50 chars, required
+    - password: 8-100 chars, required
     
     Returns:
     - 200: {"message": "Login successful", "redirect": "/"}
     - 401: {"error": "Invalid username or password"}
     - 403: {"error": "Account not activated yet"}
-    - 400: {"error": "Username and password required"}
+    - 400: {"error": "..."}
+    - 500: {"error": "..."}
     """
     from services.auth_service import get_user_by_username, verify_password
     
     try:
-        try:
-            data = request.json or {}
-        except Exception as e:
-            return jsonify({"error": "Invalid JSON in request body"}), 400
-        
-        username = data.get("username", "").strip()
-        password = data.get("password", "")
-        
-        if not username or not password:
-            return jsonify({"error": "Username and password required"}), 400
-        
         user = get_user_by_username(username)
         
         if not user or not verify_password(password, user.password_hash):
-            return jsonify({"error": "Invalid username or password"}), 401
+            return {"error": "Invalid username or password"}, 401
         
         # Check if user is active
         if not user.is_active:
-            return jsonify({"error": "Account not activated yet"}), 403
+            return {"error": "Account not activated yet"}, 403
         
         # Set session
         session['user_id'] = user.id
         session['username'] = user.username
         
-        return jsonify({"message": "Login successful", "redirect": "/"}), 200
+        return {"message": "Login successful", "redirect": "/"}, 200
     
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return {"error": str(e)}, 500
 
 
 @api_bp.route("/auth/register", methods=["POST"])
@@ -748,16 +742,6 @@ def delete_chat_history_endpoint(job_id):
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/think", methods=["POST"])
-@doc(
-    tags=["Internal"],
-    description="Agent requests next action during code execution analysis",
-    responses={
-        200: {"description": "Action decision returned", "schema": {"type": "object"}},
-        400: {"description": "Bad request - job_id required", "schema": ErrorSchema()},
-        404: {"description": "Job not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
-)
 def agent_think():
     """
     Agent calls this to ask for next action.
@@ -773,7 +757,7 @@ def agent_think():
     repo_state = data.get("repo_state", {})
     
     if not job_id:
-        return jsonify({"error": "job_id required"}), 400
+        return ({"error": "job_id required"}), 400
     
     # SECURITY: Validate that job_id actually exists in database
     # This prevents agents from making up job IDs or accessing arbitrary jobs
@@ -781,11 +765,11 @@ def agent_think():
         from models.database import Job
         job = Job.get_by_id(job_id)
         if not job:
-            return jsonify({"error": "Invalid job_id"}), 404
+            return ({"error": "Invalid job_id"}), 404
     except Exception as e:
         from flask import current_app
         current_app.logger.error(f"[{job_id}] Job validation failed: {str(e)}")
-        return jsonify({"error": "Failed to validate job"}), 500
+        return ({"error": "Failed to validate job"}), 500
     
     try:
         # Build prompt for Claude
@@ -862,26 +846,16 @@ RESPONSE FORMAT (JSON only):
             else:
                 action = {"action": "done", "reasoning": "Could not parse response"}
         
-        return jsonify(action)
+        return (action)
     
     except Exception as e:
         from flask import current_app
         current_app.logger.exception(f"[{job_id}] Agent decision failed: {str(e)}")
-        return jsonify({"error": str(e), "action": "done"}), 500
+        return ({"error": str(e), "action": "done"}), 500
 
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/log", methods=["POST"])
-@doc(
-    tags=["Internal"],
-    description="Agent logs progress messages during analysis",
-    responses={
-        200: {"description": "Log message recorded successfully", "schema": SuccessMessageSchema()},
-        400: {"description": "Bad request - job_id required", "schema": ErrorSchema()},
-        404: {"description": "Job not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
-)
 def agent_log():
     """Agent logs progress.
     
@@ -894,36 +868,26 @@ def agent_log():
     message = data.get("message", "")
     
     if not job_id:
-        return jsonify({"error": "job_id required"}), 400
+        return ({"error": "job_id required"}), 400
     
     # SECURITY: Validate that job_id actually exists
     try:
         job = JobRepository.get(job_id)
         if not job:
-            return jsonify({"error": "Invalid job_id"}), 404
+            return ({"error": "Invalid job_id"}), 404
     except Exception as e:
-        return jsonify({"error": "Failed to validate job"}), 500
+        return ({"error": "Failed to validate job"}), 500
     
     emit_event(job_id, {
         "step": "agent_progress",
         "message": message
     })
     
-    return jsonify({"ok": True})
+    return ({"ok": True})
 
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/execution", methods=["POST"])
-@doc(
-    tags=["Internal"],
-    description="Agent stores execution results and discovered information",
-    responses={
-        200: {"description": "Execution details stored successfully", "schema": SuccessMessageSchema()},
-        400: {"description": "Bad request - job_id required", "schema": ErrorSchema()},
-        404: {"description": "Job not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
-)
 def agent_execution():
     """
     Agent stores execution details.
@@ -936,15 +900,15 @@ def agent_execution():
     job_id = data.get("job_id")
     
     if not job_id:
-        return jsonify({"error": "job_id required"}), 400
+        return ({"error": "job_id required"}), 400
     
     # SECURITY: Validate that job_id actually exists
     try:
         job = JobRepository.get(job_id)
         if not job:
-            return jsonify({"error": "Invalid job_id"}), 404
+            return ({"error": "Invalid job_id"}), 404
     except Exception as e:
-        return jsonify({"error": "Failed to validate job"}), 500
+        return ({"error": "Failed to validate job"}), 500
     
     try:
         ExecutionDetails.create(
@@ -959,24 +923,14 @@ def agent_execution():
             randomness_info=data.get("randomness_info", "")
         )
         
-        return jsonify({"ok": True})
+        return ({"ok": True})
     
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return ({"error": str(e)}), 500
 
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/complete", methods=["POST"])
-@doc(
-    tags=["Internal"],
-    description="Agent reports completion of analysis",
-    responses={
-        200: {"description": "Completion recorded successfully", "schema": SuccessMessageSchema()},
-        400: {"description": "Bad request - job_id required", "schema": ErrorSchema()},
-        404: {"description": "Job not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
-)
 def agent_complete():
     """
     Agent reports completion.
@@ -994,15 +948,15 @@ def agent_complete():
     message = data.get("message", "Analysis complete")
     
     if not job_id:
-        return jsonify({"error": "job_id required"}), 400
+        return ({"error": "job_id required"}), 400
     
     # SECURITY: Validate that job_id actually exists
     try:
         job = JobRepository.get(job_id)
         if not job:
-            return jsonify({"error": "Invalid job_id"}), 404
+            return ({"error": "Invalid job_id"}), 404
     except Exception as e:
-        return jsonify({"error": "Failed to validate job"}), 500
+        return ({"error": "Failed to validate job"}), 500
     
     try:
         # Just emit event - don't update job status (pipeline orchestrator handles that)
@@ -1013,10 +967,10 @@ def agent_complete():
             "agent_status": status_label
         })
         
-        return jsonify({"ok": True})
+        return ({"ok": True})
     
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return ({"error": str(e)}), 500
 
 
 # ============================================================================
