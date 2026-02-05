@@ -8,28 +8,38 @@ let currentJob = null;
 let pollInterval = null;
 let lastStage = null;
 
-// DOM Elements
+// DOM Elements - Sections
+const statusSection = document.getElementById("statusSection");
+const progressSection = document.getElementById("progressSection");
+const metadataSection = document.getElementById("metadataSection");
+const citationsSection = document.getElementById("citationsSection");
+const artifactsSection = document.getElementById("artifactsSection");
+const aspectsSection = document.getElementById("aspectsSection");
+const logSection = document.getElementById("logSection");
+const chatSection = document.getElementById("chatSection");
+
+// DOM Elements - Content Areas
 const statusContent = document.getElementById("statusContent");
 const progressFill = document.getElementById("progressFill");
 const progressText = document.getElementById("progressText");
 const eventLog = document.getElementById("eventLog");
-const logSection = document.getElementById("logSection");
-const progressSection = document.getElementById("progressSection");
 const metadataContent = document.getElementById("metadataContent");
 const citationsContent = document.getElementById("citationsContent");
 const citationCount = document.getElementById("citationCount");
 const artifactsContent = document.getElementById("artifactsContent");
 const aspectsContent = document.getElementById("aspectsContent");
-const chatSection = document.getElementById("chatSection");
 
+// DOM Elements - Controls
 const deleteBtn = document.getElementById("deleteBtn");
 const deleteModal = document.getElementById("deleteModal");
 const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
 const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
 
+// DOM Elements - Header
 const docTitle = document.getElementById("docTitle");
 const docMeta = document.getElementById("docMeta");
 
+// DOM Elements - Chat
 const chatHistory = document.getElementById("chatHistory");
 const chatInput = document.getElementById("chatInput");
 const chatSendBtn = document.getElementById("chatSendBtn");
@@ -89,6 +99,9 @@ async function pollOnce() {
         
         console.log(`[polling] Received: status=${job.status}, progress=${job.progress}, stage=${job.current_stage}, events=${job.events.length}`);
         
+        // Show/hide sections based on job status and data
+        showRelevantSections(job);
+        
         // Update all UI components - each in its own try-catch so failures don't stop others
         try { updateProgressBar(job); } catch (e) { console.error(`[update] progressBar failed:`, e); }
         try { updateStages(job); } catch (e) { console.error(`[update] stages failed:`, e); }
@@ -112,6 +125,62 @@ async function pollOnce() {
 // ============================================================================
 // UI Update Functions
 // ============================================================================
+
+function showRelevantSections(job) {
+    console.log(`[sections] Showing relevant sections for status=${job.status}`);
+    
+    // Always show status section
+    if (statusSection) {
+        statusSection.style.display = "block";
+        console.log(`[sections] statusSection: shown`);
+    }
+    
+    // Show progress section only if processing
+    if (progressSection) {
+        const show = job.status === "processing" || job.status === "pending";
+        progressSection.style.display = show ? "block" : "none";
+        console.log(`[sections] progressSection: ${show ? "shown" : "hidden"} (status=${job.status})`);
+    }
+    
+    // Show analysis sections if we have data
+    if (metadataSection) {
+        const show = !!job.paper_analysis;
+        metadataSection.style.display = show ? "block" : "none";
+        console.log(`[sections] metadataSection: ${show ? "shown" : "hidden"} (has data=${show})`);
+    }
+    
+    if (citationsSection) {
+        const show = job.paper_analysis && Array.isArray(job.paper_analysis.citations) && job.paper_analysis.citations.length > 0;
+        citationsSection.style.display = show ? "block" : "none";
+        console.log(`[sections] citationsSection: ${show ? "shown" : "hidden"} (count=${job.paper_analysis?.citations?.length || 0})`);
+    }
+    
+    if (artifactsSection) {
+        const show = Array.isArray(job.artifacts) && job.artifacts.length > 0;
+        artifactsSection.style.display = show ? "block" : "none";
+        console.log(`[sections] artifactsSection: ${show ? "shown" : "hidden"} (count=${job.artifacts?.length || 0})`);
+    }
+    
+    if (aspectsSection) {
+        const show = job.report && Array.isArray(job.report.aspect_evaluations) && job.report.aspect_evaluations.length > 0;
+        aspectsSection.style.display = show ? "block" : "none";
+        console.log(`[sections] aspectsSection: ${show ? "shown" : "hidden"} (count=${job.report?.aspect_evaluations?.length || 0})`);
+    }
+    
+    // Show log if we have events
+    if (logSection) {
+        const show = Array.isArray(job.events) && job.events.length > 0;
+        logSection.style.display = show ? "block" : "none";
+        console.log(`[sections] logSection: ${show ? "shown" : "hidden"} (count=${job.events?.length || 0})`);
+    }
+    
+    // Show chat for completed jobs
+    if (chatSection) {
+        const show = job.status === "completed";
+        chatSection.style.display = show ? "block" : "none";
+        console.log(`[sections] chatSection: ${show ? "shown" : "hidden"} (status=${job.status})`);
+    }
+}
 
 function updateProgressBar(job) {
     console.log(`[update] progressBar: progressFill=${!!progressFill}, progressText=${!!progressText}`);
