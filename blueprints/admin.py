@@ -118,3 +118,105 @@ def delete_user(user_id):
         from flask import current_app
         current_app.logger.error(f"Error deleting user: {e}")
         return jsonify({"error": "Failed to delete user"}), 500
+
+
+@admin_bp.route("/api/admin/users/<int:user_id>/activate", methods=["POST"])
+@require_admin
+def activate_user(user_id):
+    """Activate a user - admin only."""
+    try:
+        from flask import current_app
+        
+        # Verify user exists
+        user = UserRepository.get_by_id(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        # Update user status
+        User.update(is_active=True).where(User.id == user_id).execute()
+        
+        return jsonify({
+            "ok": True,
+            "message": f"User {user.username} activated successfully"
+        }), 200
+    except Exception as e:
+        from flask import current_app
+        current_app.logger.error(f"Error activating user: {e}")
+        return jsonify({"error": "Failed to activate user"}), 500
+
+
+@admin_bp.route("/api/admin/users/<int:user_id>/deactivate", methods=["POST"])
+@require_admin
+def deactivate_user(user_id):
+    """Deactivate a user - admin only."""
+    try:
+        from flask import current_app
+        
+        # Verify user exists
+        user = UserRepository.get_by_id(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        # Prevent deactivating admin
+        if user.username == 'admin':
+            return jsonify({"error": "Cannot deactivate admin user"}), 400
+        
+        # Update user status
+        User.update(is_active=False).where(User.id == user_id).execute()
+        
+        return jsonify({
+            "ok": True,
+            "message": f"User {user.username} deactivated successfully"
+        }), 200
+    except Exception as e:
+        from flask import current_app
+        current_app.logger.error(f"Error deactivating user: {e}")
+        return jsonify({"error": "Failed to deactivate user"}), 500
+
+
+@admin_bp.route("/api/admin/users/<int:user_id>/delete", methods=["POST"])
+@require_admin
+def delete_user_post(user_id):
+    """Delete a user - admin only (POST version for compatibility)."""
+    try:
+        from pathlib import Path
+        from models.database import Event, Artifact, AspectEvaluation, ExecutionDetails, PaperAnalysis
+        from flask import current_app
+        
+        # Verify user exists
+        user = UserRepository.get_by_id(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        # Prevent deleting admin
+        if user.username == 'admin':
+            return jsonify({"error": "Cannot delete admin user"}), 400
+        
+        # Delete user's jobs and related data
+        user_jobs = list(Job.select().where(Job.user == user_id))
+        
+        for job in user_jobs:
+            # Delete PDF file
+            if job.pdf_path:
+                pdf_file = Path(job.pdf_path)
+                if pdf_file.exists():
+                    pdf_file.unlink()
+            
+            # Delete job data (cascade deletes should handle this, but be explicit)
+            Event.delete().where(Event.job == job.id).execute()
+            Artifact.delete().where(Artifact.job == job.id).execute()
+            AspectEvaluation.delete().where(AspectEvaluation.job == job.id).execute()
+            ExecutionDetails.delete().where(ExecutionDetails.job == job.id).execute()
+            PaperAnalysis.delete().where(PaperAnalysis.job == job.id).execute()
+        
+        # Delete user's jobs
+        Job.delete().where(Job.user == user_id).execute()
+        
+        # Delete user
+        User.delete_by_id(user_id)
+        
+        return jsonify({"ok": True, "message": f"User {user.username} deleted successfully"}), 200
+    except Exception as e:
+        from flask import current_app
+        current_app.logger.error(f"Error deleting user: {e}")
+        return jsonify({"error": "Failed to delete user"}), 500

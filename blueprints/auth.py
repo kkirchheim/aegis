@@ -73,3 +73,76 @@ def change_password_page():
     if 'user_id' not in session:
         return redirect("/login")
     return render_template("change-password.html")
+
+
+@auth_bp.route("/login", methods=["POST"])
+def login_form():
+    """User login - form-based endpoint."""
+    try:
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        
+        if not username or not password:
+            return jsonify({"error": "Username and password required"}), 400
+        
+        user = get_user_by_username(username)
+        
+        if not user or not verify_password(password, user.password_hash):
+            return jsonify({"error": "Invalid username or password"}), 401
+        
+        # Check if user is active
+        if not user.is_active:
+            return jsonify({"error": "Account not activated yet"}), 403
+        
+        # Set session
+        session['user_id'] = user.id
+        session['username'] = user.username
+        
+        return jsonify({"message": "Login successful", "redirect": "/"}), 200
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@auth_bp.route("/register", methods=["POST"])
+def register_form():
+    """User registration - form-based endpoint."""
+    try:
+        username = request.form.get("username", "").strip()
+        email = request.form.get("email", "").strip()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        
+        # Validate inputs
+        valid, error = validate_username(username)
+        if not valid:
+            return jsonify({"error": error}), 400
+        
+        valid, error = validate_email(email)
+        if not valid:
+            return jsonify({"error": error}), 400
+        
+        valid, error = validate_password(password)
+        if not valid:
+            return jsonify({"error": error}), 400
+        
+        valid, error = validate_passwords_match(password, confirm_password)
+        if not valid:
+            return jsonify({"error": error}), 400
+        
+        # Check if user exists
+        if user_exists(username, email):
+            return jsonify({"error": "Username or email already exists"}), 400
+        
+        # Create user
+        user_id = create_user(username, email, password)
+        if not user_id:
+            return jsonify({"error": "Failed to create account"}), 500
+        
+        return jsonify({
+            "message": "Account created. Awaiting activation by admin.",
+            "redirect": "/login"
+        }), 201
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

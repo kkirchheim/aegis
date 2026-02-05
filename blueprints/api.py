@@ -10,7 +10,7 @@ from flask import Blueprint, request, jsonify, session
 from utils.decorators import require_auth, require_admin
 from services.cache_service import get_cache_stats, clear_cache
 from models.database import User, db, Job, ChatSession, ChatMessage
-from repositories import JobRepository, ChatRepository
+from repositories import JobRepository, ChatRepository, EventRepository
 from config import Config
 from services.job_service import (
     create_job, get_job, get_user_jobs, update_job_status, delete_job,
@@ -1035,4 +1035,90 @@ def get_job_full(job_id):
     return jsonify(response)
 
 
-# Polling endpoint removed - now use /api/job/<id>/full for all data
+@api_bp.route("/job/<job_id>/events", methods=["GET"])
+@require_auth
+def get_job_events_polling(job_id):
+    """Get events for a job with optional timestamp filtering.
+    
+    Query parameters:
+    - since: ISO format timestamp to get events after this time (optional)
+    
+    Returns JSON with:
+    - events: List of events (max 500)
+    - completed: Boolean indicating if job is completed
+    - job_status: Current job status string
+    """
+    from datetime import datetime
+    
+    user_id = session.get('user_id')
+    
+    job = get_job(job_id)
+    
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+    
+    if job.user_id != user_id:
+        return jsonify({"error": "Access denied"}), 403
+    
+    # Get all events for the job
+    from repositories import EventRepository
+    all_events = EventRepository.list_by_job(job_id)
+    
+    # Handle 'since' parameter for filtering
+    since_param = request.args.get('since')
+    filtered_events = []
+    
+    if since_param:
+        try:
+            from datetime import timezone
+            # Parse ISO format timestamp (e.g., "2024-01-01T12:00:00Z")
+            if since_param.endswith('Z'):
+                since_param = since_param[:-1] + '+00:00'
+            since_time = datetime.fromisoformat(since_param)
+            
+            # Ensure since_time is timezone-aware (UTC)
+            if since_time.tzinfo is None:
+                since_time = since_time.replace(tzinfo=timezone.utc)
+            
+            # Filter events by timestamp
+            for event in all_events:
+                event_time = event.timestamp
+                
+                # Ensure event_time is timezone-aware (UTC) for comparison
+                if event_time.tzinfo is None:
+                    event_time = event_time.replace(tzinfo=timezone.utc)
+                
+                if event_time > since_time:
+                    filtered_events.append(event)
+        except (ValueError, TypeError) as e:
+            return jsonify({"error": f"Invalid timestamp format: {str(e)}"}), 400
+    else:
+        filtered_events = all_events
+    
+    # Enforce 500 event limit for safety
+    filtered_events = filtered_events[:500]
+    
+    # Convert events to dictionary format
+    events_data = []
+    for event in filtered_events:
+        event_dict = {
+            "id": str(event.id),
+            "job_id": str(event.job_id),
+            "step": event.step,
+            "message": event.message,
+            "severity": event.severity,
+            "timestamp": event.timestamp.isoformat() + 'Z' if hasattr(event.timestamp, 'isoformat') else str(event.timestamp),
+            "stage_duration_ms": event.stage_duration_ms
+        }
+        events_data.append(event_dict)
+    
+    # Determine if job is completed
+    completed = job.status in ["completed", "failed", "cancelled"]
+    
+    response = {
+        "events": events_data,
+        "completed": completed,
+        "job_status": job.status
+    }
+    
+    return jsonify(response)

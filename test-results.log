@@ -1,0 +1,519 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.19, pytest-7.4.3, pluggy-1.6.0 -- /usr/local/bin/python3
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pytest.ini
+plugins: cov-4.1.0, anyio-4.12.1
+collecting ... collected 363 items
+
+tests/test_api.py::TestEventLoggingEndpoint::test_emit_event_via_dispatcher FAILED [  0%]
+tests/test_api.py::TestEventLoggingEndpoint::test_log_event_with_stage_duration FAILED [  0%]
+tests/test_api.py::TestEventLoggingEndpoint::test_log_chat_event_not_persisted FAILED [  0%]
+tests/test_api.py::TestEventLoggingEndpoint::test_log_non_chat_event_persisted PASSED [  1%]
+tests/test_api.py::TestEventLoggingEndpoint::test_log_event_invalid_severity PASSED [  1%]
+tests/test_api.py::TestErrorHandling::test_missing_job_id_error PASSED   [  1%]
+tests/test_api.py::TestErrorHandling::test_invalid_job_id_error PASSED   [  1%]
+tests/test_api.py::TestErrorHandling::test_database_error_logged PASSED  [  2%]
+tests/test_api.py::TestErrorHandling::test_invalid_event_data PASSED     [  2%]
+tests/test_api.py::TestValidation::test_job_id_required PASSED           [  2%]
+tests/test_api.py::TestValidation::test_step_required PASSED             [  3%]
+tests/test_api.py::TestValidation::test_event_timestamp_auto_set PASSED  [  3%]
+tests/test_api.py::TestValidation::test_event_default_severity PASSED    [  3%]
+tests/test_api.py::TestEventSerialization::test_event_to_dict_includes_all_fields PASSED [  3%]
+tests/test_api.py::TestEventSerialization::test_event_dict_json_serializable PASSED [  4%]
+tests/test_api.py::TestStageTransitionEvents::test_stage_transition_event_logged PASSED [  4%]
+tests/test_api.py::TestStageTransitionEvents::test_all_stage_transitions_recognized PASSED [  4%]
+tests/test_api.py::TestConcurrentEventEmission::test_multiple_events_to_same_job FAILED [  4%]
+tests/test_api.py::TestConcurrentEventEmission::test_events_to_different_jobs FAILED [  5%]
+tests/test_api.py::TestConcurrentEventEmission::test_event_to_nonexistent_queue PASSED [  5%]
+tests/test_api.py::TestEventFactory::test_create_test_dispatcher PASSED  [  5%]
+tests/test_api.py::TestEventFactory::test_create_dispatcher_with_queues PASSED [  6%]
+tests/test_api.py::TestEventFactory::test_test_dispatcher_with_mock_logger PASSED [  6%]
+tests/test_app.py::TestHomeAndBasics::test_home_page_redirects_when_unauthenticated PASSED [  6%]
+tests/test_app.py::TestHomeAndBasics::test_home_page_loads_when_authenticated PASSED [  6%]
+tests/test_app.py::TestHomeAndBasics::test_jobs_list_empty_when_authenticated FAILED [  7%]
+tests/test_app.py::TestDatabase::test_database_schema PASSED             [  7%]
+tests/test_app.py::TestDatabase::test_jobs_table_columns PASSED          [  7%]
+tests/test_app.py::TestDatabase::test_execution_details_has_discovered_files PASSED [  7%]
+tests/test_app.py::TestEventEmission::test_emit_event_stores_in_database FAILED [  8%]
+tests/test_app.py::TestStageEvents::test_stage_1_events FAILED           [  8%]
+tests/test_app.py::TestStageEvents::test_all_three_stages_events FAILED  [  8%]
+tests/test_app.py::TestJobRoutes::test_get_nonexistent_job_requires_auth PASSED [  9%]
+tests/test_app.py::TestJobRoutes::test_create_job_in_database FAILED     [  9%]
+tests/test_app.py::TestErrorHandling::test_agent_think_missing_job_id PASSED [  9%]
+tests/test_app.py::TestErrorHandling::test_agent_log_missing_job_id PASSED [  9%]
+tests/test_app.py::TestErrorHandling::test_agent_execution_missing_job_id PASSED [ 10%]
+tests/test_app.py::TestDataIntegrity::test_store_execution_details FAILED [ 10%]
+tests/test_app.py::TestDataIntegrity::test_store_aspect_evaluations FAILED [ 10%]
+tests/test_app.py::TestPaperAnalysisStorage::test_store_paper_analysis FAILED [ 11%]
+tests/test_app.py::TestArtifactStorage::test_store_artifacts FAILED      [ 11%]
+tests/test_auth.py::TestPasswordHashing::test_hash_password_creates_different_hashes PASSED [ 11%]
+tests/test_auth.py::TestPasswordHashing::test_hash_password_format PASSED [ 11%]
+tests/test_auth.py::TestPasswordHashing::test_verify_password_correct PASSED [ 12%]
+tests/test_auth.py::TestPasswordHashing::test_verify_password_incorrect PASSED [ 12%]
+tests/test_auth.py::TestPasswordHashing::test_verify_password_invalid_hash PASSED [ 12%]
+tests/test_auth.py::TestPasswordReset::test_password_reset_creates_new_hash PASSED [ 12%]
+tests/test_auth.py::TestPasswordPBKDF2::test_pbkdf2_parameters PASSED    [ 13%]
+tests/test_auth.py::TestPasswordPBKDF2::test_salt_encoding PASSED        [ 13%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_index PASSED [ 13%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_upload PASSED [ 14%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_jobs FAILED [ 14%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_profile PASSED [ 14%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_change_password_page PASSED [ 14%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_change_password_api PASSED [ 15%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_history PASSED [ 15%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_job_detail FAILED [ 15%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_job_full PASSED [ 15%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_chat PASSED [ 16%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_chat_history PASSED [ 16%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_delete_job FAILED [ 16%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_logout PASSED [ 17%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_admin_panel PASSED [ 17%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_admin_users_api PASSED [ 17%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_activate_user_api FAILED [ 17%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_deactivate_user_api FAILED [ 18%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_delete_user_api FAILED [ 18%]
+tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_events_sse FAILED [ 18%]
+tests/test_auth_security.py::TestAuthenticatedAccessToProtectedRoutes::test_authenticated_user_can_access_profile PASSED [ 19%]
+tests/test_auth_security.py::TestAuthenticatedAccessToProtectedRoutes::test_authenticated_user_can_access_change_password_page PASSED [ 19%]
+tests/test_auth_security.py::TestAuthenticatedAccessToProtectedRoutes::test_authenticated_user_can_access_history PASSED [ 19%]
+tests/test_auth_security.py::TestAuthenticatedAccessToProtectedRoutes::test_authenticated_user_can_access_jobs_list FAILED [ 19%]
+tests/test_auth_security.py::TestAuthenticatedAccessToProtectedRoutes::test_authenticated_user_can_logout PASSED [ 20%]
+tests/test_auth_security.py::TestCrossUserAccessControl::test_user1_cannot_access_user2_job FAILED [ 20%]
+tests/test_auth_security.py::TestCrossUserAccessControl::test_user1_cannot_access_user2_job_full PASSED [ 20%]
+tests/test_auth_security.py::TestCrossUserAccessControl::test_user1_cannot_delete_user2_job FAILED [ 20%]
+tests/test_auth_security.py::TestCrossUserAccessControl::test_user1_cannot_chat_on_user2_job PASSED [ 21%]
+tests/test_auth_security.py::TestCrossUserAccessControl::test_user1_cannot_get_user2_chat_history PASSED [ 21%]
+tests/test_auth_security.py::TestCrossUserAccessControl::test_user1_cannot_delete_user2_chat_history PASSED [ 21%]
+tests/test_auth_security.py::TestCrossUserAccessControl::test_user1_cannot_access_events_for_user2_job FAILED [ 22%]
+tests/test_auth_security.py::TestAdminAuthorization::test_non_admin_cannot_access_admin_panel PASSED [ 22%]
+tests/test_auth_security.py::TestAdminAuthorization::test_non_admin_cannot_get_users_list PASSED [ 22%]
+tests/test_auth_security.py::TestAdminAuthorization::test_non_admin_cannot_activate_user FAILED [ 22%]
+tests/test_auth_security.py::TestAdminAuthorization::test_non_admin_cannot_deactivate_user FAILED [ 23%]
+tests/test_auth_security.py::TestAdminAuthorization::test_non_admin_cannot_delete_user FAILED [ 23%]
+tests/test_auth_security.py::TestAdminAuthorization::test_admin_can_access_admin_panel PASSED [ 23%]
+tests/test_auth_security.py::TestAdminAuthorization::test_admin_can_get_users_list PASSED [ 23%]
+tests/test_auth_security.py::TestAdminAuthorization::test_admin_can_activate_user FAILED [ 24%]
+tests/test_auth_security.py::TestAdminAuthorization::test_admin_can_deactivate_user FAILED [ 24%]
+tests/test_auth_security.py::TestAdminAuthorization::test_admin_cannot_delete_self FAILED [ 24%]
+tests/test_auth_security.py::TestAdminAuthorization::test_admin_can_delete_regular_user FAILED [ 25%]
+tests/test_auth_security.py::TestPublicRoutes::test_register_page_public PASSED [ 25%]
+tests/test_auth_security.py::TestPublicRoutes::test_login_page_public PASSED [ 25%]
+tests/test_auth_security.py::TestPublicRoutes::test_about_page_public PASSED [ 25%]
+tests/test_auth_security.py::TestPublicRoutes::test_register_user_public FAILED [ 26%]
+tests/test_auth_security.py::TestPublicRoutes::test_login_user_public FAILED [ 26%]
+tests/test_auth_security.py::TestCriticalSecurityGaps::test_cache_stats_should_be_admin_only PASSED [ 26%]
+tests/test_auth_security.py::TestCriticalSecurityGaps::test_cache_clear_should_be_admin_only PASSED [ 26%]
+tests/test_auth_security.py::TestCriticalSecurityGaps::test_detail_page_should_check_ownership PASSED [ 27%]
+tests/test_event_dispatcher.py::TestJobEvent::test_event_creation PASSED [ 27%]
+tests/test_event_dispatcher.py::TestJobEvent::test_event_to_dict PASSED  [ 27%]
+tests/test_event_dispatcher.py::TestJobEvent::test_event_with_stage_duration PASSED [ 28%]
+tests/test_event_dispatcher.py::TestJobEvent::test_chat_event_detection PASSED [ 28%]
+tests/test_event_dispatcher.py::TestJobEvent::test_stage_transition_detection PASSED [ 28%]
+tests/test_event_dispatcher.py::TestStageTransitions::test_all_transitions_defined PASSED [ 28%]
+tests/test_event_dispatcher.py::TestStageTransitions::test_transition_properties FAILED [ 29%]
+tests/test_event_dispatcher.py::TestStageTransitions::test_stage_3_complete_stays_in_evaluation FAILED [ 29%]
+tests/test_event_dispatcher.py::TestStageTransitions::test_complete_transitions_to_completed PASSED [ 29%]
+tests/test_event_dispatcher.py::TestEventDispatcher::test_dispatcher_creation PASSED [ 30%]
+tests/test_event_dispatcher.py::TestEventDispatcher::test_emit_non_chat_event_to_queue FAILED [ 30%]
+tests/test_event_dispatcher.py::TestEventDispatcher::test_emit_chat_event_to_queue FAILED [ 30%]
+tests/test_event_dispatcher.py::TestEventDispatcher::test_emit_to_nonexistent_queue PASSED [ 30%]
+tests/test_event_dispatcher.py::TestEventDispatcher::test_emit_event_with_stage_duration FAILED [ 31%]
+tests/test_event_dispatcher.py::TestEventDispatcher::test_persist_non_chat_event PASSED [ 31%]
+tests/test_event_dispatcher.py::TestEventDispatcher::test_no_persist_chat_event PASSED [ 31%]
+tests/test_event_dispatcher.py::TestEventDispatcher::test_stage_transition_logging PASSED [ 31%]
+tests/test_event_dispatcher.py::TestEventDispatcher::test_all_stage_transitions PASSED [ 32%]
+tests/test_event_dispatcher.py::TestEventDispatcherFactory::test_create_default_dispatcher PASSED [ 32%]
+tests/test_event_dispatcher.py::TestEventDispatcherFactory::test_create_test_dispatcher PASSED [ 32%]
+tests/test_event_dispatcher.py::TestEventDispatcherFactory::test_test_dispatcher_silent_logging PASSED [ 33%]
+tests/test_event_dispatcher.py::TestEventDispatcherThreadSafety::test_concurrent_emits FAILED [ 33%]
+tests/test_event_dispatcher_integration.py::TestEventDispatcherIntegration::test_stage_transition_event_updates_database PASSED [ 33%]
+tests/test_event_dispatcher_integration.py::TestEventDispatcherIntegration::test_stage_transitions_through_full_pipeline PASSED [ 33%]
+tests/test_event_dispatcher_integration.py::TestEventDispatcherIntegration::test_event_persisted_to_database PASSED [ 34%]
+tests/test_event_dispatcher_integration.py::TestEventDispatcherIntegration::test_non_stage_events_dont_update_job_stage PASSED [ 34%]
+tests/test_event_dispatcher_integration.py::TestEventDispatcherIntegration::test_chat_events_not_persisted PASSED [ 34%]
+tests/test_event_dispatcher_integration.py::TestEventDispatcherIntegration::test_dispatcher_dependency_injection PASSED [ 34%]
+tests/test_event_dispatcher_integration.py::TestEventDispatcherRealVsMock::test_real_dispatcher_updates_database PASSED [ 35%]
+tests/test_event_dispatcher_integration.py::TestEventDispatcherRealVsMock::test_mock_dispatcher_doesnt_actually_update PASSED [ 35%]
+tests/test_integration.py::TestEventDispatcherIntegration::test_event_dispatcher_to_peewee_flow FAILED [ 35%]
+tests/test_integration.py::TestEventDispatcherIntegration::test_stage_duration_ms_flows_through_layers FAILED [ 36%]
+tests/test_integration.py::TestEventDispatcherIntegration::test_multiple_events_sequence FAILED [ 36%]
+tests/test_integration.py::TestEventDispatcherIntegration::test_chat_events_not_persisted_to_db FAILED [ 36%]
+tests/test_integration.py::TestPipelineOrchestratorEventEmission::test_orchestrator_emits_stage_start_event FAILED [ 36%]
+tests/test_integration.py::TestPipelineOrchestratorEventEmission::test_event_emission_triggers_job_status_update PASSED [ 37%]
+tests/test_integration.py::TestEventRepositoryIntegration::test_event_creation_via_dispatcher PASSED [ 37%]
+tests/test_integration.py::TestJobRepositoryIntegration::test_job_lookup_before_event_creation PASSED [ 37%]
+tests/test_integration.py::TestJobRepositoryIntegration::test_job_not_found_error_handling PASSED [ 38%]
+tests/test_integration.py::TestStageTransitionIntegration::test_all_stage_transitions_emit_to_queue FAILED [ 38%]
+tests/test_integration.py::TestStageTransitionIntegration::test_progress_tracking_through_transitions FAILED [ 38%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestrator::test_orchestrator_creation PASSED [ 38%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestrator::test_emit_event_creates_job_event PASSED [ 39%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestrator::test_run_analysis_success_flow PASSED [ 39%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestrator::test_run_analysis_handles_stage_1_failure PASSED [ 39%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestrator::test_run_analysis_handles_stage_3_failure PASSED [ 39%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestrator::test_run_stage_1_extracts_and_stores_artifacts PASSED [ 40%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestrator::test_run_stage_2_executes_github_artifacts PASSED [ 40%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestrator::test_run_stage_2_handles_agent_failure PASSED [ 40%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestrator::test_run_stage_3_evaluates_reproducibility PASSED [ 41%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestrator::test_run_stage_3_fails_if_evaluation_returns_false PASSED [ 41%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestrator::test_emit_event_without_dispatcher PASSED [ 41%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestrator::test_logger_called_at_key_points PASSED [ 41%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestratorFactory::test_create_production PASSED [ 42%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestratorFactory::test_create_test PASSED [ 42%]
+tests/test_pipeline_orchestrator.py::TestPipelineOrchestratorFactory::test_create_test_with_mock_logger PASSED [ 42%]
+tests/test_pipeline_orchestrator.py::TestPipelineIntegration::test_full_pipeline_happy_path PASSED [ 42%]
+tests/test_pipeline_orchestrator.py::TestPipelineIntegration::test_pipeline_error_recovery PASSED [ 43%]
+tests/test_polling_endpoint.py::TestPollingEndpoint::test_get_all_events_no_timestamp FAILED [ 43%]
+tests/test_polling_endpoint.py::TestPollingEndpoint::test_get_events_since_timestamp FAILED [ 43%]
+tests/test_polling_endpoint.py::TestPollingEndpoint::test_event_fields_format FAILED [ 44%]
+tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_captures_event_with_duration FAILED [ 44%]
+tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_job_completion_status FAILED [ 44%]
+tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_job_not_completed FAILED [ 44%]
+tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_access_control FAILED [ 45%]
+tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_invalid_timestamp_format FAILED [ 45%]
+tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_nonexistent_job PASSED [ 45%]
+tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_unauthenticated_access FAILED [ 46%]
+tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_event_ordering FAILED [ 46%]
+tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_response_limit FAILED [ 46%]
+tests/test_polling_endpoint.py::TestPollingFrontendIntegration::test_polling_response_format_for_javascript FAILED [ 46%]
+tests/test_polling_endpoint.py::TestPollingFrontendIntegration::test_polling_timestamp_parsing_in_response FAILED [ 47%]
+tests/test_progress_updates.py::TestProgressScale::test_progress_initialized_to_zero PASSED [ 47%]
+tests/test_progress_updates.py::TestProgressScale::test_progress_valid_range PASSED [ 47%]
+tests/test_progress_updates.py::TestProgressScale::test_progress_completion_is_one PASSED [ 47%]
+tests/test_progress_updates.py::TestProgressScale::test_progress_error_is_zero PASSED [ 48%]
+tests/test_progress_updates.py::TestProgressMonotonicity::test_progress_never_decreases PASSED [ 48%]
+tests/test_progress_updates.py::TestProgressEventConsistency::test_no_duplicate_stage_transitions PASSED [ 48%]
+tests/test_progress_updates.py::TestProgressEventConsistency::test_job_progress_updated_on_status_change PASSED [ 49%]
+tests/test_progress_updates.py::TestProgressUpdateContract::test_single_source_of_truth PASSED [ 49%]
+tests/test_progress_updates.py::TestPipelineProgressSequence::test_stage_1_progress PASSED [ 49%]
+tests/test_progress_updates.py::TestPipelineProgressSequence::test_stage_2_progress PASSED [ 49%]
+tests/test_progress_updates.py::TestPipelineProgressSequence::test_stage_3_progress PASSED [ 50%]
+tests/test_services.py::TestAnalysisService::test_extract_pdf_text_happy_path PASSED [ 50%]
+tests/test_services.py::TestAnalysisService::test_extract_pdf_with_hashlib PASSED [ 50%]
+tests/test_services.py::TestAnalysisService::test_paper_analysis_caching PASSED [ 50%]
+tests/test_services.py::TestAnalysisService::test_store_paper_analysis_in_db PASSED [ 51%]
+tests/test_services.py::TestAnalysisService::test_parse_paper_with_invalid_pdf PASSED [ 51%]
+tests/test_services.py::TestEvaluationService::test_evaluate_reproducibility_aspects PASSED [ 51%]
+tests/test_services.py::TestEvaluationService::test_aspect_evaluation_with_evidence PASSED [ 52%]
+tests/test_services.py::TestEvaluationService::test_evaluation_caching PASSED [ 52%]
+tests/test_services.py::TestEvaluationService::test_evaluation_missing_data PASSED [ 52%]
+tests/test_services.py::TestDockerService::test_is_docker_available PASSED [ 52%]
+tests/test_services.py::TestDockerService::test_spawn_agent_container PASSED [ 53%]
+tests/test_services.py::TestDockerService::test_spawn_container_error_handling PASSED [ 53%]
+tests/test_services.py::TestJobService::test_create_job PASSED           [ 53%]
+tests/test_services.py::TestJobService::test_get_job PASSED              [ 53%]
+tests/test_services.py::TestJobService::test_update_job_status PASSED    [ 54%]
+tests/test_services.py::TestCacheService::test_get_cached_paper_analysis PASSED [ 54%]
+tests/test_services.py::TestCacheService::test_store_paper_analysis_cache PASSED [ 54%]
+tests/test_services.py::TestCacheService::test_get_cached_evaluation PASSED [ 55%]
+tests/test_services.py::TestCacheService::test_cache_stats PASSED        [ 55%]
+tests/test_services.py::TestAuthService::test_hash_password PASSED       [ 55%]
+tests/test_services.py::TestAuthService::test_verify_password PASSED     [ 55%]
+tests/test_services.py::TestAuthService::test_get_user_by_username PASSED [ 56%]
+tests/test_services.py::TestAuthService::test_create_user PASSED         [ 56%]
+tests/test_services.py::TestServiceIntegration::test_analysis_to_cache_to_storage PASSED [ 56%]
+tests/test_services.py::TestErrorHandlingAcrossServices::test_pdf_extraction_error_propagates PASSED [ 57%]
+tests/test_services.py::TestErrorHandlingAcrossServices::test_evaluation_handles_missing_analysis PASSED [ 57%]
+tests/test_stage_transitions.py::test_emit_event_stage_transitions FAILED [ 57%]
+tests/test_stage_transitions.py::test_progress_updates PASSED            [ 57%]
+tests/test_stage_transitions.py::test_error_handling PASSED              [ 58%]
+tests/test_stage_transitions.py::test_evaluation_stage_persistence PASSED [ 58%]
+tests/test_stage_transitions.py::test_stage_sequence_order PASSED        [ 58%]
+tests/integration/test_admin_flow.py::TestAdminUserList::test_admin_list_users PASSED [ 58%]
+tests/integration/test_admin_flow.py::TestAdminUserList::test_list_users_non_admin PASSED [ 59%]
+tests/integration/test_admin_flow.py::TestAdminUserList::test_list_users_unauthenticated PASSED [ 59%]
+tests/integration/test_admin_flow.py::TestAdminUserStatus::test_activate_user PASSED [ 59%]
+tests/integration/test_admin_flow.py::TestAdminUserStatus::test_deactivate_user PASSED [ 60%]
+tests/integration/test_admin_flow.py::TestAdminUserStatus::test_update_missing_is_active_field PASSED [ 60%]
+tests/integration/test_admin_flow.py::TestAdminUserStatus::test_update_nonexistent_user PASSED [ 60%]
+tests/integration/test_admin_flow.py::TestAdminUserStatus::test_update_user_non_admin PASSED [ 60%]
+tests/integration/test_admin_flow.py::TestAdminUserDelete::test_delete_user_success PASSED [ 61%]
+tests/integration/test_admin_flow.py::TestAdminUserDelete::test_delete_nonexistent_user PASSED [ 61%]
+tests/integration/test_admin_flow.py::TestAdminUserDelete::test_delete_own_account PASSED [ 61%]
+tests/integration/test_admin_flow.py::TestAdminUserDelete::test_delete_user_non_admin PASSED [ 61%]
+tests/integration/test_admin_flow.py::TestAdminUserDelete::test_delete_requires_auth PASSED [ 62%]
+tests/integration/test_admin_flow.py::TestAdminPanelPage::test_admin_panel_page_admin PASSED [ 62%]
+tests/integration/test_admin_flow.py::TestAdminPanelPage::test_admin_panel_page_non_admin PASSED [ 62%]
+tests/integration/test_admin_flow.py::TestAdminPanelPage::test_admin_panel_page_unauthenticated PASSED [ 63%]
+tests/integration/test_auth_flow.py::TestAuthRegistration::test_register_valid_user PASSED [ 63%]
+tests/integration/test_auth_flow.py::TestAuthRegistration::test_register_duplicate_username PASSED [ 63%]
+tests/integration/test_auth_flow.py::TestAuthRegistration::test_register_password_mismatch PASSED [ 63%]
+tests/integration/test_auth_flow.py::TestAuthRegistration::test_register_missing_fields PASSED [ 64%]
+tests/integration/test_auth_flow.py::TestAuthLogin::test_login_valid_credentials PASSED [ 64%]
+tests/integration/test_auth_flow.py::TestAuthLogin::test_login_invalid_password PASSED [ 64%]
+tests/integration/test_auth_flow.py::TestAuthLogin::test_login_nonexistent_user PASSED [ 65%]
+tests/integration/test_auth_flow.py::TestAuthPages::test_login_page PASSED [ 65%]
+tests/integration/test_auth_flow.py::TestAuthPages::test_register_page PASSED [ 65%]
+tests/integration/test_auth_flow.py::TestAuthPages::test_profile_page_requires_auth PASSED [ 65%]
+tests/integration/test_auth_flow.py::TestChangePassword::test_change_password_valid PASSED [ 66%]
+tests/integration/test_auth_flow.py::TestChangePassword::test_change_password_wrong_current PASSED [ 66%]
+tests/integration/test_auth_flow.py::TestChangePassword::test_change_password_mismatch PASSED [ 66%]
+tests/integration/test_chat_flow.py::TestChatSendMessage::test_send_message_success PASSED [ 66%]
+tests/integration/test_chat_flow.py::TestChatSendMessage::test_send_message_empty PASSED [ 67%]
+tests/integration/test_chat_flow.py::TestChatSendMessage::test_send_message_nonexistent_job PASSED [ 67%]
+tests/integration/test_chat_flow.py::TestChatSendMessage::test_chat_requires_auth PASSED [ 67%]
+tests/integration/test_chat_flow.py::TestChatHistory::test_get_chat_history_empty PASSED [ 68%]
+tests/integration/test_chat_flow.py::TestChatHistory::test_get_chat_history_with_messages PASSED [ 68%]
+tests/integration/test_chat_flow.py::TestChatHistory::test_history_nonexistent_job PASSED [ 68%]
+tests/integration/test_chat_flow.py::TestChatHistory::test_history_requires_auth PASSED [ 68%]
+tests/integration/test_chat_flow.py::TestChatClear::test_clear_chat_history PASSED [ 69%]
+tests/integration/test_chat_flow.py::TestChatClear::test_clear_empty_history PASSED [ 69%]
+tests/integration/test_chat_flow.py::TestChatClear::test_clear_nonexistent_job PASSED [ 69%]
+tests/integration/test_chat_flow.py::TestChatClear::test_clear_requires_auth PASSED [ 69%]
+tests/integration/test_chat_flow.py::TestChatPermissions::test_other_user_cant_access_chat PASSED [ 70%]
+tests/integration/test_chat_flow.py::TestChatPermissions::test_other_user_cant_clear_chat PASSED [ 70%]
+tests/integration/test_error_handling.py::TestContentNegotiation::test_404_returns_html_for_browser PASSED [ 70%]
+tests/integration/test_error_handling.py::TestContentNegotiation::test_404_returns_json_for_api_request PASSED [ 71%]
+tests/integration/test_error_handling.py::TestContentNegotiation::test_404_returns_json_with_accept_header PASSED [ 71%]
+tests/integration/test_error_handling.py::TestContentNegotiation::test_500_returns_html_for_browser PASSED [ 71%]
+tests/integration/test_error_handling.py::TestAPIErrorResponses::test_400_bad_request PASSED [ 71%]
+tests/integration/test_error_handling.py::TestAPIErrorResponses::test_401_unauthorized PASSED [ 72%]
+tests/integration/test_error_handling.py::TestAPIErrorResponses::test_403_forbidden PASSED [ 72%]
+tests/integration/test_error_handling.py::TestAPIErrorResponses::test_404_not_found FAILED [ 72%]
+tests/integration/test_error_handling.py::TestHTTPMethods::test_post_required_for_login PASSED [ 73%]
+tests/integration/test_error_handling.py::TestHTTPMethods::test_delete_returns_204 FAILED [ 73%]
+tests/integration/test_error_handling.py::TestHTTPMethods::test_patch_for_user_status PASSED [ 73%]
+tests/integration/test_error_handling.py::TestMalformedRequests::test_invalid_json_body FAILED [ 73%]
+tests/integration/test_error_handling.py::TestMalformedRequests::test_missing_required_fields PASSED [ 74%]
+tests/integration/test_error_handling.py::TestMalformedRequests::test_invalid_field_types FAILED [ 74%]
+tests/integration/test_error_handling.py::TestAuthenticationErrors::test_missing_auth_token FAILED [ 74%]
+tests/integration/test_error_handling.py::TestAuthenticationErrors::test_invalid_auth_token FAILED [ 74%]
+tests/integration/test_error_handling.py::TestAuthenticationErrors::test_expired_session PASSED [ 75%]
+tests/integration/test_job_flow.py::TestJobUpload::test_upload_pdf_success PASSED [ 75%]
+tests/integration/test_job_flow.py::TestJobUpload::test_upload_pdf_unauthenticated PASSED [ 75%]
+tests/integration/test_job_flow.py::TestJobUpload::test_upload_missing_file PASSED [ 76%]
+tests/integration/test_job_flow.py::TestJobUpload::test_upload_too_large FAILED [ 76%]
+tests/integration/test_job_flow.py::TestJobList::test_list_jobs_empty PASSED [ 76%]
+tests/integration/test_job_flow.py::TestJobList::test_list_jobs_with_jobs PASSED [ 76%]
+tests/integration/test_job_flow.py::TestJobList::test_list_jobs_unauthenticated PASSED [ 77%]
+tests/integration/test_job_flow.py::TestJobList::test_list_jobs_isolation PASSED [ 77%]
+tests/integration/test_job_flow.py::TestJobDetail::test_get_job_detail PASSED [ 77%]
+tests/integration/test_job_flow.py::TestJobDetail::test_get_job_full_data PASSED [ 77%]
+tests/integration/test_job_flow.py::TestJobDetail::test_get_nonexistent_job PASSED [ 78%]
+tests/integration/test_job_flow.py::TestJobDetail::test_get_other_users_job PASSED [ 78%]
+tests/integration/test_job_flow.py::TestJobDelete::test_delete_job_success PASSED [ 78%]
+tests/integration/test_job_flow.py::TestJobDelete::test_delete_nonexistent_job PASSED [ 79%]
+tests/integration/test_job_flow.py::TestJobDelete::test_delete_other_users_job PASSED [ 79%]
+tests/integration/test_job_flow.py::TestJobDelete::test_delete_requires_auth FAILED [ 79%]
+tests/integration/test_job_flow.py::TestJobPolling::test_polling_returns_progress PASSED [ 79%]
+tests/integration/test_job_flow.py::TestJobPolling::test_polling_returns_stage FAILED [ 80%]
+tests/integration/test_job_flow.py::TestJobPolling::test_polling_returns_events PASSED [ 80%]
+tests/integration/test_pipeline.py::TestPipelineStages::test_pipeline_completes_all_stages FAILED [ 80%]
+tests/integration/test_pipeline.py::TestPipelineStages::test_pipeline_stage_progression_order PASSED [ 80%]
+tests/integration/test_pipeline.py::TestPipelineEventEmission::test_events_emitted_for_each_stage FAILED [ 81%]
+tests/integration/test_pipeline.py::TestPipelineProgress::test_progress_starts_at_zero PASSED [ 81%]
+tests/integration/test_pipeline.py::TestPipelineProgress::test_progress_is_monotonic PASSED [ 81%]
+tests/integration/test_pipeline.py::TestPipelineErrorHandling::test_pipeline_handles_invalid_pdf PASSED [ 82%]
+tests/unit/test_models.py::TestUserModel::test_user_fields PASSED        [ 82%]
+tests/unit/test_models.py::TestJobModel::test_job_fields PASSED          [ 82%]
+tests/unit/test_models.py::TestPaperAnalysisModel::test_paper_analysis_json_fields PASSED [ 82%]
+tests/unit/test_models.py::TestEventModel::test_event_fields PASSED      [ 83%]
+tests/unit/test_repositories.py::TestUserRepository::test_create_user PASSED [ 83%]
+tests/unit/test_repositories.py::TestUserRepository::test_get_user_by_id PASSED [ 83%]
+tests/unit/test_repositories.py::TestJobRepository::test_create_job PASSED [ 84%]
+tests/unit/test_repositories.py::TestJobRepository::test_update_job_status PASSED [ 84%]
+tests/unit/test_repositories.py::TestJobRepository::test_list_user_jobs PASSED [ 84%]
+tests/unit/test_repositories.py::TestPaperAnalysisRepository::test_save_analysis PASSED [ 84%]
+tests/unit/test_services.py::TestJobService::test_create_job_success PASSED [ 85%]
+tests/unit/test_services.py::TestJobService::test_create_job_failure PASSED [ 85%]
+tests/unit/test_services.py::TestJobService::test_get_job PASSED         [ 85%]
+tests/unit/test_services.py::TestJobService::test_get_user_jobs PASSED   [ 85%]
+tests/unit/test_services.py::TestJobService::test_update_job_status_success PASSED [ 86%]
+tests/unit/test_services.py::TestJobService::test_update_job_completion PASSED [ 86%]
+tests/unit/test_services.py::TestJobService::test_delete_job_success PASSED [ 86%]
+tests/unit/test_services.py::TestJobService::test_store_artifacts PASSED [ 87%]
+tests/unit/test_services.py::TestJobService::test_get_job_artifacts PASSED [ 87%]
+tests/unit/test_services.py::TestAuthService::test_hash_password_returns_hashed_value PASSED [ 87%]
+tests/unit/test_services.py::TestAuthService::test_hash_password_produces_different_hashes PASSED [ 87%]
+tests/unit/test_services.py::TestAuthService::test_verify_password_correct PASSED [ 88%]
+tests/unit/test_services.py::TestAuthService::test_verify_password_incorrect PASSED [ 88%]
+tests/unit/test_services.py::TestAuthService::test_get_user_by_username PASSED [ 88%]
+tests/unit/test_services.py::TestAuthService::test_get_user_by_id PASSED [ 88%]
+tests/unit/test_services.py::TestAuthService::test_user_exists_true PASSED [ 89%]
+tests/unit/test_services.py::TestAuthService::test_user_exists_false PASSED [ 89%]
+tests/unit/test_services.py::TestAuthService::test_create_user PASSED    [ 89%]
+tests/unit/test_services.py::TestAuthService::test_update_password PASSED [ 90%]
+tests/unit/test_services.py::TestEventDispatcher::test_emit_event_persists_to_database PASSED [ 90%]
+tests/unit/test_services.py::TestEventDispatcher::test_emit_event_handles_stage_transitions PASSED [ 90%]
+tests/unit/test_services.py::TestEventDispatcher::test_emit_event_logs_progress PASSED [ 90%]
+tests/unit/test_services.py::TestEventDispatcher::test_event_dispatcher_factory_creates_test_dispatcher PASSED [ 91%]
+tests/unit/test_services.py::TestCacheService::test_get_cached_paper_analysis_hit PASSED [ 91%]
+tests/unit/test_services.py::TestCacheService::test_get_cached_paper_analysis_miss PASSED [ 91%]
+tests/unit/test_services.py::TestCacheService::test_get_cached_paper_analysis_disabled PASSED [ 92%]
+tests/unit/test_services.py::TestCacheService::test_store_paper_analysis_cache PASSED [ 92%]
+tests/unit/test_services.py::TestCacheService::test_get_cached_evaluation_hit PASSED [ 92%]
+tests/unit/test_services.py::TestCacheService::test_get_cache_stats PASSED [ 92%]
+tests/unit/test_services.py::TestAnalysisService::test_extract_and_analyze_pdf_success PASSED [ 93%]
+tests/unit/test_services.py::TestAnalysisService::test_parse_paper_with_claude PASSED [ 93%]
+tests/unit/test_services.py::TestAnalysisService::test_parse_paper_with_claude_markdown_json PASSED [ 93%]
+tests/unit/test_services.py::TestAnalysisService::test_store_paper_analysis PASSED [ 93%]
+tests/unit/test_services.py::TestEvaluationService::test_evaluate_reproducibility_aspects_success SKIPPED [ 94%]
+tests/unit/test_services.py::TestLLMService::test_init_llm_provider_success PASSED [ 94%]
+tests/unit/test_services.py::TestLLMService::test_init_llm_provider_failure PASSED [ 94%]
+tests/unit/test_services.py::TestAnthropicProvider::test_anthropic_provider_initialization PASSED [ 95%]
+tests/unit/test_services.py::TestAnthropicProvider::test_anthropic_provider_initialization_no_key PASSED [ 95%]
+tests/unit/test_services.py::TestAnthropicProvider::test_anthropic_provider_complete PASSED [ 95%]
+tests/unit/test_services.py::TestAnthropicProvider::test_anthropic_provider_get_name PASSED [ 95%]
+tests/unit/test_services.py::TestOllamaProvider::test_ollama_provider_initialization_success PASSED [ 96%]
+tests/unit/test_services.py::TestOllamaProvider::test_ollama_provider_initialization_no_connection PASSED [ 96%]
+tests/unit/test_services.py::TestOllamaProvider::test_ollama_provider_complete PASSED [ 96%]
+tests/unit/test_services.py::TestOllamaProvider::test_ollama_provider_get_name PASSED [ 96%]
+tests/unit/test_services.py::TestDockerService::test_docker_service_init_success PASSED [ 97%]
+tests/unit/test_services.py::TestDockerService::test_docker_service_init_failure PASSED [ 97%]
+tests/unit/test_services.py::TestDockerService::test_is_docker_available PASSED [ 97%]
+tests/unit/test_services.py::TestDockerService::test_validate_network_exists PASSED [ 98%]
+tests/unit/test_services.py::TestDockerService::test_validate_network_not_exists PASSED [ 98%]
+tests/unit/test_services.py::TestDockerService::test_build_agent_image_success PASSED [ 98%]
+tests/unit/test_services.py::TestDockerService::test_build_agent_image_failure PASSED [ 98%]
+tests/unit/test_services.py::TestPipelineOrchestrator::test_orchestrator_initialization PASSED [ 99%]
+tests/unit/test_services.py::TestPipelineOrchestrator::test_orchestrator_emit_event PASSED [ 99%]
+tests/unit/test_services.py::TestPipelineOrchestrator::test_orchestrator_default_logger PASSED [ 99%]
+tests/unit/test_services.py::TestProviderFactory::test_get_provider_returns_provider PASSED [100%]
+
+=================================== FAILURES ===================================
+/app/tests/test_api.py:32: assert 0 == 1
+/app/tests/test_api.py:49: IndexError: list index out of range
+/app/tests/test_api.py:73: assert 0 == 1
+/app/tests/test_api.py:313: assert 0 == 4
+/app/tests/test_api.py:324: assert 0 == 1
+/app/tests/test_app.py:38: assert 404 in [200, 302]
+/app/tests/test_app.py:105: sqlite3.IntegrityError: NOT NULL constraint failed: jobs.current_stage
+/app/tests/test_app.py:139: sqlite3.IntegrityError: NOT NULL constraint failed: jobs.current_stage
+/app/tests/test_app.py:177: sqlite3.IntegrityError: NOT NULL constraint failed: jobs.current_stage
+/app/tests/test_app.py:231: sqlite3.IntegrityError: NOT NULL constraint failed: jobs.current_stage
+/app/tests/test_app.py:292: sqlite3.IntegrityError: NOT NULL constraint failed: jobs.current_stage
+/app/tests/test_app.py:334: sqlite3.IntegrityError: NOT NULL constraint failed: jobs.current_stage
+/app/tests/test_app.py:371: sqlite3.IntegrityError: NOT NULL constraint failed: jobs.current_stage
+/app/tests/test_app.py:408: sqlite3.IntegrityError: NOT NULL constraint failed: jobs.current_stage
+/app/tests/test_auth_security.py:126: assert 404 == 401
+/app/tests/test_auth_security.py:155: assert 404 == 401
+/app/tests/test_auth_security.py:177: assert 404 == 401
+/app/tests/test_auth_security.py:197: assert 404 == 401
+/app/tests/test_auth_security.py:202: assert 404 == 401
+/app/tests/test_auth_security.py:207: assert 404 == 401
+/app/tests/test_auth_security.py:212: assert 404 == 401
+/app/tests/test_auth_security.py:241: assert 404 == 200
+/app/tests/test_auth_security.py:288: assert 404 == 403
+/app/tests/test_auth_security.py:330: assert 404 == 403
+/app/tests/test_auth_security.py:424: assert 404 == 403
+/app/tests/test_auth_security.py:447: assert 404 == 403
+/app/tests/test_auth_security.py:452: assert 404 == 403
+/app/tests/test_auth_security.py:457: assert 404 == 403
+/app/tests/test_auth_security.py:477: assert 404 == 200
+/app/tests/test_auth_security.py:484: assert 404 == 200
+/app/tests/test_auth_security.py:492: assert 404 == 400
+/app/tests/test_auth_security.py:497: assert 404 == 200
+/app/tests/test_auth_security.py:533: assert 405 in [200, 201, 301, 302, 303, 307, ...]
+/app/tests/test_auth_security.py:542: assert 405 in [200, 301, 302, 303, 307, 308]
+/app/tests/test_event_dispatcher.py:104: AttributeError: 'StageTransition' object has no attribute 'progress'
+/app/tests/test_event_dispatcher.py:112: AttributeError: 'StageTransition' object has no attribute 'progress'
+/app/tests/test_event_dispatcher.py:141: assert 0 == 1
+/app/tests/test_event_dispatcher.py:153: assert 0 == 1
+/app/tests/test_event_dispatcher.py:178: assert 0 == 1
+/app/tests/test_event_dispatcher.py:348: assert 0 == 20
+/app/tests/test_integration.py:48: assert 0 == 1
+/app/tests/test_integration.py:73: IndexError: list index out of range
+/app/tests/test_integration.py:110: assert 0 == 4
+/app/tests/test_integration.py:138: assert 0 == 1
+/app/tests/test_integration.py:169: assert 0 == 1
+/app/tests/test_integration.py:304: AssertionError: assert 0 == 7
+/app/tests/test_integration.py:335: AssertionError: assert 0 == 4
+/app/tests/test_polling_endpoint.py:89: assert 404 == 200
+/app/tests/test_polling_endpoint.py:111: assert 404 == 200
+/app/tests/test_polling_endpoint.py:127: KeyError: 'events'
+/app/tests/test_polling_endpoint.py:158: KeyError: 'events'
+/app/tests/test_polling_endpoint.py:190: KeyError: 'completed'
+/app/tests/test_polling_endpoint.py:200: KeyError: 'completed'
+/app/tests/test_polling_endpoint.py:240: assert 404 == 200
+/app/tests/test_polling_endpoint.py:255: assert 404 == 400
+/app/tests/test_polling_endpoint.py:274: assert 404 in [301, 302, 401, 403]
+/app/tests/test_polling_endpoint.py:284: KeyError: 'events'
+/app/tests/test_polling_endpoint.py:317: KeyError: 'events'
+/app/tests/test_polling_endpoint.py:332: AssertionError: assert {'error'} >= {'completed', 'events', 'job_status'}
+/app/tests/test_polling_endpoint.py:349: KeyError: 'events'
+/app/tests/test_stage_transitions.py:105: assert 'stage_3_complete -> staying in evaluation' in '[21a78162-f608-44f7-83da-f3c56f6c1cb6] Failed to persist event stage_1_starting: OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] TRANSITION: stage_1_starting -> paper_analysis\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** DISPATCHER: No progress in event, NOT setting progress field ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Calling update_job_status with: {\'status\': \'processing\', \'current_stage\': \'paper_analysis\'}\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** BEFORE DATABASE UPDATE ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Incoming: status=processing, progress=None, stage=paper_analysis\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     DB Before: (job not found)\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     SQL: (\'UPDATE "jobs" SET "status" = ?, "current_stage" = ? WHERE ("jobs"."id" = ?)\', [\'processing\', \'paper_analysis\', \'21a78162-f608-44f7-83da-f3c56f6c1cb6\'])\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** UPDATE FAILED ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Error: no such table: jobs\nTraceback (most recent call last):\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\nsqlite3.OperationalError: no such table: jobs\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File "/app/services/job_service.py", line 92, in update_job_status\n    result = query.execute()\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 1972, in inner\n    return method(self, database, *args, **kwargs)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2043, in execute\n    return self._execute(database)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2561, in _execute\n    cursor = database.execute(self)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3260, in execute\n    return self.execute_sql(sql, params)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3250, in execute_sql\n    with __exception_wrapper__:\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3020, in __exit__\n    reraise(new_type, new_type(exc_value, *exc_args), traceback)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 192, in reraise\n    raise value.with_traceback(tb)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\npeewee.OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Failed to persist event stage_1_complete: OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] TRANSITION: stage_1_complete -> code_execution\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** DISPATCHER: No progress in event, NOT setting progress field ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Calling update_job_status with: {\'status\': \'processing\', \'current_stage\': \'code_execution\'}\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** BEFORE DATABASE UPDATE ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Incoming: status=processing, progress=None, stage=code_execution\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     DB Before: (job not found)\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     SQL: (\'UPDATE "jobs" SET "status" = ?, "current_stage" = ? WHERE ("jobs"."id" = ?)\', [\'processing\', \'code_execution\', \'21a78162-f608-44f7-83da-f3c56f6c1cb6\'])\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** UPDATE FAILED ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Error: no such table: jobs\nTraceback (most recent call last):\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\nsqlite3.OperationalError: no such table: jobs\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File "/app/services/job_service.py", line 92, in update_job_status\n    result = query.execute()\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 1972, in inner\n    return method(self, database, *args, **kwargs)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2043, in execute\n    return self._execute(database)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2561, in _execute\n    cursor = database.execute(self)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3260, in execute\n    return self.execute_sql(sql, params)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3250, in execute_sql\n    with __exception_wrapper__:\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3020, in __exit__\n    reraise(new_type, new_type(exc_value, *exc_args), traceback)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 192, in reraise\n    raise value.with_traceback(tb)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\npeewee.OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Failed to persist event stage_2_starting: OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] TRANSITION: stage_2_starting -> code_execution\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** DISPATCHER: No progress in event, NOT setting progress field ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Calling update_job_status with: {\'status\': \'processing\', \'current_stage\': \'code_execution\'}\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** BEFORE DATABASE UPDATE ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Incoming: status=processing, progress=None, stage=code_execution\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     DB Before: (job not found)\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     SQL: (\'UPDATE "jobs" SET "status" = ?, "current_stage" = ? WHERE ("jobs"."id" = ?)\', [\'processing\', \'code_execution\', \'21a78162-f608-44f7-83da-f3c56f6c1cb6\'])\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** UPDATE FAILED ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Error: no such table: jobs\nTraceback (most recent call last):\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\nsqlite3.OperationalError: no such table: jobs\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File "/app/services/job_service.py", line 92, in update_job_status\n    result = query.execute()\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 1972, in inner\n    return method(self, database, *args, **kwargs)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2043, in execute\n    return self._execute(database)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2561, in _execute\n    cursor = database.execute(self)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3260, in execute\n    return self.execute_sql(sql, params)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3250, in execute_sql\n    with __exception_wrapper__:\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3020, in __exit__\n    reraise(new_type, new_type(exc_value, *exc_args), traceback)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 192, in reraise\n    raise value.with_traceback(tb)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\npeewee.OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Failed to persist event stage_2_complete: OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] TRANSITION: stage_2_complete -> evaluation\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** DISPATCHER: No progress in event, NOT setting progress field ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Calling update_job_status with: {\'status\': \'processing\', \'current_stage\': \'evaluation\'}\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** BEFORE DATABASE UPDATE ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Incoming: status=processing, progress=None, stage=evaluation\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     DB Before: (job not found)\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     SQL: (\'UPDATE "jobs" SET "status" = ?, "current_stage" = ? WHERE ("jobs"."id" = ?)\', [\'processing\', \'evaluation\', \'21a78162-f608-44f7-83da-f3c56f6c1cb6\'])\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** UPDATE FAILED ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Error: no such table: jobs\nTraceback (most recent call last):\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\nsqlite3.OperationalError: no such table: jobs\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File "/app/services/job_service.py", line 92, in update_job_status\n    result = query.execute()\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 1972, in inner\n    return method(self, database, *args, **kwargs)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2043, in execute\n    return self._execute(database)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2561, in _execute\n    cursor = database.execute(self)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3260, in execute\n    return self.execute_sql(sql, params)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3250, in execute_sql\n    with __exception_wrapper__:\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3020, in __exit__\n    reraise(new_type, new_type(exc_value, *exc_args), traceback)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 192, in reraise\n    raise value.with_traceback(tb)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\npeewee.OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Failed to persist event stage_3_starting: OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] TRANSITION: stage_3_starting -> evaluation\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** DISPATCHER: No progress in event, NOT setting progress field ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Calling update_job_status with: {\'status\': \'processing\', \'current_stage\': \'evaluation\'}\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** BEFORE DATABASE UPDATE ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Incoming: status=processing, progress=None, stage=evaluation\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     DB Before: (job not found)\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     SQL: (\'UPDATE "jobs" SET "status" = ?, "current_stage" = ? WHERE ("jobs"."id" = ?)\', [\'processing\', \'evaluation\', \'21a78162-f608-44f7-83da-f3c56f6c1cb6\'])\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** UPDATE FAILED ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Error: no such table: jobs\nTraceback (most recent call last):\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\nsqlite3.OperationalError: no such table: jobs\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File "/app/services/job_service.py", line 92, in update_job_status\n    result = query.execute()\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 1972, in inner\n    return method(self, database, *args, **kwargs)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2043, in execute\n    return self._execute(database)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2561, in _execute\n    cursor = database.execute(self)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3260, in execute\n    return self.execute_sql(sql, params)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3250, in execute_sql\n    with __exception_wrapper__:\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3020, in __exit__\n    reraise(new_type, new_type(exc_value, *exc_args), traceback)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 192, in reraise\n    raise value.with_traceback(tb)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\npeewee.OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Failed to persist event stage_3_complete: OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] TRANSITION: stage_3_complete -> evaluation\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** DISPATCHER: No progress in event, NOT setting progress field ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Calling update_job_status with: {\'status\': \'processing\', \'current_stage\': \'evaluation\'}\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** BEFORE DATABASE UPDATE ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Incoming: status=processing, progress=None, stage=evaluation\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     DB Before: (job not found)\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     SQL: (\'UPDATE "jobs" SET "status" = ?, "current_stage" = ? WHERE ("jobs"."id" = ?)\', [\'processing\', \'evaluation\', \'21a78162-f608-44f7-83da-f3c56f6c1cb6\'])\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** UPDATE FAILED ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Error: no such table: jobs\nTraceback (most recent call last):\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\nsqlite3.OperationalError: no such table: jobs\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File "/app/services/job_service.py", line 92, in update_job_status\n    result = query.execute()\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 1972, in inner\n    return method(self, database, *args, **kwargs)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2043, in execute\n    return self._execute(database)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2561, in _execute\n    cursor = database.execute(self)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3260, in execute\n    return self.execute_sql(sql, params)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3250, in execute_sql\n    with __exception_wrapper__:\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3020, in __exit__\n    reraise(new_type, new_type(exc_value, *exc_args), traceback)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 192, in reraise\n    raise value.with_traceback(tb)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\npeewee.OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Failed to persist event complete: OperationalError: no such table: jobs\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] TRANSITION: complete -> completed\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** DISPATCHER: No progress in event, NOT setting progress field ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] Calling update_job_status with: {\'status\': \'completed\', \'current_stage\': \'completed\'}\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** BEFORE DATABASE UPDATE ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Incoming: status=completed, progress=None, stage=completed\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     DB Before: (job not found)\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     SQL: (\'UPDATE "jobs" SET "status" = ?, "current_stage" = ? WHERE ("jobs"."id" = ?)\', [\'completed\', \'completed\', \'21a78162-f608-44f7-83da-f3c56f6c1cb6\'])\n[21a78162-f608-44f7-83da-f3c56f6c1cb6] *** UPDATE FAILED ***\n[21a78162-f608-44f7-83da-f3c56f6c1cb6]     Error: no such table: jobs\nTraceback (most recent call last):\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\nsqlite3.OperationalError: no such table: jobs\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File "/app/services/job_service.py", line 92, in update_job_status\n    result = query.execute()\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 1972, in inner\n    return method(self, database, *args, **kwargs)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2043, in execute\n    return self._execute(database)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 2561, in _execute\n    cursor = database.execute(self)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3260, in execute\n    return self.execute_sql(sql, params)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3250, in execute_sql\n    with __exception_wrapper__:\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3020, in __exit__\n    reraise(new_type, new_type(exc_value, *exc_args), traceback)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 192, in reraise\n    raise value.with_traceback(tb)\n  File "/usr/local/lib/python3.10/site-packages/peewee.py", line 3252, in execute_sql\n    cursor.execute(sql, params or ())\npeewee.OperationalError: no such table: jobs\n'
+/app/tests/integration/test_error_handling.py:92: assert 401 == 404
+/app/tests/integration/test_error_handling.py:110: assert 200 == 204
+/app/tests/integration/test_error_handling.py:134: assert 500 == 400
+/app/tests/integration/test_error_handling.py:153: assert 500 == 400
+/app/tests/integration/test_error_handling.py:162: assert 200 == 401
+/app/tests/integration/test_error_handling.py:170: assert 200 == 401
+/app/tests/integration/test_job_flow.py:50: assert 400 == 413
+/app/tests/integration/test_job_flow.py:165: assert 200 == 401
+/app/tests/integration/test_job_flow.py:184: AssertionError: assert 'analysis' in ['pending', 'paper_analysis', 'code_execution', 'evaluation', 'completed']
+/app/tests/integration/test_pipeline.py:41: AssertionError: assert 'pending' == 'completed'
+/app/tests/integration/test_pipeline.py:80: assert 0 > 0
+=========================== short test summary info ============================
+FAILED tests/test_api.py::TestEventLoggingEndpoint::test_emit_event_via_dispatcher
+FAILED tests/test_api.py::TestEventLoggingEndpoint::test_log_event_with_stage_duration
+FAILED tests/test_api.py::TestEventLoggingEndpoint::test_log_chat_event_not_persisted
+FAILED tests/test_api.py::TestConcurrentEventEmission::test_multiple_events_to_same_job
+FAILED tests/test_api.py::TestConcurrentEventEmission::test_events_to_different_jobs
+FAILED tests/test_app.py::TestHomeAndBasics::test_jobs_list_empty_when_authenticated
+FAILED tests/test_app.py::TestEventEmission::test_emit_event_stores_in_database
+FAILED tests/test_app.py::TestStageEvents::test_stage_1_events - sqlite3.Inte...
+FAILED tests/test_app.py::TestStageEvents::test_all_three_stages_events - sql...
+FAILED tests/test_app.py::TestJobRoutes::test_create_job_in_database - sqlite...
+FAILED tests/test_app.py::TestDataIntegrity::test_store_execution_details - s...
+FAILED tests/test_app.py::TestDataIntegrity::test_store_aspect_evaluations - ...
+FAILED tests/test_app.py::TestPaperAnalysisStorage::test_store_paper_analysis
+FAILED tests/test_app.py::TestArtifactStorage::test_store_artifacts - sqlite3...
+FAILED tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_jobs
+FAILED tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_job_detail
+FAILED tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_delete_job
+FAILED tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_activate_user_api
+FAILED tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_deactivate_user_api
+FAILED tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_delete_user_api
+FAILED tests/test_auth_security.py::TestUnauthenticatedAccessToProtectedRoutes::test_unauthenticated_access_to_events_sse
+FAILED tests/test_auth_security.py::TestAuthenticatedAccessToProtectedRoutes::test_authenticated_user_can_access_jobs_list
+FAILED tests/test_auth_security.py::TestCrossUserAccessControl::test_user1_cannot_access_user2_job
+FAILED tests/test_auth_security.py::TestCrossUserAccessControl::test_user1_cannot_delete_user2_job
+FAILED tests/test_auth_security.py::TestCrossUserAccessControl::test_user1_cannot_access_events_for_user2_job
+FAILED tests/test_auth_security.py::TestAdminAuthorization::test_non_admin_cannot_activate_user
+FAILED tests/test_auth_security.py::TestAdminAuthorization::test_non_admin_cannot_deactivate_user
+FAILED tests/test_auth_security.py::TestAdminAuthorization::test_non_admin_cannot_delete_user
+FAILED tests/test_auth_security.py::TestAdminAuthorization::test_admin_can_activate_user
+FAILED tests/test_auth_security.py::TestAdminAuthorization::test_admin_can_deactivate_user
+FAILED tests/test_auth_security.py::TestAdminAuthorization::test_admin_cannot_delete_self
+FAILED tests/test_auth_security.py::TestAdminAuthorization::test_admin_can_delete_regular_user
+FAILED tests/test_auth_security.py::TestPublicRoutes::test_register_user_public
+FAILED tests/test_auth_security.py::TestPublicRoutes::test_login_user_public
+FAILED tests/test_event_dispatcher.py::TestStageTransitions::test_transition_properties
+FAILED tests/test_event_dispatcher.py::TestStageTransitions::test_stage_3_complete_stays_in_evaluation
+FAILED tests/test_event_dispatcher.py::TestEventDispatcher::test_emit_non_chat_event_to_queue
+FAILED tests/test_event_dispatcher.py::TestEventDispatcher::test_emit_chat_event_to_queue
+FAILED tests/test_event_dispatcher.py::TestEventDispatcher::test_emit_event_with_stage_duration
+FAILED tests/test_event_dispatcher.py::TestEventDispatcherThreadSafety::test_concurrent_emits
+FAILED tests/test_integration.py::TestEventDispatcherIntegration::test_event_dispatcher_to_peewee_flow
+FAILED tests/test_integration.py::TestEventDispatcherIntegration::test_stage_duration_ms_flows_through_layers
+FAILED tests/test_integration.py::TestEventDispatcherIntegration::test_multiple_events_sequence
+FAILED tests/test_integration.py::TestEventDispatcherIntegration::test_chat_events_not_persisted_to_db
+FAILED tests/test_integration.py::TestPipelineOrchestratorEventEmission::test_orchestrator_emits_stage_start_event
+FAILED tests/test_integration.py::TestStageTransitionIntegration::test_all_stage_transitions_emit_to_queue
+FAILED tests/test_integration.py::TestStageTransitionIntegration::test_progress_tracking_through_transitions
+FAILED tests/test_polling_endpoint.py::TestPollingEndpoint::test_get_all_events_no_timestamp
+FAILED tests/test_polling_endpoint.py::TestPollingEndpoint::test_get_events_since_timestamp
+FAILED tests/test_polling_endpoint.py::TestPollingEndpoint::test_event_fields_format
+FAILED tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_captures_event_with_duration
+FAILED tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_job_completion_status
+FAILED tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_job_not_completed
+FAILED tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_access_control
+FAILED tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_invalid_timestamp_format
+FAILED tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_unauthenticated_access
+FAILED tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_event_ordering
+FAILED tests/test_polling_endpoint.py::TestPollingEndpoint::test_polling_response_limit
+FAILED tests/test_polling_endpoint.py::TestPollingFrontendIntegration::test_polling_response_format_for_javascript
+FAILED tests/test_polling_endpoint.py::TestPollingFrontendIntegration::test_polling_timestamp_parsing_in_response
+FAILED tests/test_stage_transitions.py::test_emit_event_stage_transitions - a...
+FAILED tests/integration/test_error_handling.py::TestAPIErrorResponses::test_404_not_found
+FAILED tests/integration/test_error_handling.py::TestHTTPMethods::test_delete_returns_204
+FAILED tests/integration/test_error_handling.py::TestMalformedRequests::test_invalid_json_body
+FAILED tests/integration/test_error_handling.py::TestMalformedRequests::test_invalid_field_types
+FAILED tests/integration/test_error_handling.py::TestAuthenticationErrors::test_missing_auth_token
+FAILED tests/integration/test_error_handling.py::TestAuthenticationErrors::test_invalid_auth_token
+FAILED tests/integration/test_job_flow.py::TestJobUpload::test_upload_too_large
+FAILED tests/integration/test_job_flow.py::TestJobDelete::test_delete_requires_auth
+FAILED tests/integration/test_job_flow.py::TestJobPolling::test_polling_returns_stage
+FAILED tests/integration/test_pipeline.py::TestPipelineStages::test_pipeline_completes_all_stages
+FAILED tests/integration/test_pipeline.py::TestPipelineEventEmission::test_events_emitted_for_each_stage
+============ 72 failed, 290 passed, 1 skipped in 140.43s (0:02:20) =============
