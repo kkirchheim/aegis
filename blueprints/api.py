@@ -1048,7 +1048,7 @@ def get_job_events_polling(job_id):
     - completed: Boolean indicating if job is completed
     - job_status: Current job status string
     """
-    from datetime import datetime
+    from datetime import timezone
     
     user_id = session.get('user_id')
     
@@ -1061,7 +1061,6 @@ def get_job_events_polling(job_id):
         return jsonify({"error": "Access denied"}), 403
     
     # Get all events for the job
-    from repositories import EventRepository
     all_events = EventRepository.list_by_job(job_id)
     
     # Handle 'since' parameter for filtering
@@ -1070,7 +1069,6 @@ def get_job_events_polling(job_id):
     
     if since_param:
         try:
-            from datetime import timezone
             # Parse ISO format timestamp (e.g., "2024-01-01T12:00:00Z")
             if since_param.endswith('Z'):
                 since_param = since_param[:-1] + '+00:00'
