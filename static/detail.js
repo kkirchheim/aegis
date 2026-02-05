@@ -428,8 +428,13 @@ function updateCitations(job) {
     }
     
     citationsContent.innerHTML = citations
-        .slice(0, 10)
-        .map(c => `<div class="text-sm"><strong>${c.authors}</strong> (${c.year}): ${c.title}</div>`)
+        .map(c => {
+            const authors = c.authors ? `<strong>${c.authors}</strong>` : "(Unknown authors)";
+            const year = c.year ? ` (${c.year})` : "";
+            const title = c.title ? `${c.title}` : "";
+            const url = c.url ? ` <a href="${c.url}" target="_blank" class="link link-primary text-xs">🔗</a>` : "";
+            return `<div class="text-sm mb-2">${authors}${year}: ${title}${url}</div>`;
+        })
         .join("");
 }
 
@@ -439,12 +444,17 @@ function updateArtifacts(job) {
     const artifacts = job.artifacts || [];
     
     if (artifacts.length === 0) {
-        artifactsContent.innerHTML = "<p class='text-base-content/50'>No artifacts</p>";
+        artifactsContent.innerHTML = "<p class='text-base-content/50'>No artifacts found</p>";
         return;
     }
     
     artifactsContent.innerHTML = artifacts
-        .map(a => `<div class="text-sm"><a href="${a.path}" class="link">${a.name}</a></div>`)
+        .map(a => {
+            const type = a.artifact_type ? `<span class="badge badge-sm badge-outline mr-2">${a.artifact_type}</span>` : "";
+            const description = a.description ? `<p class="text-xs text-base-content/70 mt-1">${a.description}</p>` : "";
+            const link = a.url ? `<a href="${a.url}" target="_blank" class="link link-primary text-sm">View Artifact →</a>` : "";
+            return `<div class="mb-4 p-3 bg-base-200 rounded-lg">${type}<div class="text-sm font-semibold">${a.description || a.url || "Artifact"}</div>${description}${link}</div>`;
+        })
         .join("");
 }
 
@@ -462,10 +472,31 @@ function updateAspects(job) {
     }
     
     aspectsContent.innerHTML = aspects
-        .map(a => {
-            const icon = a.status === "pass" ? "✓" : a.status === "fail" ? "✗" : "?";
-            const color = a.status === "pass" ? "text-success" : a.status === "fail" ? "text-error" : "text-warning";
-            return `<div class="text-sm"><span class="${color}">${icon}</span> ${a.name}</div>`;
+        .map((a, index) => {
+            const statusIcon = a.status === "pass" ? "✓" : a.status === "fail" ? "✗" : "?";
+            const statusColor = a.status === "pass" ? "text-success" : a.status === "fail" ? "text-error" : "text-warning";
+            const statusLabel = a.status === "pass" ? "Pass" : a.status === "fail" ? "Fail" : "Unknown";
+            
+            const conclusion = a.conclusion ? `<p class="mt-2"><strong>Conclusion:</strong> ${a.conclusion}</p>` : "";
+            const evidence = a.evidence ? `<p class="mt-2"><strong>Evidence:</strong> ${a.evidence}</p>` : "";
+            const codeSupports = a.code_supports !== undefined ? `<p class="mt-2"><strong>Code Supports:</strong> ${a.code_supports ? "Yes ✓" : "No ✗"}</p>` : "";
+            const paperSupports = a.paper_supports !== undefined ? `<p class="mt-2"><strong>Paper Supports:</strong> ${a.paper_supports ? "Yes ✓" : "No ✗"}</p>` : "";
+            
+            const hasDetails = conclusion || evidence || codeSupports || paperSupports;
+            
+            return `
+                <div class="collapse collapse-arrow bg-base-200 mb-2">
+                    <input type="checkbox" />
+                    <div class="collapse-title font-semibold flex items-center gap-2">
+                        <span class="${statusColor} text-lg">${statusIcon}</span>
+                        <span>${a.name}</span>
+                        <span class="text-xs badge badge-${a.status === "pass" ? "success" : a.status === "fail" ? "error" : "warning"}">${statusLabel}</span>
+                    </div>
+                    <div class="collapse-content text-sm">
+                        ${hasDetails ? `${conclusion}${evidence}${codeSupports}${paperSupports}` : '<p class="text-base-content/50">No additional details available</p>'}
+                    </div>
+                </div>
+            `;
         })
         .join("");
 }
