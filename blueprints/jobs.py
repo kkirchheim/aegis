@@ -59,34 +59,6 @@ def history():
     return render_template("history.html")
 
 
-@jobs_bp.route("/reports/<job_id>")
-@require_auth
-def detail_page(job_id):
-    """Serve detail page for a job."""
-    user_id = session.get('user_id')
-    
-    job = get_job(job_id)
-    
-    if not job or job.user_id != user_id:
-        return redirect('/')
-    
-    return render_template("detail.html", job_id=job_id)
-
-
-@jobs_bp.route("/results/<job_id>")
-@require_auth
-def results_page(job_id):
-    """Serve results page for a job."""
-    user_id = session.get('user_id')
-    
-    job = get_job(job_id)
-    
-    if not job or job.user_id != user_id:
-        return redirect('/')
-    
-    return render_template("detail.html", job_id=job_id)
-
-
 @jobs_bp.route("/jobs", methods=["GET"])
 @require_auth
 def list_jobs():
@@ -99,16 +71,16 @@ def list_jobs():
 @jobs_bp.route("/job/<job_id>", methods=["GET"])
 @require_auth
 def job_detail(job_id):
-    """Get job detail page - returns HTML or 403."""
+    """Serve job detail page for a job - unified route for job UI."""
     user_id = session.get('user_id')
     
     job = get_job(job_id)
     
     if not job:
-        return jsonify({"error": "Job not found"}), 404
+        return redirect('/')
     
     if job.user_id != user_id:
-        return jsonify({"error": "Access denied"}), 403
+        return redirect('/')
     
     return render_template("detail.html", job_id=job_id)
 

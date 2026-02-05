@@ -232,7 +232,7 @@ function renderJobs() {
 // ============================================================================
 
 function viewJob(jobId) {
-    window.location.href = `/results/${jobId}`;
+    window.location.href = `/job/${jobId}`;
 }
 
 // ============================================================================

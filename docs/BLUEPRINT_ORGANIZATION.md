@@ -87,14 +87,13 @@ Provides REST API endpoints for authentication, health checks, cache management,
 
 ## jobs.py - Job Management Pages
 
-Handles page serving for job history, details, and results. **Page routes only** (GET) - job API operations are in `api.py`.
+Handles page serving for job history and details. **Page routes only** (GET) - job API operations are in `api.py`.
 
 | Route | Method | Purpose |
 |-------|--------|---------|
 | `/` | GET | Home page; redirects to login if not authenticated |
 | `/history` | GET | Browse past analyses |
-| `/reports/<job_id>` | GET | Serve job detail/report page |
-| `/results/<job_id>` | GET | Serve job results page |
+| `/job/<job_id>` | GET | Serve job detail/report page |
 
 **Auth Required:** All except `/`
 
@@ -148,8 +147,7 @@ Complete reference of all routes with HTTP methods, authentication requirements,
 | GET | `/api/job/<job_id>/full` | api | Yes | Get complete job data |
 | GET | `/` | jobs | No | Home page |
 | GET | `/history` | jobs | Yes | View job history |
-| GET | `/reports/<job_id>` | jobs | Yes | View job report |
-| GET | `/results/<job_id>` | jobs | Yes | View job results |
+| GET | `/job/<job_id>` | jobs | Yes | View job detail/report page |
 | GET | `/admin` | admin | Yes (Admin) | Admin panel |
 | GET | `/api/admin/users` | admin | Yes (Admin) | List all users |
 | PATCH | `/api/admin/users/<user_id>` | admin | Yes (Admin) | Update user status (activate/deactivate) |

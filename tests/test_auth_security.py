@@ -273,28 +273,6 @@ class TestCrossUserAccessControl:
             c = conn.cursor()
             c.execute(
                 "INSERT INTO jobs (id, status, pdf_path, user_id) VALUES (?, ?, ?, ?)",
-                ("job-user2-123", "processing", "/tmp/test.pdf", 2)
-            )
-            conn.commit()
-            conn.close()
-        
-        # Now try to access with user1
-        with user1_session.session_transaction() as sess:
-            sess['user_id'] = 1
-            sess['username'] = 'testuser1'
-        
-        response = user1_session.get('/job/job-user2-123')
-        # Should return 403 Forbidden
-        assert response.status_code == 403
-    
-    def test_user1_cannot_access_user2_job_full(self, user1_session, user2_session, client):
-        """User 1 should not be able to access User 2's job full data."""
-        # Create a job for user2
-        with app.app_context():
-            conn = get_db()
-            c = conn.cursor()
-            c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id) VALUES (?, ?, ?, ?)",
                 ("job-user2-456", "completed", "/tmp/test.pdf", 2)
             )
             conn.commit()
@@ -569,8 +547,8 @@ class TestCriticalSecurityGaps:
             # SECURITY GAP FOUND: Cache clear is publicly accessible
             pytest.skip("SECURITY GAP: /api/cache/clear is public but should be admin-only")
     
-    def test_detail_page_should_check_ownership(self, user1_session, user2_session, client):
-        """SECURITY GAP: GET /reports/<job_id> might not check ownership."""
+    def test_job_detail_page_should_check_ownership(self, user1_session, client):
+        """Job detail page should check ownership before serving page."""
         # Create a job for user2
         with app.app_context():
             conn = get_db()
@@ -587,9 +565,7 @@ class TestCriticalSecurityGaps:
             sess['user_id'] = 1
             sess['username'] = 'testuser1'
         
-        response = user1_session.get('/reports/job-detail-test')
-        # Should check ownership before serving detail page
-        # Currently might serve without checking
-        if response.status_code == 200:
-            # Possible SECURITY GAP
-            pytest.skip("POTENTIAL GAP: /reports/<job_id> might not validate ownership")
+        response = user1_session.get('/job/job-detail-test')
+        # Should redirect (not serve page)
+        assert response.status_code in [301, 302, 303, 307, 308]
+    

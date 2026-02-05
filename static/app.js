@@ -107,7 +107,7 @@ async function handleAnalyzeClick() {
         currentJobId = result.job_id;
         
         // Redirect immediately to report page
-        window.location.href = `/reports/${currentJobId}`;
+        window.location.href = `/job/${currentJobId}`;
         
     } catch (error) {
         alert(`Upload error: ${error.message}`);
@@ -202,7 +202,7 @@ async function deleteJobFromList(jobId, event) {
 
 async function viewJob(jobId) {
     // Navigate to detail page
-    window.location.href = `/reports/${jobId}`;
+    window.location.href = `/job/${jobId}`;
 }
 
 function escapeHtml(text) {
