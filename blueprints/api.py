@@ -365,10 +365,17 @@ def revoke_api_key(key_id):
     
     try:
         user_id = session.get('user_id')
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
         
         # Ensure user owns this key
         key = APIKey.get_or_none(APIKey.id == key_id)
-        if not key or key.user_id != user_id:
+        if not key:
+            return {"error": "API key not found"}, 404
+        
+        # Compare user IDs (get the raw int ID from the ForeignKey)
+        key_user_id = key.user_id_id if hasattr(key, 'user_id_id') else key.user_id.id
+        if key_user_id != int(user_id):
             return {"error": "API key not found"}, 404
         
         # Delete the key
@@ -1199,6 +1206,7 @@ def upload_pdf():
     from utils.api_key_utils import verify_api_key, InvalidAPIKeyError
     import os
     import uuid
+    from flask import current_app
     
     # Manual auth check - support both session cookie and API key
     user_id = None
@@ -1206,17 +1214,26 @@ def upload_pdf():
     # Try session cookie first
     if 'user_id' in session:
         user_id = session['user_id']
+        current_app.logger.info(f"[upload_pdf] Authenticated via session: user_id={user_id}")
     else:
         # Try API key from Authorization header
         auth_header = request.headers.get('Authorization', '')
+        current_app.logger.info(f"[upload_pdf] No session, checking header: {auth_header[:20] if auth_header else 'empty'}...")
+        
         if auth_header.startswith('ApiKey '):
             api_key = auth_header[7:]  # Remove "ApiKey " prefix
+            current_app.logger.info(f"[upload_pdf] Found ApiKey header: {api_key[:20]}...")
             try:
                 user_id = verify_api_key(api_key)
-            except (InvalidAPIKeyError, Exception):
+                current_app.logger.info(f"[upload_pdf] API key verified: user_id={user_id}")
+            except (InvalidAPIKeyError, Exception) as e:
+                current_app.logger.error(f"[upload_pdf] API key verification failed: {str(e)}")
                 pass  # Invalid key, treat as unauthorized
+        else:
+            current_app.logger.info(f"[upload_pdf] No ApiKey header found")
     
     if not user_id:
+        current_app.logger.warning("[upload_pdf] Authentication failed - returning 401")
         return {"error": "Unauthorized"}, 401
     
     # Validate file

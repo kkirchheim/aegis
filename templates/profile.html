@@ -501,23 +501,46 @@
         function copyKeyToClipboard() {
             const keyInput = document.getElementById('modalKeyValue');
             const keyValue = keyInput.value;
+            const btn = event.target;
+            const originalText = btn.innerHTML;
 
-            // Use modern Clipboard API (works on disabled inputs too)
-            navigator.clipboard.writeText(keyValue).then(() => {
-                // Show feedback
-                const btn = event.target;
-                const originalText = btn.innerHTML;
+            // Try modern Clipboard API first
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(keyValue).then(() => {
+                    btn.innerHTML = '✓ Copied!';
+                    btn.disabled = true;
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Clipboard API failed:', err);
+                    fallbackCopy(keyInput, btn, originalText);
+                });
+            } else {
+                // Fallback for older browsers or HTTP
+                fallbackCopy(keyInput, btn, originalText);
+            }
+        }
+
+        // Fallback copy method (for HTTP or older browsers)
+        function fallbackCopy(input, btn, originalText) {
+            try {
+                input.disabled = false;
+                input.select();
+                document.execCommand('copy');
+                input.disabled = true;
+                
                 btn.innerHTML = '✓ Copied!';
                 btn.disabled = true;
-
                 setTimeout(() => {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
                 }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy:', err);
-                alert('Failed to copy. Please copy manually.');
-            });
+            } catch (err) {
+                console.error('Fallback copy failed:', err);
+                alert('Copy failed. Key: ' + input.value);
+            }
         }
 
         // Close key modal
