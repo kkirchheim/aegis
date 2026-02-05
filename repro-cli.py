@@ -43,7 +43,7 @@ class APIClient:
         self.api_key = api_key
         self.session = requests.Session()
         self.session.headers.update({
-            'Authorization': f'Bearer {api_key}'
+            'Authorization': f'ApiKey {api_key}'
         })
     
     def upload_pdf(self, pdf_path: str) -> str:
@@ -63,7 +63,7 @@ class APIClient:
         
         try:
             with open(pdf_path, 'rb') as f:
-                files = {'file': (Path(pdf_path).name, f, 'application/pdf')}
+                files = {'pdf': (Path(pdf_path).name, f, 'application/pdf')}
                 print(f"📤 Uploading {Path(pdf_path).name}...")
                 response = self.session.post(url, files=files, timeout=30)
         except FileNotFoundError:
