@@ -13,45 +13,42 @@ class TestUserModel:
     
     def test_user_fields(self):
         """Test User model has required fields"""
-        user = User()
-        assert hasattr(user, 'username')
-        assert hasattr(user, 'password_hash')
-        assert hasattr(user, 'is_active')
-        assert hasattr(user, 'is_admin')
-        assert hasattr(user, 'created_at')
+        assert hasattr(User, 'username')
+        assert hasattr(User, 'password_hash')
+        assert hasattr(User, 'email')
+        assert hasattr(User, 'is_active')
+        assert hasattr(User, 'created_at')
 
 class TestJobModel:
     """Test Job model"""
     
     def test_job_fields(self):
         """Test Job model has required fields"""
-        job = Job()
-        assert hasattr(job, 'user_id')
-        assert hasattr(job, 'status')
-        assert hasattr(job, 'current_stage')
-        assert hasattr(job, 'progress')
-        assert hasattr(job, 'pdf_path')
-        assert hasattr(job, 'created_at')
+        assert hasattr(Job, 'user')
+        assert hasattr(Job, 'status')
+        assert hasattr(Job, 'current_stage')
+        assert hasattr(Job, 'progress')
+        assert hasattr(Job, 'pdf_path')
+        assert hasattr(Job, 'created_at')
 
 class TestPaperAnalysisModel:
     """Test PaperAnalysis model"""
     
     def test_paper_analysis_json_fields(self):
         """Test PaperAnalysis handles JSON fields"""
-        analysis = PaperAnalysis()
-        assert hasattr(analysis, 'citations')  # JSON field
-        assert hasattr(analysis, 'title')
-        assert hasattr(analysis, 'abstract')
+        assert hasattr(PaperAnalysis, 'citations')  # JSON field
+        assert hasattr(PaperAnalysis, 'title')
+        assert hasattr(PaperAnalysis, 'abstract')
 
 class TestEventModel:
     """Test Event model"""
     
     def test_event_fields(self):
         """Test Event model has required fields"""
-        event = Event()
-        assert hasattr(event, 'job_id')
-        assert hasattr(event, 'step')
-        assert hasattr(event, 'message')
-        assert hasattr(event, 'severity')
-        assert hasattr(event, 'progress')
-        assert hasattr(event, 'timestamp')
+        # Check fields exist on the model class (not instance to avoid FK issues)
+        assert hasattr(Event, 'job')
+        assert hasattr(Event, 'step')
+        assert hasattr(Event, 'message')
+        assert hasattr(Event, 'severity')
+        assert hasattr(Event, 'stage_duration_ms')
+        assert hasattr(Event, 'timestamp')

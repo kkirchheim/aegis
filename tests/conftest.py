@@ -703,3 +703,38 @@ def test_job(authenticated_user, create_test_job, app):
             "status": job.status,
             "current_stage": job.current_stage,
         }
+
+
+@pytest.fixture
+def test_job_with_chat(authenticated_user, create_test_job, app):
+    """Create a test job with chat messages for the authenticated user."""
+    from models.database import ChatSession, ChatMessage
+    
+    with app.app_context():
+        with authenticated_user.session_transaction() as sess:
+            user_id = sess.get('user_id')
+        
+        job = create_test_job(user_id=user_id)
+        
+        # Create a chat session for this job
+        chat_session = ChatSession.create(job=job)
+        
+        # Create some chat messages
+        ChatMessage.create(
+            session=chat_session,
+            role="user",
+            content="What are the main findings of this paper?"
+        )
+        ChatMessage.create(
+            session=chat_session,
+            role="assistant",
+            content="The main findings are..."
+        )
+        
+        # Return job as dictionary with id
+        return {
+            "id": str(job.id),
+            "user_id": job.user_id,
+            "status": job.status,
+            "current_stage": job.current_stage,
+        }
