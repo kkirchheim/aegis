@@ -144,7 +144,25 @@
                 
                 if (!response.ok) {
                     document.getElementById('errorMessage').classList.remove('hidden');
-                    document.getElementById('errorText').textContent = data.error || 'Login failed';
+                    
+                    // Handle different error formats
+                    if (response.status === 422) {
+                        // Validation error - flatten messages
+                        const messages = data.messages || {};
+                        const errorLines = [];
+                        for (const [field, errors] of Object.entries(messages)) {
+                            if (Array.isArray(errors)) {
+                                errorLines.push(`${field}: ${errors.join(', ')}`);
+                            }
+                        }
+                        const errorText = errorLines.length > 0 
+                            ? errorLines.join('\n')
+                            : data.error || 'Validation failed';
+                        document.getElementById('errorText').textContent = errorText;
+                    } else {
+                        // Regular error (400, 401, 403, etc.)
+                        document.getElementById('errorText').textContent = data.error || 'Login failed';
+                    }
                     return;
                 }
                 

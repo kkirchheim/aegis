@@ -104,6 +104,40 @@ def create_app():
         "description": "Session-based authentication via cookies"
     })
     
+    # Error handlers for proper JSON responses
+    @app.errorhandler(422)
+    def handle_validation_error(err):
+        """
+        Handle validation errors from @use_kwargs (Marshmallow validation).
+        
+        flask-apispec returns 422 with HTML by default.
+        This handler converts it to JSON format for API clients.
+        
+        Example error response:
+        {
+          "error": "Validation failed",
+          "messages": {
+            "password": ["Missing data for required field."]
+          }
+        }
+        """
+        headers = err.data.get('headers', None)
+        messages = err.data.get('messages', {})
+        
+        # Flatten nested messages structure if present
+        # messages can be: {"json": {"field": [errors]}} or {"field": [errors]}
+        if isinstance(messages, dict) and 'json' in messages:
+            messages = messages['json']
+        
+        response = {
+            "error": "Validation failed",
+            "messages": messages
+        }
+        
+        if headers:
+            return response, 422, headers
+        return response, 422
+    
     # Security headers and cache control
     @app.after_request
     def set_security_headers(response):
