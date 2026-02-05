@@ -91,7 +91,7 @@ async function handleAnalyzeClick() {
         analyzeBtn.disabled = true;
         
         // Upload PDF
-        const response = await fetch("/upload", {
+        const response = await fetch("/api/job/upload", {
             method: "POST",
             body: formData
         });
@@ -124,7 +124,7 @@ async function loadJobsHistory() {
     if (!jobsList) return;
     
     try {
-        const response = await fetch("/jobs");
+        const response = await fetch("/api/job");
         const jobs = await response.json();
         
         if (jobs.length === 0) {
@@ -182,7 +182,7 @@ async function deleteJobFromList(jobId, event) {
     }
     
     try {
-        const response = await fetch(`/job/${jobId}`, {
+        const response = await fetch(`/api/job/${jobId}`, {
             method: "DELETE"
         });
         

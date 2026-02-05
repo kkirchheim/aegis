@@ -1,22 +1,12 @@
-"""Jobs blueprint - upload, history, detail, results pages."""
+"""Jobs blueprint - page routes only. API endpoints moved to api.py."""
 
-import os
-import json
-import uuid
 import threading
-from pathlib import Path
-from flask import Blueprint, request, jsonify, render_template, Response, session, redirect
+from flask import Blueprint, render_template, session, redirect
 from utils.decorators import require_auth
-from config import Config
-from services.job_service import (
-    create_job, get_job, get_user_jobs, update_job_status, delete_job,
-    store_artifacts, get_job_artifacts, get_job_events
-)
+from services.job_service import get_job
 from services.event_dispatcher import EventDispatcher
 from services.pipeline_orchestrator import PipelineOrchestrator
 from models.events import JobEvent
-from utils.pdf_utils import extract_page_count, generate_pdf_thumbnail
-from database import get_db
 
 jobs_bp = Blueprint('jobs', __name__)
 
@@ -54,76 +44,6 @@ def analyze_paper_background(job_id, pdf_path, config, llm_provider):
     _orchestrator.run_analysis(job_id, pdf_path, config, llm_provider)
 
 
-@jobs_bp.route("/upload", methods=["POST"])
-@require_auth
-def upload_pdf():
-    """Upload PDF for analysis."""
-    from services.llm_service import init_llm_provider
-    
-    user_id = session['user_id']
-    
-    # Validate file
-    if "pdf" not in request.files:
-        return jsonify({"error": "No PDF file provided"}), 400
-    
-    file = request.files["pdf"]
-    if file.filename == "":
-        return jsonify({"error": "No file selected"}), 400
-    
-    if not file.filename.lower().endswith(".pdf"):
-        return jsonify({"error": "File must be a PDF"}), 400
-    
-    # Check file size
-    file.seek(0, os.SEEK_END)
-    file_size = file.tell()
-    file.seek(0)
-    
-    if file_size > Config.MAX_PDF_SIZE:
-        return jsonify({"error": "PDF too large (max 100MB)"}), 400
-    
-    # Create job
-    job_id = str(uuid.uuid4())
-    pdf_filename = f"{job_id}.pdf"
-    pdf_path = Config.UPLOAD_FOLDER / pdf_filename
-    
-    file.save(pdf_path)
-    
-    # Extract page count and generate thumbnail
-    num_pages = extract_page_count(str(pdf_path))
-    thumbnail_path = generate_pdf_thumbnail(str(pdf_path), job_id, Config.THUMBNAILS_FOLDER)
-    
-    # Create job in database
-    create_job(job_id, str(pdf_path), file.filename, user_id, thumbnail_path, num_pages)
-    
-    # Get configuration
-    config = {
-        "container": request.form.get("container", "python"),
-        "model": request.form.get("model", "haiku"),
-        "cpu_limit": int(request.form.get("cpu_limit", 4)),
-        "memory_limit": int(request.form.get("memory_limit", 2048)),
-        "runtime_limit": int(request.form.get("runtime_limit", 30)),
-        "max_iterations": int(request.form.get("max_iterations", 3)),
-        "storage_limit": int(request.form.get("storage_limit", 10))
-    }
-    
-    # Start analysis thread
-    try:
-        llm_provider = init_llm_provider()
-        thread = threading.Thread(
-            target=analyze_paper_background,
-            args=(job_id, str(pdf_path), config, llm_provider),
-            daemon=True
-        )
-        thread.start()
-    except Exception as e:
-        update_job_status(job_id, "error", str(e))
-    
-    return jsonify({
-        "job_id": job_id,
-        "message": "Paper uploaded successfully. Analysis starting..."
-    }), 202
-
-
 @jobs_bp.route("/")
 def index():
     """Home page - redirect to login if not authenticated."""
@@ -139,97 +59,6 @@ def history():
     return render_template("history.html")
 
 
-@jobs_bp.route("/job/<job_id>")
-@require_auth
-def get_job_detail(job_id):
-    """Get job status and report."""
-    user_id = session.get('user_id')
-    
-    job = get_job(job_id)
-    
-    if not job:
-        return jsonify({"error": "Job not found"}), 404
-    
-    if job.user_id != user_id:
-        return jsonify({"error": "Access denied"}), 403
-    
-    response = {
-        "id": job.id,
-        "status": job.status,
-        "created_at": job.created_at,
-        "completed_at": job.completed_at
-    }
-    
-    if job.report:
-        response["report"] = json.loads(job.report) if isinstance(job.report, str) else job.report
-    
-    if job.error_message:
-        response["error"] = job.error_message
-    
-    return jsonify(response)
-
-
-@jobs_bp.route("/jobs")
-@require_auth
-def list_jobs_api():
-    """List all jobs for current user."""
-    user_id = session.get('user_id')
-    jobs = get_user_jobs(user_id)
-    return jsonify(jobs)
-
-
-@jobs_bp.route("/api/job/<job_id>/full", methods=["GET"])
-@require_auth
-def get_job_full(job_id):
-    """Get full job data including all details."""
-    user_id = session.get('user_id')
-    
-    job = get_job(job_id)
-    
-    if not job:
-        return jsonify({"error": "Job not found"}), 404
-    
-    if job.user_id != user_id:
-        return jsonify({"error": "Access denied"}), 403
-    
-    # Fetch related data
-    events_list = get_job_events(job_id)
-    artifacts = get_job_artifacts(job_id)
-    
-    # Fetch paper analysis
-    from services.analysis_service import get_paper_analysis
-    paper_analysis = get_paper_analysis(job_id) or {}
-    
-    # Get current_stage, default to pending if not set
-    current_stage = job.current_stage or "pending"
-    
-    # Log raw database values before putting in response
-    print(f"[{job_id}] *** API /full READ FROM DB ***", file=__import__('sys').stderr)
-    print(f"[{job_id}]     job.progress type={type(job.progress).__name__}, raw value={repr(job.progress)}", file=__import__('sys').stderr)
-    print(f"[{job_id}]     job.status={job.status}, job.current_stage={job.current_stage}", file=__import__('sys').stderr)
-    
-    response = {
-        "id": job.id,
-        "status": job.status,
-        "progress": job.progress if job.progress is not None else 0.0,  # 0.0-1.0
-        "current_stage": current_stage,  # pipeline stage
-        "pdf_filename": job.pdf_filename,
-        "created_at": job.created_at,
-        "completed_at": job.completed_at,
-        "report": json.loads(job.report) if job.report else {},
-        "error_message": job.error_message,
-        "events": events_list,
-        "artifacts": artifacts,
-        "paper_analysis": paper_analysis
-    }
-    
-    # Log response for debugging
-    print(f"[{job_id}] *** API /full RESPONSE ***", file=__import__('sys').stderr)
-    print(f"[{job_id}]     status={response['status']}, progress={response['progress']}, stage={response['current_stage']}, events={len(response['events'])}", file=__import__('sys').stderr)
-    
-    return jsonify(response)
-
-
 @jobs_bp.route("/reports/<job_id>")
 @require_auth
 def detail_page(job_id):
@@ -239,7 +68,7 @@ def detail_page(job_id):
     job = get_job(job_id)
     
     if not job or job.user_id != user_id:
-        return jsonify({"error": "Access denied"}), 403
+        return redirect('/')
     
     return render_template("detail.html", job_id=job_id)
 
@@ -253,30 +82,6 @@ def results_page(job_id):
     job = get_job(job_id)
     
     if not job or job.user_id != user_id:
-        return jsonify({"error": "Access denied"}), 403
+        return redirect('/')
     
     return render_template("detail.html", job_id=job_id)
-
-
-@jobs_bp.route("/job/<job_id>", methods=["DELETE"])
-@require_auth
-def delete_job_route(job_id):
-    """Delete a job."""
-    try:
-        user_id = session.get('user_id')
-        
-        job = get_job(job_id)
-        
-        if not job:
-            return jsonify({"error": "Job not found"}), 404
-        
-        if job.user_id != user_id:
-            return jsonify({"error": "Access denied"}), 403
-        
-        if delete_job(job_id):
-            return jsonify({"ok": True, "message": "Job deleted"})
-        else:
-            return jsonify({"error": "Failed to delete job"}), 500
-    
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
