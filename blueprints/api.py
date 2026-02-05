@@ -23,7 +23,9 @@ from schemas import (
     ChatMessageSchema, ChatMessageRequestSchema, ChatMessageResponseSchema, ChatHistorySchema,
     LoginSchema, RegisterSchema, ChangePasswordSchema, SessionSchema, UserSchema,
     SuccessMessageSchema, EventSchema, HealthResponseSchema, CacheStatsResponseSchema,
-    UploadJobResponseSchema
+    UploadJobResponseSchema,
+    AgentThinkRequestSchema, AgentLogRequestSchema, AgentExecutionRequestSchema,
+    AgentCompleteRequestSchema, AgentActionSchema, AgentResponseSchema
 )
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -732,22 +734,32 @@ def delete_chat_history_endpoint(job_id):
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/think", methods=["POST"])
-def agent_think():
+@use_kwargs(AgentThinkRequestSchema, location="json")
+@marshal_with(AgentActionSchema, code=200)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
+def agent_think(job_id, repo_state=None):
     """
     Agent calls this to ask for next action.
     
+    Input validated by AgentThinkRequestSchema (@use_kwargs):
+    - job_id: UUID string, required
+    - repo_state: dict with discovered_files, combined_output, executed_commands, errors
+    
     Security: Validates job_id exists before processing.
     Job must exist in database - agents cannot invent job IDs.
+    
+    Returns:
+    - 200: {"action": "...", "target": "...", "reasoning": "..."}
+    - 400: {"error": "..."}
+    - 404: {"error": "Invalid job_id"}
+    - 500: {"error": "..."}
     """
     from services.llm_service import init_llm_provider
     from config import Config
     
-    data = request.json
-    job_id = data.get("job_id")
-    repo_state = data.get("repo_state", {})
-    
-    if not job_id:
-        return ({"error": "job_id required"}), 400
+    repo_state = repo_state or {}
     
     # SECURITY: Validate that job_id actually exists in database
     # This prevents agents from making up job IDs or accessing arbitrary jobs
@@ -755,11 +767,11 @@ def agent_think():
         from models.database import Job
         job = Job.get_by_id(job_id)
         if not job:
-            return ({"error": "Invalid job_id"}), 404
+            return {"error": "Invalid job_id"}, 404
     except Exception as e:
         from flask import current_app
         current_app.logger.error(f"[{job_id}] Job validation failed: {str(e)}")
-        return ({"error": "Failed to validate job"}), 500
+        return {"error": "Failed to validate job"}, 500
     
     try:
         # Build prompt for Claude
@@ -836,117 +848,149 @@ RESPONSE FORMAT (JSON only):
             else:
                 action = {"action": "done", "reasoning": "Could not parse response"}
         
-        return (action)
+        return action
     
     except Exception as e:
         from flask import current_app
         current_app.logger.exception(f"[{job_id}] Agent decision failed: {str(e)}")
-        return ({"error": str(e), "action": "done"}), 500
+        return {"error": str(e), "action": "done"}, 500
 
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/log", methods=["POST"])
-def agent_log():
+@use_kwargs(AgentLogRequestSchema, location="json")
+@marshal_with(AgentResponseSchema, code=200)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
+def agent_log(job_id, message=None):
     """Agent logs progress.
     
+    Input validated by AgentLogRequestSchema (@use_kwargs):
+    - job_id: UUID string, required
+    - message: progress message, optional
+    
     Security: Validates job_id exists before accepting logs.
+    
+    Returns:
+    - 200: {"ok": True}
+    - 400: {"error": "..."}
+    - 404: {"error": "Invalid job_id"}
+    - 500: {"error": "..."}
     """
     from blueprints.jobs import emit_event
     
-    data = request.json
-    job_id = data.get("job_id")
-    message = data.get("message", "")
-    
-    if not job_id:
-        return ({"error": "job_id required"}), 400
+    message = message or ""
     
     # SECURITY: Validate that job_id actually exists
     try:
         job = JobRepository.get(job_id)
         if not job:
-            return ({"error": "Invalid job_id"}), 404
+            return {"error": "Invalid job_id"}, 404
     except Exception as e:
-        return ({"error": "Failed to validate job"}), 500
+        return {"error": "Failed to validate job"}, 500
     
     emit_event(job_id, {
         "step": "agent_progress",
         "message": message
     })
     
-    return ({"ok": True})
+    return {"ok": True}
 
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/execution", methods=["POST"])
-def agent_execution():
+@use_kwargs(AgentExecutionRequestSchema, location="json")
+@marshal_with(AgentResponseSchema, code=200)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
+def agent_execution(job_id, commands_run=None, stdout_combined=None, actual_results=None,
+                   dependencies_used=None, errors_summary=None, discovered_files=None,
+                   test_info=None, randomness_info=None):
     """
     Agent stores execution details.
     
+    Input validated by AgentExecutionRequestSchema (@use_kwargs):
+    - job_id: UUID string, required
+    - commands_run, stdout_combined, actual_results, dependencies_used, etc.: optional fields
+    
     Security: Validates job_id exists before storing execution details.
+    
+    Returns:
+    - 200: {"ok": True}
+    - 400: {"error": "..."}
+    - 404: {"error": "Invalid job_id"}
+    - 500: {"error": "..."}
     """
     from models.database import ExecutionDetails
-    
-    data = request.json
-    job_id = data.get("job_id")
-    
-    if not job_id:
-        return ({"error": "job_id required"}), 400
     
     # SECURITY: Validate that job_id actually exists
     try:
         job = JobRepository.get(job_id)
         if not job:
-            return ({"error": "Invalid job_id"}), 404
+            return {"error": "Invalid job_id"}, 404
     except Exception as e:
-        return ({"error": "Failed to validate job"}), 500
+        return {"error": "Failed to validate job"}, 500
     
     try:
         ExecutionDetails.create(
             job_id=job_id,
-            commands_run=data.get("commands_run", ""),
-            stdout_combined=data.get("stdout_combined", ""),
-            actual_results=json.dumps(data.get("actual_results", {})),
-            dependencies_used=data.get("dependencies_used", ""),
-            errors_summary=data.get("errors_summary", ""),
-            discovered_files=json.dumps(data.get("discovered_files", [])),
-            test_info=data.get("test_info", ""),
-            randomness_info=data.get("randomness_info", "")
+            commands_run=commands_run or "",
+            stdout_combined=stdout_combined or "",
+            actual_results=json.dumps(actual_results or {}),
+            dependencies_used=dependencies_used or "",
+            errors_summary=errors_summary or "",
+            discovered_files=json.dumps(discovered_files or []),
+            test_info=test_info or "",
+            randomness_info=randomness_info or ""
         )
         
-        return ({"ok": True})
+        return {"ok": True}
     
     except Exception as e:
-        return ({"error": str(e)}), 500
+        return {"error": str(e)}, 500
 
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/complete", methods=["POST"])
-def agent_complete():
+@use_kwargs(AgentCompleteRequestSchema, location="json")
+@marshal_with(AgentResponseSchema, code=200)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
+def agent_complete(job_id, success=None, message=None):
     """
     Agent reports completion.
+    
+    Input validated by AgentCompleteRequestSchema (@use_kwargs):
+    - job_id: UUID string, required
+    - success: bool, whether analysis succeeded, optional
+    - message: completion message, optional
     
     NOTE: Agent does NOT control job status. Only emits event.
     Pipeline orchestrator manages job lifecycle (pending -> processing -> completed).
     
     Security: Validates job_id exists before accepting completion.
+    
+    Returns:
+    - 200: {"ok": True}
+    - 400: {"error": "..."}
+    - 404: {"error": "Invalid job_id"}
+    - 500: {"error": "..."}
     """
     from blueprints.jobs import emit_event
     
-    data = request.json
-    job_id = data.get("job_id")
-    success = data.get("success", False)
-    message = data.get("message", "Analysis complete")
-    
-    if not job_id:
-        return ({"error": "job_id required"}), 400
+    success = success or False
+    message = message or "Analysis complete"
     
     # SECURITY: Validate that job_id actually exists
     try:
         job = JobRepository.get(job_id)
         if not job:
-            return ({"error": "Invalid job_id"}), 404
+            return {"error": "Invalid job_id"}, 404
     except Exception as e:
-        return ({"error": "Failed to validate job"}), 500
+        return {"error": "Failed to validate job"}, 500
     
     try:
         # Just emit event - don't update job status (pipeline orchestrator handles that)
@@ -957,10 +1001,10 @@ def agent_complete():
             "agent_status": status_label
         })
         
-        return ({"ok": True})
+        return {"ok": True}
     
     except Exception as e:
-        return ({"error": str(e)}), 500
+        return {"error": str(e)}, 500
 
 
 # ============================================================================

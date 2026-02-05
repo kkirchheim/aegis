@@ -9,7 +9,8 @@ Schemas exported:
 - Jobs: JobSchema, JobListSchema, JobDetailSchema, JobUploadSchema
 - Chat: ChatMessageSchema, ChatMessageResponseSchema, ChatHistorySchema
 - Results: ArtifactSchema, AspectEvaluationSchema, ExecutionResultSchema, PaperAnalysisSchema
-- Admin: UserSchema, UserListSchema, UserActionSchema
+- Admin: UserSchema, UserListSchema, UserActionSchema, UpdateUserStatusSchema
+- Agent: AgentThinkRequestSchema, AgentLogRequestSchema, AgentExecutionRequestSchema, AgentCompleteRequestSchema, AgentActionSchema, AgentResponseSchema
 - Common: ErrorSchema, PaginationSchema, SuccessMessageSchema
 """
 
@@ -22,6 +23,10 @@ from .jobs import JobSchema, JobListSchema, JobDetailSchema, JobUploadSchema
 from .chat import ChatMessageSchema, ChatMessageResponseSchema, ChatHistorySchema, ChatMessageRequestSchema
 from .results import ArtifactSchema, AspectEvaluationSchema, ExecutionResultSchema, PaperAnalysisSchema
 from .admin import UserSchema, UserListSchema, UserActionSchema, UpdateUserStatusSchema
+from .agent import (
+    AgentThinkRequestSchema, AgentLogRequestSchema, AgentExecutionRequestSchema,
+    AgentCompleteRequestSchema, AgentActionSchema, AgentResponseSchema
+)
 
 __all__ = [
     # Common
@@ -57,4 +62,11 @@ __all__ = [
     'UserListSchema',
     'UserActionSchema',
     'UpdateUserStatusSchema',
+    # Agent (Internal - Response & Input)
+    'AgentThinkRequestSchema',
+    'AgentLogRequestSchema',
+    'AgentExecutionRequestSchema',
+    'AgentCompleteRequestSchema',
+    'AgentActionSchema',
+    'AgentResponseSchema',
 ]
