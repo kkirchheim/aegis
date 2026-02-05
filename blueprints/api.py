@@ -388,6 +388,7 @@ def get_chat_history(session_id, limit=20):
 @use_kwargs(ChatMessageRequestSchema, location="json")
 @marshal_with(SuccessMessageSchema, code=200)
 @marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=422)
 @marshal_with(ErrorSchema, code=403)
 @marshal_with(ErrorSchema, code=404)
 @marshal_with(ErrorSchema, code=500)
@@ -398,7 +399,8 @@ def get_chat_history(session_id, limit=20):
     params={"job_id": {"description": "Job ID", "in": "path"}},
     responses={
         200: {"description": "Message sent successfully", "schema": SuccessMessageSchema()},
-        400: {"description": "Bad request - empty message", "schema": ErrorSchema()},
+        400: {"description": "Bad request - job analysis not complete", "schema": ErrorSchema()},
+        422: {"description": "Unprocessable Entity - validation error", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}

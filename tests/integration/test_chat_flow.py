@@ -26,7 +26,8 @@ class TestChatSendMessage:
             "message": ""
         })
         
-        assert response.status_code == 400
+        # @use_kwargs returns 422 for validation errors, not 400
+        assert response.status_code == 422
     
     def test_send_message_nonexistent_job(self, authenticated_user):
         """Test sending message to non-existent job"""
