@@ -136,11 +136,10 @@ function showRelevantSections(job) {
         console.log(`[sections] statusSection: shown`);
     }
     
-    // Show progress section only if processing
+    // Always show progress section - shows 100% when completed
     if (progressSection) {
-        const show = job.status === "processing" || job.status === "pending";
-        progressSection.style.display = show ? "block" : "none";
-        console.log(`[sections] progressSection: ${show ? "shown" : "hidden"} (status=${job.status})`);
+        progressSection.style.display = "block";
+        console.log(`[sections] progressSection: shown (status=${job.status})`);
     }
     
     // Show analysis sections if we have data
@@ -389,20 +388,12 @@ function updateMetadata(job) {
             <div class="divider my-4"></div>
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <p class="text-xs text-base-content/60 uppercase tracking-wide">Filename</p>
-                    <p class="font-mono text-sm">${job.pdf_filename}</p>
-                </div>
-                <div>
                     <p class="text-xs text-base-content/60 uppercase tracking-wide">Created</p>
                     <p class="text-sm">${new Date(job.created_at).toLocaleDateString()}</p>
                 </div>
                 <div>
                     <p class="text-xs text-base-content/60 uppercase tracking-wide">Completed</p>
                     <p class="text-sm">${job.completed_at ? new Date(job.completed_at).toLocaleDateString() : "—"}</p>
-                </div>
-                <div>
-                    <p class="text-xs text-base-content/60 uppercase tracking-wide">Status</p>
-                    <p class="text-sm"><span class="badge badge-sm">${job.status}</span></p>
                 </div>
             </div>
         </div>
