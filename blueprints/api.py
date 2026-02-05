@@ -1195,27 +1195,40 @@ def upload_pdf():
     """Upload PDF for analysis."""
     from services.llm_service import init_llm_provider
     from blueprints.jobs import analyze_paper_background, emit_event
+    from utils.decorators import get_current_user_id
+    from utils.api_key_utils import verify_api_key, InvalidAPIKeyError
     import os
     import uuid
     
-    require_auth_decorator = require_auth  # Get the decorator function
+    # Manual auth check - support both session cookie and API key
+    user_id = None
     
-    # Manual auth check since we can't use decorator on moved function
-    if 'user_id' not in session:
-        return ({"error": "Unauthorized"}), 401
+    # Try session cookie first
+    if 'user_id' in session:
+        user_id = session['user_id']
+    else:
+        # Try API key from Authorization header
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('ApiKey '):
+            api_key = auth_header[7:]  # Remove "ApiKey " prefix
+            try:
+                user_id = verify_api_key(api_key)
+            except (InvalidAPIKeyError, Exception):
+                pass  # Invalid key, treat as unauthorized
     
-    user_id = session['user_id']
+    if not user_id:
+        return {"error": "Unauthorized"}, 401
     
     # Validate file
     if "pdf" not in request.files:
-        return ({"error": "No PDF file provided"}), 400
+        return {"error": "No PDF file provided"}, 400
     
     file = request.files["pdf"]
     if file.filename == "":
-        return ({"error": "No file selected"}), 400
+        return {"error": "No file selected"}, 400
     
     if not file.filename.lower().endswith(".pdf"):
-        return ({"error": "File must be a PDF"}), 400
+        return {"error": "File must be a PDF"}, 400
     
     # Check file size
     file.seek(0, os.SEEK_END)
@@ -1223,7 +1236,7 @@ def upload_pdf():
     file.seek(0)
     
     if file_size > Config.MAX_PDF_SIZE:
-        return ({"error": "PDF too large (max 100MB)"}), 413
+        return {"error": "PDF too large (max 100MB)"}, 413
     
     # Create job
     job_id = str(uuid.uuid4())
@@ -1270,7 +1283,7 @@ def upload_pdf():
             "message": "Paper uploaded successfully. Analysis starting..."
         },
         202
-    )
+    )  # Tuple required for 202 status code
 
 
 @api_bp.route("/job", methods=["GET"])
