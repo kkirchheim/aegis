@@ -122,7 +122,7 @@ def create_app():
         from flask import jsonify, request
         
         # If request came from API (/api/*) or wants JSON, return JSON
-        if request.path.startswith("/api") or request.accept_mimetypes.get('application/json'):
+        if request.path.startswith("/api") or 'application/json' in request.accept_mimetypes:
             return jsonify({"error": "Not found"}), 404
         
         # Otherwise, render HTML error page
@@ -136,7 +136,7 @@ def create_app():
         app.logger.error(f"Server error: {error}")
         
         # If request came from API (/api/*) or wants JSON, return JSON
-        if request.path.startswith("/api") or request.accept_mimetypes.get('application/json'):
+        if request.path.startswith("/api") or 'application/json' in request.accept_mimetypes:
             return jsonify({"error": "Internal server error"}), 500
         
         # Otherwise, render HTML error page
