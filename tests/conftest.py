@@ -33,6 +33,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "db: mark test as database test (requires database)")
     config.addinivalue_line("markers", "api: mark test as API endpoint test")
     config.addinivalue_line("markers", "auth: mark test as authentication test")
+    config.addinivalue_line("markers", "admin: mark test as admin management test")
     config.addinivalue_line("markers", "event: mark test as event/streaming test")
 
 # Add parent directory to path so 'app' module can be imported
@@ -201,6 +202,96 @@ def authenticated_admin(client, app, create_test_user, admin_user_credentials):
         sess['username'] = admin_user_credentials['username']
     
     return client
+
+
+@pytest.fixture
+def admin_user(client, app, create_test_user, admin_user_credentials):
+    """Create and authenticate an admin user (for integration tests).
+    
+    Returns a Flask test client with admin session.
+    """
+    user_id = create_test_user(
+        admin_user_credentials['username'],
+        admin_user_credentials['email'],
+        admin_user_credentials['password'],
+        is_active=True
+    )
+    
+    # Mark user as admin in database
+    with app.app_context():
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("UPDATE users SET role = ? WHERE id = ?", ('admin', user_id))
+        conn.commit()
+        conn.close()
+    
+    # Set session
+    with client.session_transaction() as sess:
+        sess['user_id'] = user_id
+        sess['username'] = admin_user_credentials['username']
+    
+    return client
+
+
+@pytest.fixture
+def test_user(app, create_test_user, test_user_credentials):
+    """Create a test user and return their data."""
+    user_id = create_test_user(
+        test_user_credentials['username'],
+        test_user_credentials['email'],
+        test_user_credentials['password'],
+        is_active=True
+    )
+    
+    return {
+        'id': user_id,
+        'username': test_user_credentials['username'],
+        'email': test_user_credentials['email'],
+        'password': test_user_credentials['password'],
+        'is_active': True
+    }
+
+
+@pytest.fixture
+def test_user_creds(test_user_credentials):
+    """Provide test user credentials."""
+    return test_user_credentials
+
+
+@pytest.fixture
+def inactive_user(app, create_test_user):
+    """Create an inactive test user and return their data."""
+    user_id = create_test_user(
+        "inactive_user",
+        "inactive@example.com",
+        "InactivePass123!",
+        is_active=False
+    )
+    
+    return {
+        'id': user_id,
+        'username': 'inactive_user',
+        'email': 'inactive@example.com',
+        'is_active': False
+    }
+
+
+@pytest.fixture
+def active_user(app, create_test_user):
+    """Create an active test user and return their data."""
+    user_id = create_test_user(
+        "active_user",
+        "active@example.com",
+        "ActivePass123!",
+        is_active=True
+    )
+    
+    return {
+        'id': user_id,
+        'username': 'active_user',
+        'email': 'active@example.com',
+        'is_active': True
+    }
 
 
 @pytest.fixture
@@ -502,3 +593,89 @@ def mock_event_dispatcher(mock_event_queues, mock_job_service):
     )
     
     return dispatcher
+
+
+# ============================================================================
+# NEW: Job API Testing Fixtures
+# ============================================================================
+
+@pytest.fixture
+def test_pdf_file():
+    """Provide a mock PDF file for testing file uploads."""
+    from io import BytesIO
+    
+    # Create a minimal valid PDF (PDF header + EOF marker)
+    pdf_content = b"""%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< >>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Hello World) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000229 00000 n
+0000000310 00000 n
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+392
+%%EOF"""
+    
+    return BytesIO(pdf_content)
+
+
+@pytest.fixture
+def other_user(client, app, create_test_user):
+    """Create and authenticate a second test user for multi-user testing."""
+    user_id = create_test_user(
+        "otheruser",
+        "otheruser@example.com",
+        "OtherPassword123!",
+        is_active=True
+    )
+    
+    # Set session for second user
+    with client.session_transaction() as sess:
+        sess['user_id'] = user_id
+        sess['username'] = "otheruser"
+    
+    return client
+
+
+@pytest.fixture
+def test_job(authenticated_user, create_test_job, app):
+    """Create a test job for the authenticated user."""
+    with app.app_context():
+        with authenticated_user.session_transaction() as sess:
+            user_id = sess.get('user_id')
+        
+        job = create_test_job(user_id=user_id)
+        
+        # Return job as dictionary with id
+        return {
+            "id": str(job.id),
+            "user_id": job.user_id,
+            "status": job.status,
+            "current_stage": job.current_stage,
+        }
