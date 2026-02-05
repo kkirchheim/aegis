@@ -116,8 +116,8 @@ class TestUnauthenticatedAccessToProtectedRoutes:
         assert response.status_code in [301, 302, 303, 307, 308, 401]
     
     def test_unauthenticated_access_to_upload(self, client):
-        """POST /upload without auth should return 401."""
-        response = client.post('/upload')
+        """POST /api/job/upload without auth should return 401."""
+        response = client.post('/api/job/upload')
         assert response.status_code == 401
     
     def test_unauthenticated_access_to_jobs(self, client):
