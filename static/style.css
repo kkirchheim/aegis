@@ -29,38 +29,51 @@
     background-color: #f9f9f9;
 }
 
-/* Chat message styles */
+/* Chat message styles - Theme-aware with DaisyUI colors */
 .chat-message {
-    margin: 6px 0;
+    margin: 8px 0;
     display: flex;
     word-wrap: break-word;
 }
 
-/* User message - primary color (blue) box, right-aligned */
+/* User message - Primary blue, right-aligned */
 .chat-message.user-message {
     justify-content: flex-end;
+    padding: 0 4px;
 }
 
 .chat-message.user-message .message-content {
-    background-color: #2196F3; /* Primary blue */
+    background-color: #0068b4; /* Match primary override */
     color: white;
-    padding: 10px 14px;
-    border-radius: 12px;
+    padding: 12px 16px;
+    border-radius: 14px;
     max-width: 70%;
     word-wrap: break-word;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    border-bottom-right-radius: 4px;
 }
 
-/* Assistant message - light gray box, left-aligned */
+/* Assistant message - Secondary/neutral, left-aligned, theme-aware */
 .chat-message.assistant-message {
     justify-content: flex-start;
+    padding: 0 4px;
 }
 
 .chat-message.assistant-message .message-content {
-    background-color: #e8e8e8;
-    color: #333;
-    padding: 10px 14px;
-    border-radius: 12px;
+    /* Light theme: #e5e7eb (gray-200), Dark theme adapts via CSS variables */
+    background-color: #e5e7eb;
+    color: #1f2937;
+    padding: 12px 16px;
+    border-radius: 14px;
     max-width: 70%;
     word-wrap: break-word;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border-bottom-left-radius: 4px;
+}
+
+/* Dark theme support for assistant messages */
+[data-theme="dark"] .chat-message.assistant-message .message-content {
+    background-color: #374151; /* gray-700 for dark mode */
+    color: #f3f4f6;            /* gray-100 for dark mode */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }

@@ -712,6 +712,10 @@ async function loadChatHistory() {
             addChatMessage(msg.role, msg.content);
         });
         
+        // Track how many messages we've rendered so polling knows what's new
+        lastChatMessageCount = messages.length;
+        console.log('[chat-polling] Synced lastChatMessageCount to', lastChatMessageCount);
+        
         // Scroll to bottom
         chatHistory.scrollTop = chatHistory.scrollHeight;
     } catch (error) {
@@ -757,19 +761,11 @@ async function sendChat() {
             return;
         }
         
-        // Handle response
-        const text = await response.text();
-        if (text) {
-            try {
-                const data = JSON.parse(text);
-                addChatMessage('assistant', data.message || data.response || 'Message sent');
-            } catch (e) {
-                // Plain text response or empty
-                if (text.length > 0) {
-                    addChatMessage('assistant', text);
-                }
-            }
-        }
+        // Backend returns success, but don't add message here.
+        // The polling loop will fetch the response from the database
+        // within 500ms. This avoids duplicate messages and race conditions.
+        console.log('[chat] Message sent, waiting for polling to fetch response from DB');
+        
     } catch (error) {
         console.error('Chat error:', error);
         addChatMessage('assistant', 'Failed to send message: ' + error.message);

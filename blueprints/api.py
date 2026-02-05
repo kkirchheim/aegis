@@ -332,6 +332,7 @@ def chat_with_paper(job_id):
     """Chat with paper analysis."""
     from services.llm_service import init_llm_provider
     from blueprints.jobs import emit_event
+    from repositories import PaperAnalysisRepository, ExecutionDetailsRepository, AspectEvaluationRepository
     
     user_id = session.get('user_id')
     data = request.json
@@ -353,6 +354,11 @@ def chat_with_paper(job_id):
         if job.status not in ["completed", "processing"]:
             return jsonify({"error": "Job analysis not complete"}), 400
         
+        # FETCH PAPER AND ANALYSIS DATA
+        paper_analysis = PaperAnalysisRepository.get(job_id)
+        execution_details = ExecutionDetailsRepository.get(job_id)
+        aspect_evaluations = AspectEvaluationRepository.list_by_job(job_id)
+        
         # Get or create session
         session_obj = get_or_create_chat_session(job_id)
         store_chat_message(session_obj["id"], "user", user_message)
@@ -361,12 +367,21 @@ def chat_with_paper(job_id):
         history = get_chat_history(session_obj["id"], limit=10)
         messages = [{"role": msg["role"], "content": msg["content"]} for msg in history]
         
-        # Start response thread
+        # Start response thread with paper context
         try:
             llm_provider = init_llm_provider()
             thread = threading.Thread(
                 target=_generate_chat_response,
-                args=(job_id, session_obj["id"], messages, llm_provider, emit_event),
+                args=(
+                    job_id, 
+                    session_obj["id"], 
+                    messages, 
+                    llm_provider, 
+                    emit_event,
+                    paper_analysis,
+                    execution_details,
+                    aspect_evaluations
+                ),
                 daemon=True
             )
             thread.start()
@@ -379,12 +394,126 @@ def chat_with_paper(job_id):
         return jsonify({"error": str(e)}), 500
 
 
-def _generate_chat_response(job_id, session_id, messages, llm_provider, emit_event):
-    """Generate chat response in background."""
+def _build_chat_system_prompt(paper_analysis, execution_details, aspect_evaluations):
+    """Build system prompt with paper analysis and reproducibility context."""
+    import json
+    
+    # Extract paper metadata
+    paper_info = ""
+    if paper_analysis:
+        paper_info = f"""
+PAPER INFORMATION:
+═════════════════════════════════════════
+Title: {paper_analysis.title or "Not extracted"}
+Abstract: {(paper_analysis.abstract[:500] if paper_analysis.abstract else "Not available")}...
+
+Methodology: {paper_analysis.methodology or "Not described"}
+
+Dependencies/Libraries Mentioned: {paper_analysis.dependencies or "None mentioned"}
+
+Dataset: {paper_analysis.dataset_description or "Not described"}
+"""
+    
+    # Extract execution results
+    execution_info = ""
+    if execution_details:
+        # Parse JSON fields safely
+        actual_results = {}
+        if execution_details.actual_results:
+            try:
+                actual_results = json.loads(execution_details.actual_results)
+            except:
+                pass
+        
+        discovered_files = []
+        if execution_details.discovered_files:
+            try:
+                discovered_files = json.loads(execution_details.discovered_files)
+            except:
+                discovered_files = []
+        
+        execution_info = f"""
+EXECUTION RESULTS:
+═════════════════════════════════════════
+Status: Successfully executed
+
+Commands Run: {(execution_details.commands_run[:500] if execution_details.commands_run else "None recorded")}
+
+Output (last 800 chars): {(execution_details.stdout_combined[-800:] if execution_details.stdout_combined else "No output")}
+
+Files Discovered: {len(discovered_files)} files
+Top files: {', '.join(discovered_files[:10])}
+
+Actual Results: {(json.dumps(actual_results, indent=2) if actual_results else "No results recorded")}
+
+Dependencies Used: {execution_details.dependencies_used or "Not logged"}
+
+Errors Encountered: {execution_details.errors_summary or "No errors"}
+"""
+    
+    # Extract reproducibility evaluations
+    evaluations_info = ""
+    if aspect_evaluations:
+        eval_summary = []
+        for eval_item in aspect_evaluations:
+            status_emoji = "✓" if eval_item.status == "pass" else "✗" if eval_item.status == "fail" else "~"
+            eval_summary.append(
+                f"{status_emoji} {eval_item.name}: {eval_item.status}\n"
+                f"  Evidence: {(eval_item.evidence[:200] if eval_item.evidence else 'N/A')}\n"
+                f"  Paper supports: {eval_item.paper_supports}, Code supports: {eval_item.code_supports}"
+            )
+        
+        evaluations_info = f"""
+REPRODUCIBILITY ASSESSMENT:
+═════════════════════════════════════════
+{chr(10).join(eval_summary)}
+"""
+    
+    # Build complete system prompt
+    system_prompt = f"""You are an AI assistant specialized in analyzing scientific papers and their reproducibility.
+
+You have access to detailed information about a research paper and the results of attempting to reproduce its code implementation.
+
+Your role is to:
+1. Answer questions about the paper's content, methodology, and findings
+2. Explain the reproducibility assessment results
+3. Provide insights on what worked, what didn't, and why
+4. Suggest improvements or next steps for reproduction
+5. Help interpret the gap between claimed and actual results
+
+Always base your answers on the provided context. If information is not available, say so clearly.
+
+{paper_info}
+
+{execution_info}
+
+{evaluations_info}
+
+INSTRUCTIONS:
+- Answer questions based on the paper and execution context provided above
+- If asked about specific results or findings, cite the exact section
+- Be honest about limitations and gaps in reproducibility
+- Explain technical concepts when needed
+- Suggest improvements or troubleshooting when appropriate
+"""
+    
+    return system_prompt
+
+
+def _generate_chat_response(job_id, session_id, messages, llm_provider, emit_event, paper_analysis=None, execution_details=None, aspect_evaluations=None):
+    """Generate chat response in background with paper context."""
     try:
+        # BUILD SYSTEM PROMPT WITH PAPER CONTEXT
+        system_prompt = _build_chat_system_prompt(
+            paper_analysis,
+            execution_details,
+            aspect_evaluations
+        )
+        
         full_response = ""
         for chunk in llm_provider.stream(
             messages=messages,
+            system=system_prompt,
             max_tokens=2048,
             temperature=0.7
         ):
