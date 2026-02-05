@@ -228,12 +228,6 @@ async function pollOnce() {
 function showRelevantSections(job) {
     console.log(`[sections] Showing relevant sections for status=${job.status}`);
     
-    // Always show status section
-    if (statusSection) {
-        statusSection.style.display = "block";
-        console.log(`[sections] statusSection: shown`);
-    }
-    
     // Always show progress section - shows 100% when completed
     if (progressSection) {
         progressSection.style.display = "block";
@@ -387,9 +381,11 @@ function updateStages(job) {
 }
 
 function updateStatus(job) {
-    console.log(`[update] status: statusContent=${!!statusContent}`);
-    if (!statusContent) {
-        console.warn(`[update] status skipped - missing statusContent`);
+    // Update status badge in the progress section header
+    const statusBadge = document.getElementById("statusBadge");
+    
+    if (!statusBadge) {
+        console.warn(`[update] status: missing statusBadge element`);
         return;
     }
     
@@ -409,16 +405,10 @@ function updateStatus(job) {
         'error': 'badge-error'
     }[job.status] || 'badge-gray';
     
-    statusContent.innerHTML = `<div class="badge ${statusClass}">${statusText}</div>`;
+    statusBadge.className = `badge ${statusClass}`;
+    statusBadge.textContent = statusText;
     
-    if (job.error_message) {
-        statusContent.innerHTML += `<div class="alert alert-error mt-2"><p>${job.error_message}</p></div>`;
-    }
-    
-    console.log(`[update] status: Rendered as "${statusText}"`);
-    console.log(`[update] status: innerHTML is now:`, statusContent.innerHTML);
-    console.log(`[update] status: computed display:`, window.getComputedStyle(statusContent).display);
-    console.log(`[update] status: statusContent parent:`, statusContent.parentElement?.id || statusContent.parentElement?.className);
+    console.log(`[update] status: Updated statusBadge to "${statusText}" with class ${statusClass}`);
 }
 
 function updateEventLog(job) {
@@ -504,17 +494,6 @@ function updateMetadata(job) {
             <div>
                 <p class="text-sm text-base-content/60 font-semibold mb-2">Abstract</p>
                 <p class="text-sm leading-relaxed">${abstract}</p>
-            </div>
-            <div class="divider my-4"></div>
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <p class="text-xs text-base-content/60 uppercase tracking-wide">Created</p>
-                    <p class="text-sm">${new Date(job.created_at).toLocaleDateString()}</p>
-                </div>
-                <div>
-                    <p class="text-xs text-base-content/60 uppercase tracking-wide">Completed</p>
-                    <p class="text-sm">${job.completed_at ? new Date(job.completed_at).toLocaleDateString() : "—"}</p>
-                </div>
             </div>
         </div>
     `;

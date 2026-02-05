@@ -156,26 +156,14 @@
     <!-- Main Container -->
     <div class="container mx-auto px-4 py-8 max-w-5xl">
         
-        <!-- Status Section -->
-        <section id="statusSection" class="mb-8">
-            <div class="card bg-base-100 shadow-lg">
-                <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2">
-                        <span>📊</span>
-                        <span>Status</span>
-                    </h2>
-                    <div id="statusContent"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Progress Section (for processing jobs) -->
+        <!-- Progress Section (for processing jobs) - FIRST -->
         <section id="progressSection" class="mb-8" style="display: none;">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2">
                         <span>⚙️</span>
                         <span>Analysis Progress</span>
+                        <span id="statusBadge" class="badge badge-primary ml-auto"></span>
                     </h2>
                     
                     <div class="flex items-center gap-4 my-4">
@@ -208,7 +196,22 @@
             </div>
         </section>
 
-        <!-- Abstract Section -->
+        <!-- Execution Log - SECOND (directly below progress) -->
+        <section id="logSection" class="mb-8" style="display: none;">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>📋</span>
+                        <span>Execution Log</span>
+                    </h2>
+                    <div id="logContent" class="bg-base-200 rounded-lg p-4 font-mono text-xs max-h-96 overflow-y-auto">
+                        <div id="eventLog" class="space-y-1"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Metadata Section (Abstract, Artifacts, Citations) - THIRD -->
         <section id="metadataSection" class="mb-8" style="display: none;">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
@@ -217,6 +220,19 @@
                         <span>Abstract</span>
                     </h2>
                     <div id="metadataContent"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Artifacts Section -->
+        <section id="artifactsSection" class="mb-8" style="display: none;">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title flex items-center gap-2">
+                        <span>🎯</span>
+                        <span>Artifacts Found</span>
+                    </h2>
+                    <div id="artifactsContent"></div>
                 </div>
             </div>
         </section>
@@ -241,23 +257,7 @@
             </div>
         </section>
 
-        <!-- Artifacts Section -->
-        <section id="artifactsSection" class="mb-8" style="display: none;">
-            <div class="card bg-base-100 shadow-lg">
-                <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2">
-                        <span>🎯</span>
-                        <span>Artifacts Found</span>
-                    </h2>
-                    <div id="artifactsContent"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Reproducibility Checklist Section (inserted dynamically) -->
-        <div id="checklistContainer"></div>
-
-        <!-- Reproducibility Aspects -->
+        <!-- Reproducibility Aspects - FOURTH -->
         <section id="aspectsSection" class="mb-8" style="display: none;">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
@@ -270,22 +270,10 @@
             </div>
         </section>
 
-        <!-- Execution Log -->
-        <section id="logSection" class="mb-8" style="display: none;">
-            <div class="card bg-base-100 shadow-lg">
-                <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2">
-                        <span>📋</span>
-                        <span>Execution Log</span>
-                    </h2>
-                    <div id="logContent" class="bg-base-200 rounded-lg p-4 font-mono text-xs max-h-96 overflow-y-auto">
-                        <div id="eventLog" class="space-y-1"></div>
-                    </div>
-                </div>
-            </div>
-        </section>
+        <!-- Reproducibility Checklist Section (inserted dynamically) -->
+        <div id="checklistContainer"></div>
 
-        <!-- Chat Section -->
+        <!-- Chat Section - LAST -->
         <section id="chatSection" class="mb-8" style="display: none;">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
