@@ -62,7 +62,8 @@ async function loadJobs() {
             return;
         }
         
-        const jobs = await response.json();
+        const data = await response.json();
+        const jobs = data.jobs || [];  // Extract jobs array from envelope format
         
         // Fetch full data for each job to get paper_analysis
         allJobs = await Promise.all(jobs.map(async (job) => {
