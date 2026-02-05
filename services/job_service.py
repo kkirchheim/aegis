@@ -16,11 +16,16 @@ def create_job(job_id, pdf_path, pdf_filename, user_id, thumbnail_path=None, num
             pdf_filename=pdf_filename,
             status="pending",
             current_stage="pending",
+            progress=0.0,  # Initialize progress to 0%
             thumbnail_path=thumbnail_path,
             num_pages=num_pages
         )
+        import sys
+        print(f"[{job_id}] Job created with progress=0.0", file=sys.stderr)
         return True
     except Exception as e:
+        import sys
+        print(f"[{job_id}] Failed to create job: {e}", file=sys.stderr)
         return False
 
 
@@ -63,10 +68,22 @@ def update_job_status(job_id, status, error_message=None, progress=None, current
         if error_message:
             updates["error_message"] = error_message
         
+        import sys
+        print(f"[{job_id}] update_job_status called: status={status}, progress={progress}, current_stage={current_stage}", file=sys.stderr)
+        print(f"[{job_id}] Executing update with: {updates}", file=sys.stderr)
+        
         # Update using Peewee
-        Job.update(updates).where(Job.id == job_id).execute()
+        result = Job.update(updates).where(Job.id == job_id).execute()
+        print(f"[{job_id}] Update executed, rows affected: {result}", file=sys.stderr)
+        
+        # Verify what was written
+        job = Job.get_by_id(job_id)
+        print(f"[{job_id}] DB now has: status={job.status}, progress={job.progress}, current_stage={job.current_stage}", file=sys.stderr)
+        
         return True
     except Exception as e:
+        import sys
+        print(f"[{job_id}] update_job_status FAILED: {e}", file=sys.stderr)
         return False
 
 

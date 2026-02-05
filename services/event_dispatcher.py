@@ -80,6 +80,8 @@ class EventDispatcher:
                 stage_duration_ms=event.stage_duration_ms,
             )
             self.logger(f"[{event.job_id}] Event persisted: {event.step}")
+            if event.progress is not None:
+                self.logger(f"[{event.job_id}] Event progress: {event.progress}")
         except Exception as e:
             self.logger(f"[{event.job_id}] Failed to persist event {event.step}: {type(e).__name__}: {e}")
     
@@ -112,7 +114,11 @@ class EventDispatcher:
             # Use event.progress if provided (event is the ground truth)
             if event.progress is not None:
                 updates["progress"] = event.progress
+                self.logger(f"[{event.job_id}] Updating progress to {event.progress} (from event)")
+            else:
+                self.logger(f"[{event.job_id}] No progress in event, not updating progress field")
             
+            self.logger(f"[{event.job_id}] Calling update_job_status with: {updates}")
             update_job_status(event.job_id, **updates)
     
     def _emit_to_queues(self, event: JobEvent) -> None:
