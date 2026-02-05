@@ -55,7 +55,7 @@ function updateSortButtons() {
 
 async function loadJobs() {
     try {
-        const response = await fetch('/jobs');
+        const response = await fetch('/api/job');
         
         if (!response.ok) {
             jobsList.innerHTML = '<div class="alert alert-error">Failed to load jobs</div>';

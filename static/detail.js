@@ -335,6 +335,7 @@ function updateEventLog(job) {
     
     // Only append new events (events after lastEventCount)
     if (currentEventCount > lastEventCount && job.events) {
+        const newEventsCount = currentEventCount - lastEventCount;
         job.events.slice(lastEventCount).forEach(event => {
             if (event.step && (event.step.startsWith('chat_') || event.step === 'chat_error')) {
                 return;  // Skip chat events
@@ -356,7 +357,7 @@ function updateEventLog(job) {
         });
         
         lastEventCount = currentEventCount;
-        console.log(`[update] eventLog: Appended ${currentEventCount - lastEventCount} new events`);
+        console.log(`[update] eventLog: Appended ${newEventsCount} new events`);
     }
     
     // Auto-scroll to bottom only if user isn't scrolled up reading history
