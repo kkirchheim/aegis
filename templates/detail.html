@@ -310,10 +310,12 @@
         document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
     </script>
 
-    <script src="{{ url_for('static', filename='detail.js') }}"></script>
     <script>
-        // Pass job_id to detail.js
-        const JOB_ID = "{{ job_id }}";
+        // Pass job_id to detail.js - MUST be var or global, not const (block-scoped)
+        // Using window.JOB_ID ensures global accessibility across script blocks
+        window.JOB_ID = "{{ job_id }}";
+        console.log('[detail-html] Set window.JOB_ID =', window.JOB_ID, 'Type:', typeof window.JOB_ID);
     </script>
+    <script src="{{ url_for('static', filename='detail.js') }}"></script>
 </body>
 </html>

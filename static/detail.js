@@ -4,6 +4,9 @@
  * Updates all UI components from complete job state
  */
 
+// Module-level JOB_ID initialized from window global
+let JOB_ID = null;
+
 let currentJob = null;
 let pollInterval = null;
 let lastStage = null;
@@ -55,9 +58,16 @@ const chatClearBtn = document.getElementById("chatClearBtn");
 // ============================================================================
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Initialize JOB_ID from window global (set by HTML template BEFORE detail.js loads)
+    JOB_ID = window.JOB_ID;
+    
     console.log(`[unified-polling] Starting for JOB_ID=${JOB_ID}`);
+    console.log('[chat-polling] Page loaded, jobId:', JOB_ID);
+    console.log('[chat-polling] JOB_ID type:', typeof JOB_ID, 'value is truthy:', !!JOB_ID);
+    console.log('[chat-polling] window.JOB_ID:', window.JOB_ID);
     
     if (!JOB_ID) {
+        console.error('[chat-polling] JOB_ID not set or empty! window.JOB_ID=', window.JOB_ID);
         statusContent.innerHTML = "<div class='alert alert-error'>No job ID provided</div>";
         return;
     }
@@ -94,7 +104,12 @@ function stopPolling() {
 // ============================================================================
 
 function startChatPolling() {
-    console.log(`[chat-polling] Starting independent chat polling every 500ms`);
+    if (!JOB_ID) {
+        console.error('[chat-polling] jobId not set, cannot start polling. JOB_ID=', JOB_ID);
+        return;
+    }
+    
+    console.log('[chat-polling] Starting polling for jobId:', JOB_ID);
     
     // Clear existing interval if any
     if (chatPollingInterval) {
@@ -104,6 +119,7 @@ function startChatPolling() {
     // Poll every 500ms (faster than job polling since it's just fetching history)
     chatPollingInterval = setInterval(async () => {
         if (!JOB_ID) {
+            console.warn('[chat-polling] jobId became undefined, stopping polling');
             stopChatPolling();
             return;
         }
@@ -115,15 +131,25 @@ function startChatPolling() {
         }
         
         try {
-            const response = await fetch(`/api/job/${JOB_ID}/chat/history`, {
+            const url = `/api/job/${JOB_ID}/chat/history`;
+            console.log('[chat-polling] Fetching from:', url);
+            
+            const response = await fetch(url, {
                 credentials: 'include'
             });
-            if (!response.ok) return;
+            
+            console.log('[chat-polling] Response status:', response.status);
+            
+            if (!response.ok) {
+                console.warn('[chat-polling] Response not ok. Status:', response.status);
+                return;
+            }
             
             const messages = await response.json();
+            console.log('[chat-polling] Received', messages.length, 'messages');
             updateChatMessages(messages);
         } catch (error) {
-            console.error('[chat-polling] Chat polling error:', error);
+            console.error('[chat-polling] Fetch failed. JobId:', JOB_ID, 'Error:', error);
         }
     }, 500); // Poll every 500ms
 }
@@ -254,9 +280,12 @@ function showRelevantSections(job) {
         
         // Load chat history and start polling when chat section is shown
         if (show) {
+            console.log('[chat-polling] Showing chat section, jobId:', JOB_ID);
             loadChatHistory();
+            console.log('[chat-polling] Chat history loaded, starting polling...');
             startChatPolling();  // Start independent chat polling
         } else {
+            console.log('[chat-polling] Hiding chat section, stopping polling...');
             stopChatPolling();  // Stop polling when chat is hidden
         }
     }
@@ -647,24 +676,33 @@ function addChatMessage(role, content) {
 }
 
 async function loadChatHistory() {
-    if (!JOB_ID) return;
+    if (!JOB_ID) {
+        console.error('[chat-polling] loadChatHistory: jobId not set');
+        return;
+    }
     
     if (!chatHistory) {
-        console.error('Chat history element not found');
+        console.error('[chat-polling] Chat history element not found');
         return;
     }
     
     try {
-        const response = await fetch(`/api/job/${JOB_ID}/chat/history`, {
+        const url = `/api/job/${JOB_ID}/chat/history`;
+        console.log('[chat-polling] Loading initial chat history from:', url);
+        
+        const response = await fetch(url, {
             credentials: 'include'
         });
         
+        console.log('[chat-polling] Initial load response status:', response.status);
+        
         if (!response.ok) {
-            console.error('Failed to load chat history:', response.status);
+            console.error('[chat-polling] Failed to load chat history. Status:', response.status);
             return;
         }
         
         const messages = await response.json();
+        console.log('[chat-polling] Loaded', messages.length, 'historical messages');
         
         // Clear existing messages
         chatHistory.innerHTML = '';
@@ -677,7 +715,7 @@ async function loadChatHistory() {
         // Scroll to bottom
         chatHistory.scrollTop = chatHistory.scrollHeight;
     } catch (error) {
-        console.error('Error loading chat history:', error);
+        console.error('[chat-polling] Error loading chat history. JobId:', JOB_ID, 'Error:', error);
     }
 }
 
