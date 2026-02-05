@@ -125,7 +125,8 @@ async function loadJobsHistory() {
     
     try {
         const response = await fetch("/api/job");
-        const jobs = await response.json();
+        const data = await response.json();
+        const jobs = data.jobs || [];  // Extract jobs array from envelope format
         
         if (jobs.length === 0) {
             jobsList.innerHTML = '<div class="text-center py-8 text-base-content/60"><p>No previous analyses yet</p></div>';

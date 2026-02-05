@@ -145,7 +145,8 @@ function startChatPolling() {
                 return;
             }
             
-            const messages = await response.json();
+            const data = await response.json();
+            const messages = data.messages || [];  // Extract messages array from envelope format
             console.log('[chat-polling] Received', messages.length, 'messages');
             updateChatMessages(messages);
         } catch (error) {
