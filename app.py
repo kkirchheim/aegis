@@ -69,6 +69,11 @@ def create_app():
     docs = FlaskApiSpec(app)
     app.logger.info("✓ API documentation initialized: /docs/ and /swagger/")
     
+    # PHASE 6: Full endpoint registration requires schema format fixes
+    # TODO: Refactor @doc decorators to use proper FlaskApiSpec format for schema responses
+    # docs.register_existing_resources()
+    # For now, all endpoints are documented but not auto-registered in the OpenAPI spec
+    
     # Configure security schemes for API documentation
     docs.spec.components.security_scheme("sessionAuth", {
         "type": "apiKey",

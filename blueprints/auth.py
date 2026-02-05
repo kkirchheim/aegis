@@ -1,6 +1,7 @@
 """Authentication blueprint - login, register, logout, profile, password change."""
 
 from flask import Blueprint, request, jsonify, session, render_template, redirect
+from flask_apispec import doc, marshal_with, use_kwargs
 from services.auth_service import (
     hash_password, verify_password, get_user_by_username, get_user_by_id,
     user_exists, create_user, update_password
@@ -9,6 +10,11 @@ from utils.decorators import require_auth
 from utils.validators import (
     validate_username, validate_email, validate_password, validate_passwords_match
 )
+from schemas.auth import (
+    LoginSchema, RegisterSchema, ChangePasswordSchema, SessionSchema
+)
+from schemas.common import ErrorSchema
+from schemas.admin import UserSchema
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -26,11 +32,22 @@ def login_page():
 
 
 @auth_bp.route("/logout", methods=["POST", "GET"])
+@doc(
+    description="Logout user and clear session",
+    tags=["Authentication"],
+    responses={
+        204: None,
+        401: ErrorSchema(),
+        500: ErrorSchema()
+    },
+    security=[{"api_key": []}]
+)
+@marshal_with(None, code=204)
 @require_auth
 def logout():
-    """User logout - clears session and redirects to login."""
+    """User logout - clears session and returns 204 No Content."""
     session.clear()
-    return redirect("/login")
+    return "", 204
 
 
 @auth_bp.route("/profile")
@@ -75,7 +92,76 @@ def change_password_page():
     return render_template("change-password.html")
 
 
+@auth_bp.route("/change-password", methods=["POST"])
+@doc(
+    description="Change user password",
+    tags=["Authentication"],
+    responses={
+        204: None,
+        400: ErrorSchema(),
+        401: ErrorSchema(),
+        500: ErrorSchema()
+    },
+    security=[{"api_key": []}]
+)
+@use_kwargs(ChangePasswordSchema, location="json")
+@marshal_with(None, code=204)
+@require_auth
+def change_password():
+    """User change password - JSON-based endpoint."""
+    try:
+        user_id = session.get('user_id')
+        
+        if not user_id:
+            return jsonify({"error": "User not authenticated"}), 401
+        
+        data = request.get_json() or {}
+        old_password = data.get("old_password", "")
+        new_password = data.get("new_password", "")
+        confirm_password = data.get("confirm_password", "")
+        
+        # Get user
+        user = get_user_by_id(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 401
+        
+        # Verify old password
+        if not verify_password(old_password, user.password_hash):
+            return jsonify({"error": "Current password is incorrect"}), 401
+        
+        # Validate new password
+        valid, error = validate_password(new_password)
+        if not valid:
+            return jsonify({"error": error}), 400
+        
+        # Check password confirmation
+        valid, error = validate_passwords_match(new_password, confirm_password)
+        if not valid:
+            return jsonify({"error": error}), 400
+        
+        # Update password
+        if not update_password(user_id, new_password):
+            return jsonify({"error": "Failed to update password"}), 500
+        
+        return jsonify({"message": "Password changed successfully"}), 204
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @auth_bp.route("/login", methods=["POST"])
+@doc(
+    description="Authenticate user with username and password",
+    tags=["Authentication"],
+    responses={
+        200: SessionSchema(),
+        400: ErrorSchema(),
+        401: ErrorSchema(),
+        500: ErrorSchema()
+    }
+)
+@use_kwargs(LoginSchema, location="form")
+@marshal_with(SessionSchema, code=200)
 def login_form():
     """User login - form-based endpoint."""
     try:
@@ -105,6 +191,17 @@ def login_form():
 
 
 @auth_bp.route("/register", methods=["POST"])
+@doc(
+    description="Register a new user account",
+    tags=["Authentication"],
+    responses={
+        201: UserSchema(),
+        400: ErrorSchema(),
+        500: ErrorSchema()
+    }
+)
+@use_kwargs(RegisterSchema, location="form")
+@marshal_with(UserSchema, code=201)
 def register_form():
     """User registration - form-based endpoint."""
     try:
@@ -132,7 +229,7 @@ def register_form():
         
         # Check if user exists
         if user_exists(username, email):
-            return jsonify({"error": "Username or email already exists"}), 400
+            return jsonify({"error": "Username or email already exists"}), 409
         
         # Create user
         user_id = create_user(username, email, password)

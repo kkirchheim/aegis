@@ -7,6 +7,7 @@ import os
 import uuid
 from datetime import datetime
 from flask import Blueprint, request, jsonify, session
+from flask_apispec import doc, marshal_with, use_kwargs
 from utils.decorators import require_auth, require_admin
 from services.cache_service import get_cache_stats, clear_cache
 from models.database import User, db, Job, ChatSession, ChatMessage
@@ -15,6 +16,12 @@ from config import Config
 from services.job_service import (
     create_job, get_job, get_user_jobs, update_job_status, delete_job,
     store_artifacts, get_job_artifacts, get_job_events
+)
+from schemas import (
+    JobSchema, JobListSchema, JobDetailSchema, ErrorSchema,
+    ChatMessageSchema, ChatMessageResponseSchema, ChatHistorySchema,
+    LoginSchema, RegisterSchema, ChangePasswordSchema, SessionSchema, UserSchema,
+    SuccessMessageSchema
 )
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -25,6 +32,11 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 # ============================================================================
 
 @api_bp.route("/auth/login", methods=["POST"])
+@doc(tags=["Authentication"], 
+     description="User login endpoint. Authenticates a user with username and password.",
+     responses={200: SessionSchema(), 400: ErrorSchema(), 401: ErrorSchema()})
+@use_kwargs(LoginSchema, location="json")
+@marshal_with(SessionSchema, code=200)
 def api_login():
     """
     REST API endpoint for user login.
@@ -75,6 +87,11 @@ def api_login():
 
 
 @api_bp.route("/auth/register", methods=["POST"])
+@doc(tags=["Authentication"],
+     description="User registration endpoint. Creates a new user account with username, email, and password.",
+     responses={201: UserSchema(), 400: ErrorSchema(), 409: ErrorSchema()})
+@use_kwargs(RegisterSchema, location="json")
+@marshal_with(UserSchema, code=201)
 def api_register():
     """
     REST API endpoint for user registration.
@@ -137,7 +154,7 @@ def api_register():
         
         # Check if user exists
         if user_exists(username, email):
-            return jsonify({"error": "Username or email already exists"}), 400
+            return jsonify({"error": "Username or email already exists"}), 409
         
         # Create user
         user_id = create_user(username, email, password)
@@ -154,6 +171,12 @@ def api_register():
 
 
 @api_bp.route("/auth/change-password", methods=["POST"])
+@doc(tags=["Authentication"],
+     description="Change user password endpoint. Requires session authentication. Validates old password and updates to new password.",
+     security=[{"sessionAuth": []}],
+     responses={204: None, 400: ErrorSchema, 401: ErrorSchema()})
+@use_kwargs(ChangePasswordSchema, location="json")
+@marshal_with(None, code=204)
 @require_auth
 def api_change_password():
     """
@@ -167,7 +190,7 @@ def api_change_password():
     }
     
     Returns:
-    - 200: {"ok": True, "message": "Password changed successfully"}
+    - 204: No Content (success)
     - 400: {"error": "..."}
     - 401: {"error": "Current password is incorrect"}
     - 404: {"error": "User not found"}
@@ -205,7 +228,7 @@ def api_change_password():
         if not update_password(user_id, new_password):
             return jsonify({"error": "Failed to update password"}), 500
         
-        return jsonify({"ok": True, "message": "Password changed successfully"}), 200
+        return "", 204
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -215,6 +238,8 @@ def api_change_password():
 # ============================================================================
 
 @api_bp.route("/health", methods=["GET"])
+@doc(description="Health check endpoint - verify system is operational", tags=["System"], responses={200: SuccessMessageSchema(), 500: ErrorSchema, 503: ErrorSchema()})
+@marshal_with(SuccessMessageSchema(), code=200)
 def health_check():
     """
     Health check endpoint.
@@ -283,6 +308,7 @@ def health_check():
 
 @api_bp.route("/cache/stats", methods=["GET"])
 @require_admin
+@doc(description="Get cache statistics", tags=["System"], security=[{"sessionAuth": []}], responses={200: "Cache statistics", 401: ErrorSchema, 403: ErrorSchema, 500: ErrorSchema()})
 def cache_stats():
     """Get cache statistics."""
     stats = get_cache_stats()
@@ -346,6 +372,22 @@ def get_chat_history(session_id, limit=20):
 
 @api_bp.route("/job/<job_id>/chat", methods=["POST"])
 @require_auth
+@doc(
+    description="Chat with paper analysis",
+    tags=["Chat"],
+    security=[{"sessionAuth": []}],
+    params={"job_id": {"description": "Job ID", "in": "path"}},
+    responses={
+        200: {"schema": ChatMessageResponseSchema()},
+        400: {"schema": ErrorSchema()},
+        401: {"schema": ErrorSchema()},
+        403: {"schema": ErrorSchema()},
+        404: {"schema": ErrorSchema()},
+        500: {"schema": ErrorSchema()},
+    }
+)
+@use_kwargs(ChatMessageSchema, location="json")
+@marshal_with(ChatMessageResponseSchema, code=200)
 def chat_with_paper(job_id):
     """Chat with paper analysis."""
     from services.llm_service import init_llm_provider
@@ -567,6 +609,20 @@ def _generate_chat_response(job_id, session_id, messages, llm_provider, emit_eve
 
 @api_bp.route("/job/<job_id>/chat/history", methods=["GET"])
 @require_auth
+@doc(
+    description="Get chat history for a job",
+    tags=["Chat"],
+    security=[{"sessionAuth": []}],
+    params={"job_id": {"description": "Job ID", "in": "path"}},
+    responses={
+        200: {"schema": ChatHistorySchema()},
+        401: {"schema": ErrorSchema()},
+        403: {"schema": ErrorSchema()},
+        404: {"schema": ErrorSchema()},
+        500: {"schema": ErrorSchema()},
+    }
+)
+@marshal_with(ChatHistorySchema, code=200)
 def get_chat_history_endpoint(job_id):
     """Get chat history."""
     user_id = session.get('user_id')
@@ -594,6 +650,20 @@ def get_chat_history_endpoint(job_id):
 
 @api_bp.route("/job/<job_id>/chat/history", methods=["DELETE"])
 @require_auth
+@doc(
+    description="Delete chat history for a job",
+    tags=["Chat"],
+    security=[{"sessionAuth": []}],
+    params={"job_id": {"description": "Job ID", "in": "path"}},
+    responses={
+        204: {"description": "Chat history deleted successfully"},
+        401: {"schema": ErrorSchema()},
+        403: {"schema": ErrorSchema()},
+        404: {"schema": ErrorSchema()},
+        500: {"schema": ErrorSchema()},
+    }
+)
+@marshal_with(None, code=204)
 def delete_chat_history_endpoint(job_id):
     """Delete chat history."""
     user_id = session.get('user_id')
@@ -625,7 +695,9 @@ def delete_chat_history_endpoint(job_id):
 # Agent API - Backend provides reasoning to Docker agent
 # ============================================================================
 
+# INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/think", methods=["POST"])
+@doc(description="Agent callback to request next action", hidden=True, tags=["Internal"])
 def agent_think():
     """
     Agent calls this to ask for next action.
@@ -738,7 +810,9 @@ RESPONSE FORMAT (JSON only):
         return jsonify({"error": str(e), "action": "done"}), 500
 
 
+# INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/log", methods=["POST"])
+@doc(description="Agent callback to log progress", hidden=True, tags=["Internal"])
 def agent_log():
     """Agent logs progress.
     
@@ -769,7 +843,9 @@ def agent_log():
     return jsonify({"ok": True})
 
 
+# INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/execution", methods=["POST"])
+@doc(description="Agent callback to store execution details", hidden=True, tags=["Internal"])
 def agent_execution():
     """
     Agent stores execution details.
@@ -811,7 +887,9 @@ def agent_execution():
         return jsonify({"error": str(e)}), 500
 
 
+# INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/complete", methods=["POST"])
+@doc(description="Agent callback to report completion", hidden=True, tags=["Internal"])
 def agent_complete():
     """
     Agent reports completion.
@@ -859,6 +937,8 @@ def agent_complete():
 # ============================================================================
 
 @api_bp.route("/job/upload", methods=["POST"])
+@doc(description="Upload a PDF file for paper reproducibility analysis", tags=["Jobs"], security=[{"sessionAuth": []}], responses={202: "Job created and analysis started", 400: ErrorSchema, 401: ErrorSchema, 413: ErrorSchema, 500: ErrorSchema()})
+@marshal_with(JobSchema, code=202)
 def upload_pdf():
     """Upload PDF for analysis."""
     from services.llm_service import init_llm_provider
@@ -891,7 +971,7 @@ def upload_pdf():
     file.seek(0)
     
     if file_size > Config.MAX_PDF_SIZE:
-        return jsonify({"error": "PDF too large (max 100MB)"}), 400
+        return jsonify({"error": "PDF too large (max 100MB)"}), 413
     
     # Create job
     job_id = str(uuid.uuid4())
@@ -939,6 +1019,8 @@ def upload_pdf():
 
 @api_bp.route("/job", methods=["GET"])
 @require_auth
+@doc(description="List all jobs for the current user", tags=["Jobs"], security=[{"sessionAuth": []}], responses={200: "List of jobs retrieved successfully", 401: ErrorSchema, 500: ErrorSchema()})
+@marshal_with(JobListSchema, code=200)
 def list_jobs_api():
     """List all jobs for current user."""
     user_id = session.get('user_id')
@@ -948,6 +1030,8 @@ def list_jobs_api():
 
 @api_bp.route("/job/<job_id>", methods=["GET"])
 @require_auth
+@doc(description="Get job status and report by job ID", tags=["Jobs"], security=[{"sessionAuth": []}], params={"job_id": {"description": "Unique identifier for the job", "in": "path", "type": "string", "required": True}}, responses={200: "Job details retrieved successfully", 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema()})
+@marshal_with(JobDetailSchema, code=200)
 def get_job_detail(job_id):
     """Get job status and report."""
     user_id = session.get('user_id')
@@ -978,6 +1062,8 @@ def get_job_detail(job_id):
 
 @api_bp.route("/job/<job_id>", methods=["DELETE"])
 @require_auth
+@doc(description="Delete a job by job ID", tags=["Jobs"], security=[{"sessionAuth": []}], params={"job_id": {"description": "Unique identifier for the job", "in": "path", "type": "string", "required": True}}, responses={204: "Job deleted successfully", 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema()})
+@marshal_with(None, code=204)
 def delete_job_route(job_id):
     """Delete a job."""
     try:
@@ -992,7 +1078,7 @@ def delete_job_route(job_id):
             return jsonify({"error": "Access denied"}), 403
         
         if delete_job(job_id):
-            return jsonify({"ok": True, "message": "Job deleted"})
+            return "", 204
         else:
             return jsonify({"error": "Failed to delete job"}), 500
     
@@ -1002,6 +1088,8 @@ def delete_job_route(job_id):
 
 @api_bp.route("/job/<job_id>/full", methods=["GET"])
 @require_auth
+@doc(description="Get complete job data including all details, events, artifacts, and analysis", tags=["Jobs"], security=[{"sessionAuth": []}], params={"job_id": {"description": "Unique identifier for the job", "in": "path", "type": "string", "required": True}}, responses={200: "Full job details retrieved successfully", 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema()})
+@marshal_with(JobDetailSchema, code=200)
 def get_job_full(job_id):
     """Get full job data including all details."""
     user_id = session.get('user_id')
@@ -1055,6 +1143,12 @@ def get_job_full(job_id):
 
 @api_bp.route("/job/<job_id>/events", methods=["GET"])
 @require_auth
+@doc(description="SSE-compatible endpoint for streaming job events with optional timestamp filtering", 
+     tags=["Jobs"], 
+     security=[{"sessionAuth": []}],
+     params={"job_id": {"description": "Unique identifier for the job", "in": "path", "type": "string", "required": True},
+             "since": {"description": "ISO format timestamp to get events after this time (optional)", "in": "query", "type": "string", "required": False}},
+     responses={200: "Events retrieved successfully", 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema()})
 def get_job_events_polling(job_id):
     """Get events for a job with optional timestamp filtering.
     

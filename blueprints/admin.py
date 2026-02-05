@@ -1,9 +1,11 @@
 """Admin blueprint - admin panel and user management."""
 
 from flask import Blueprint, request, jsonify, render_template
+from flask_apispec import doc, marshal_with
 from utils.decorators import require_admin
 from models.database import User, Job
 from repositories import UserRepository, JobRepository
+from schemas import UserListSchema, UserActionSchema, ErrorSchema
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -17,6 +19,18 @@ def admin_panel():
 
 @admin_bp.route("/api/admin/users", methods=["GET"])
 @require_admin
+@doc(
+    description="Get list of all users with their details",
+    tags=["Admin"],
+    security=[{"sessionAuth": []}],
+    responses={
+        200: {"description": "List of users retrieved successfully", "schema": UserListSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+@marshal_with(UserListSchema, code=200)
 def get_all_users():
     """Get list of all users (JSON) - admin only."""
     try:
@@ -122,6 +136,20 @@ def delete_user(user_id):
 
 @admin_bp.route("/api/admin/users/<int:user_id>/activate", methods=["POST"])
 @require_admin
+@doc(
+    description="Activate a user account",
+    tags=["Admin"],
+    params={"user_id": {"description": "User ID", "in": "path"}},
+    security=[{"sessionAuth": []}],
+    responses={
+        200: {"description": "User activated successfully", "schema": UserActionSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden", "schema": ErrorSchema()},
+        404: {"description": "User not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+@marshal_with(UserActionSchema, code=200)
 def activate_user(user_id):
     """Activate a user - admin only."""
     try:
@@ -147,6 +175,20 @@ def activate_user(user_id):
 
 @admin_bp.route("/api/admin/users/<int:user_id>/deactivate", methods=["POST"])
 @require_admin
+@doc(
+    description="Deactivate a user account",
+    tags=["Admin"],
+    params={"user_id": {"description": "User ID", "in": "path"}},
+    security=[{"sessionAuth": []}],
+    responses={
+        200: {"description": "User deactivated successfully", "schema": UserActionSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden", "schema": ErrorSchema()},
+        404: {"description": "User not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+@marshal_with(UserActionSchema, code=200)
 def deactivate_user(user_id):
     """Deactivate a user - admin only."""
     try:
@@ -176,6 +218,20 @@ def deactivate_user(user_id):
 
 @admin_bp.route("/api/admin/users/<int:user_id>/delete", methods=["POST"])
 @require_admin
+@doc(
+    description="Delete a user account and all associated data",
+    tags=["Admin"],
+    params={"user_id": {"description": "User ID", "in": "path"}},
+    security=[{"sessionAuth": []}],
+    responses={
+        200: {"description": "User deleted successfully", "schema": UserActionSchema()},
+        400: {"description": "Cannot delete admin user or self", "schema": ErrorSchema()},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden", "schema": ErrorSchema()},
+        404: {"description": "User not found", "schema": ErrorSchema()}
+    }
+)
+@marshal_with(UserActionSchema, code=200)
 def delete_user_post(user_id):
     """Delete a user - admin only (POST version for compatibility)."""
     try:
