@@ -104,43 +104,10 @@ class JobRepository:
         except Exception:
             return False
     
-    @staticmethod
-    def update_status(job_id: str, status: str, progress: float = None, 
-                     current_stage: str = None) -> bool:
-        """Update job status/stage. Returns True on success."""
-        try:
-            updates = {Job.status: status}
-            if progress is not None:
-                updates[Job.progress] = progress
-            if current_stage is not None:
-                updates[Job.current_stage] = current_stage
-            
-            Job.update(updates).where(Job.id == job_id).execute()
-            return True
-        except Exception:
-            return False
-    
-    @staticmethod
-    def update_stage(job_id: str, current_stage: str, progress: float = None) -> bool:
-        """Update job stage. Returns True on success."""
-        try:
-            updates = {Job.current_stage: current_stage}
-            if progress is not None:
-                updates[Job.progress] = progress
-            
-            Job.update(updates).where(Job.id == job_id).execute()
-            return True
-        except Exception:
-            return False
-    
-    @staticmethod
-    def update_progress(job_id: str, progress: float) -> bool:
-        """Update job progress. Returns True on success."""
-        try:
-            Job.update(progress=progress).where(Job.id == job_id).execute()
-            return True
-        except Exception:
-            return False
+    # NOTE: DO NOT ADD update_status, update_stage, or update_progress methods here.
+    # All job status updates MUST go through services.job_service.update_job_status()
+    # to ensure consistent logging and validation.
+    # See job_service.update_job_status() - it's the single source of truth for progress updates.
     
     @staticmethod
     def update_report(job_id: str, report: dict) -> bool:

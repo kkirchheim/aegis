@@ -149,13 +149,12 @@ def evaluate_reproducibility_aspects(job_id, llm_provider, app_logger=None, emit
         except:
             pass
         
-        # Emit completion
+        # Emit completion (without progress - orchestrator controls progress)
         stage3_duration = int((time.time() - stage3_start) * 1000)
         if emit_event:
             emit_event(job_id, {
-                "step": "stage_3_complete",
+                "step": "evaluation_complete",
                 "message": f"Evaluated {len(evaluation_results.get('evaluations', []))} aspects",
-                "progress": 100,
                 "stage_duration_ms": stage3_duration
             })
         
