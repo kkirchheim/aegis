@@ -6,10 +6,12 @@ Complete HTTP API documentation for the Paper Reproducibility Checker.
 
 - [Base URL](#base-url)
 - [Content Types](#content-types)
+- [Authentication (REST API)](#authentication-rest-api)
 - [Public Endpoints](#public-endpoints)
 - [Polling Endpoint](#polling-endpoint)
 - [List Jobs](#list-jobs)
 - [Chat Endpoints](#chat-endpoints)
+- [Admin Endpoints](#admin-endpoints)
 - [Internal Agent Endpoints](#internal-agent-endpoints)
 - [Database Endpoints](#database-endpoints)
 - [Error Responses](#error-responses)
@@ -28,6 +30,120 @@ http://localhost:5000
 
 - Request: `multipart/form-data` (uploads) or `application/json`
 - Response: `application/json`
+
+---
+
+## Authentication (REST API)
+
+### Register
+
+**POST /api/auth/register**
+
+Create a new user account. Account must be activated by an admin before first use.
+
+```bash
+curl -X POST http://localhost:5000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "user", "email": "user@example.com", "password": "password123", "confirm_password": "password123"}'
+```
+
+**Request:**
+```json
+{
+  "username": "user",
+  "email": "user@example.com",
+  "password": "password123",
+  "confirm_password": "password123"
+}
+```
+
+**Response (201):**
+```json
+{
+  "message": "Account created. Awaiting activation by admin.",
+  "redirect": "/login"
+}
+```
+
+**Error Responses:**
+- 400: `{"error": "Username or email already exists"}`
+- 400: `{"error": "Username must be 3-50 characters"}`
+- 400: `{"error": "Invalid email format"}`
+- 400: `{"error": "Password must be at least 8 characters"}`
+- 400: `{"error": "Passwords don't match"}`
+
+---
+
+### Login
+
+**POST /api/auth/login**
+
+Authenticate user and create session.
+
+```bash
+curl -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "user", "password": "password123"}'
+```
+
+**Request:**
+```json
+{
+  "username": "user",
+  "password": "password123"
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "Login successful",
+  "redirect": "/"
+}
+```
+
+**Error Responses:**
+- 400: `{"error": "Username and password required"}`
+- 401: `{"error": "Invalid username or password"}`
+- 403: `{"error": "Account not activated yet"}`
+
+---
+
+### Change Password
+
+**POST /api/auth/change-password**
+
+Change user password. Requires authentication.
+
+```bash
+curl -X POST http://localhost:5000/api/auth/change-password \
+  -H "Content-Type: application/json" \
+  -d '{"old_password": "current", "new_password": "newpass123", "confirm_password": "newpass123"}'
+```
+
+**Request:**
+```json
+{
+  "old_password": "current",
+  "new_password": "newpass123",
+  "confirm_password": "newpass123"
+}
+```
+
+**Response (200):**
+```json
+{
+  "ok": true,
+  "message": "Password changed successfully"
+}
+```
+
+**Error Responses:**
+- 400: `{"error": "All fields are required"}`
+- 400: `{"error": "New password must be at least 8 characters"}`
+- 400: `{"error": "New passwords don't match"}`
+- 401: `{"error": "Current password is incorrect"}`
+- 404: `{"error": "User not found"}`
 
 ---
 
@@ -299,6 +415,95 @@ curl -X DELETE http://localhost:5000/api/job/abc123/chat/history
 
 ---
 
+## Admin Endpoints
+
+Admin-only endpoints for user management. Requires admin authentication.
+
+### Get All Users
+
+**GET /api/admin/users**
+
+List all registered users.
+
+```bash
+curl http://localhost:5000/api/admin/users
+```
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "username": "user1",
+    "email": "user1@example.com",
+    "is_active": true,
+    "created_at": "2026-02-03T10:00:00Z"
+  },
+  {
+    "id": 2,
+    "username": "user2",
+    "email": "user2@example.com",
+    "is_active": false,
+    "created_at": "2026-02-03T11:00:00Z"
+  }
+]
+```
+
+---
+
+### Update User Status
+
+**PATCH /api/admin/users/{user_id}**
+
+Activate or deactivate a user account. Cannot deactivate the admin user.
+
+```bash
+curl -X PATCH http://localhost:5000/api/admin/users/2 \
+  -H "Content-Type: application/json" \
+  -d '{"is_active": true}'
+```
+
+**Request:**
+```json
+{
+  "is_active": true
+}
+```
+
+**Response (200):**
+```json
+{
+  "ok": true,
+  "message": "User user2 activated successfully"
+}
+```
+
+**Error Responses:**
+- 400: `{"error": "is_active field required"}`
+- 400: `{"error": "Cannot deactivate admin user"}`
+- 404: `{"error": "User not found"}`
+
+---
+
+### Delete User
+
+**DELETE /api/admin/users/{user_id}**
+
+Delete a user and all associated jobs, artifacts, and data. Cannot delete the admin user.
+
+```bash
+curl -X DELETE http://localhost:5000/api/admin/users/2
+```
+
+**Response (204):**
+Empty body (No Content)
+
+**Error Responses:**
+- 400: `{"error": "Cannot delete admin user"}`
+- 404: `{"error": "User not found"}`
+
+---
+
 ## Internal Agent Endpoints
 
 Used by Docker agent (not for external clients).
@@ -385,33 +590,63 @@ Agent signals completion (success or failure).
 
 ## Error Responses
 
-### 400 Bad Request
+The API supports **content negotiation**. Error responses are formatted based on the request type:
+
+- **API requests** (`/api/*`): JSON format
+- **Page requests** (other routes): HTML format for browser display
+
+### Error Response Codes
+
+#### 400 Bad Request
+Validation error. Returned when request parameters are missing or invalid.
+
 ```json
 {
   "error": "File must be a PDF"
 }
 ```
 
-### 403 Forbidden
+#### 401 Unauthorized
+Authentication required or invalid credentials.
+
+```json
+{
+  "error": "Invalid username or password"
+}
+```
+
+#### 403 Forbidden
+Authenticated but access denied (insufficient permissions).
+
 ```json
 {
   "error": "Access denied"
 }
 ```
 
-### 404 Not Found
-```json
-{
-  "error": "Job not found"
-}
-```
+#### 404 Not Found
+Resource not found.
 
-### 500 Internal Server Error
-```json
-{
-  "error": "Internal server error message"
-}
-```
+- **API request** (`/api/job/invalid_id`): Returns JSON
+  ```json
+  {
+    "error": "Job not found"
+  }
+  ```
+
+- **Page request** (`/invalid_page`): Returns HTML error page
+
+#### 500 Internal Server Error
+Server-side error.
+
+- **API request** (`/api/agent/think`): Returns JSON
+  ```json
+  {
+    "error": "Internal server error message"
+  }
+  ```
+
+- **Page request**: Returns HTML error page
 
 ---
 
