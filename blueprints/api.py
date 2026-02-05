@@ -21,6 +21,121 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 
 # ============================================================================
+# Authentication API Endpoints (Separated from page routes)
+# ============================================================================
+
+@api_bp.route("/auth/login", methods=["POST"])
+def api_login():
+    """
+    REST API endpoint for user login.
+    
+    Request body (JSON):
+    {
+        "username": "user",
+        "password": "password"
+    }
+    
+    Returns:
+    - 200: {"message": "Login successful", "redirect": "/"}
+    - 401: {"error": "Invalid username or password"}
+    - 403: {"error": "Account not activated yet"}
+    - 400: {"error": "Username and password required"}
+    """
+    from services.auth_service import get_user_by_username, verify_password
+    
+    try:
+        data = request.json or {}
+        username = data.get("username", "").strip()
+        password = data.get("password", "")
+        
+        if not username or not password:
+            return jsonify({"error": "Username and password required"}), 400
+        
+        user = get_user_by_username(username)
+        
+        if not user or not verify_password(password, user.password_hash):
+            return jsonify({"error": "Invalid username or password"}), 401
+        
+        # Check if user is active
+        if not user.is_active:
+            return jsonify({"error": "Account not activated yet"}), 403
+        
+        # Set session
+        session['user_id'] = user.id
+        session['username'] = user.username
+        
+        return jsonify({"message": "Login successful", "redirect": "/"}), 200
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/auth/register", methods=["POST"])
+def api_register():
+    """
+    REST API endpoint for user registration.
+    
+    Request body (JSON):
+    {
+        "username": "user",
+        "email": "user@example.com",
+        "password": "password",
+        "confirm_password": "password"
+    }
+    
+    Returns:
+    - 201: {"message": "Account created...", "redirect": "/login"}
+    - 400: {"error": "..."}
+    - 500: {"error": "Failed to create account"}
+    """
+    from services.auth_service import user_exists, create_user
+    from utils.validators import (
+        validate_username, validate_email, validate_password, validate_passwords_match
+    )
+    
+    try:
+        data = request.json or {}
+        username = data.get("username", "").strip()
+        email = data.get("email", "").strip()
+        password = data.get("password", "")
+        confirm_password = data.get("confirm_password", "")
+        
+        # Validate inputs
+        valid, error = validate_username(username)
+        if not valid:
+            return jsonify({"error": error}), 400
+        
+        valid, error = validate_email(email)
+        if not valid:
+            return jsonify({"error": error}), 400
+        
+        valid, error = validate_password(password)
+        if not valid:
+            return jsonify({"error": error}), 400
+        
+        valid, error = validate_passwords_match(password, confirm_password)
+        if not valid:
+            return jsonify({"error": error}), 400
+        
+        # Check if user exists
+        if user_exists(username, email):
+            return jsonify({"error": "Username or email already exists"}), 400
+        
+        # Create user
+        user_id = create_user(username, email, password)
+        if not user_id:
+            return jsonify({"error": "Failed to create account"}), 500
+        
+        return jsonify({
+            "message": "Account created. Awaiting activation by admin.",
+            "redirect": "/login"
+        }), 201
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
 # Health Check Endpoint
 # ============================================================================
 

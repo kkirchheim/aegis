@@ -13,74 +13,15 @@ from utils.validators import (
 auth_bp = Blueprint('auth', __name__)
 
 
-@auth_bp.route("/register", methods=["GET", "POST"])
-def register():
+@auth_bp.route("/register", methods=["GET"])
+def register_page():
     """User registration page."""
-    if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        email = request.form.get("email", "").strip()
-        password = request.form.get("password", "")
-        confirm_password = request.form.get("confirm_password", "")
-        
-        # Validate inputs
-        valid, error = validate_username(username)
-        if not valid:
-            return jsonify({"error": error}), 400
-        
-        valid, error = validate_email(email)
-        if not valid:
-            return jsonify({"error": error}), 400
-        
-        valid, error = validate_password(password)
-        if not valid:
-            return jsonify({"error": error}), 400
-        
-        valid, error = validate_passwords_match(password, confirm_password)
-        if not valid:
-            return jsonify({"error": error}), 400
-        
-        # Check if user exists
-        if user_exists(username, email):
-            return jsonify({"error": "Username or email already exists"}), 400
-        
-        # Create user
-        user_id = create_user(username, email, password)
-        if not user_id:
-            return jsonify({"error": "Failed to create account"}), 500
-        
-        return jsonify({
-            "message": "Account created. Awaiting activation by admin.",
-            "redirect": "/login"
-        }), 201
-    
     return render_template("register.html")
 
 
-@auth_bp.route("/login", methods=["GET", "POST"])
-def login():
+@auth_bp.route("/login", methods=["GET"])
+def login_page():
     """User login page."""
-    if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        
-        if not username or not password:
-            return jsonify({"error": "Username and password required"}), 400
-        
-        user = get_user_by_username(username)
-        
-        if not user or not verify_password(password, user.password_hash):
-            return jsonify({"error": "Invalid username or password"}), 401
-        
-        # Check if user is active
-        if not user.is_active:
-            return jsonify({"error": "Account not activated yet"}), 403
-        
-        # Set session
-        session['user_id'] = user.id
-        session['username'] = user.username
-        
-        return jsonify({"message": "Login successful", "redirect": "/"}), 200
-    
     return render_template("login.html")
 
 

@@ -36,59 +36,53 @@ def get_all_users():
         return jsonify({"error": str(e)}), 500
 
 
-@admin_bp.route("/api/admin/users/<int:user_id>/activate", methods=["POST"])
+@admin_bp.route("/api/admin/users/<int:user_id>", methods=["PATCH"])
 @require_admin
-def activate_user(user_id):
-    """Activate a user - admin only."""
+def update_user_status(user_id):
+    """Update user status (is_active field) - admin only."""
     try:
+        from flask import current_app
+        
+        data = request.json or {}
+        is_active = data.get("is_active")
+        
+        if is_active is None:
+            return jsonify({"error": "is_active field required"}), 400
+        
         # Verify user exists
         user = UserRepository.get_by_id(user_id)
-        
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-        
-        # Update user
-        User.update(is_active=True).where(User.id == user_id).execute()
-        
-        return jsonify({"ok": True, "message": f"User {user.username} activated"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@admin_bp.route("/api/admin/users/<int:user_id>/deactivate", methods=["POST"])
-@require_admin
-def deactivate_user(user_id):
-    """Deactivate a user - admin only."""
-    try:
-        # Verify user exists
-        user = UserRepository.get_by_id(user_id)
-        
         if not user:
             return jsonify({"error": "User not found"}), 404
         
         # Prevent deactivating admin
-        if user.username == 'admin':
+        if user.username == 'admin' and not is_active:
             return jsonify({"error": "Cannot deactivate admin user"}), 400
         
-        # Deactivate user
-        User.update(is_active=False).where(User.id == user_id).execute()
+        # Update user status
+        User.update(is_active=is_active).where(User.id == user_id).execute()
         
-        return jsonify({"ok": True, "message": f"User {user.username} deactivated"})
+        action = 'activated' if is_active else 'deactivated'
+        return jsonify({
+            "ok": True,
+            "message": f"User {user.username} {action} successfully"
+        }), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        from flask import current_app
+        current_app.logger.error(f"Error updating user: {e}")
+        return jsonify({"error": "Failed to update user"}), 500
 
 
-@admin_bp.route("/api/admin/users/<int:user_id>/delete", methods=["POST"])
+@admin_bp.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
 @require_admin
 def delete_user(user_id):
     """Delete a user - admin only."""
     try:
         from pathlib import Path
         from models.database import Event, Artifact, AspectEvaluation, ExecutionDetails, PaperAnalysis
+        from flask import current_app
         
         # Verify user exists
         user = UserRepository.get_by_id(user_id)
-        
         if not user:
             return jsonify({"error": "User not found"}), 404
         
@@ -119,6 +113,8 @@ def delete_user(user_id):
         # Delete user
         User.delete_by_id(user_id)
         
-        return jsonify({"ok": True, "message": f"User {user.username} deleted"})
+        return "", 204  # 204 No Content for successful DELETE
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        from flask import current_app
+        current_app.logger.error(f"Error deleting user: {e}")
+        return jsonify({"error": "Failed to delete user"}), 500

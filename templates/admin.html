@@ -192,17 +192,25 @@
             if (!pendingAction) return;
 
             const { type, userId, username } = pendingAction;
-            let endpoint = '';
-            let method = 'POST';
+            let endpoint = `/api/admin/users/${userId}`;
+            let method = '';
+            let body = null;
 
             if (type === 'deactivate') {
-                endpoint = `/api/admin/users/${userId}/deactivate`;
+                method = 'PATCH';
+                body = JSON.stringify({ is_active: false });
             } else if (type === 'delete') {
-                endpoint = `/api/admin/users/${userId}/delete`;
+                method = 'DELETE';
             }
 
             try {
-                const response = await fetch(endpoint, { method });
+                const options = { method };
+                if (body) {
+                    options.headers = { 'Content-Type': 'application/json' };
+                    options.body = body;
+                }
+                
+                const response = await fetch(endpoint, options);
                 if (!response.ok) {
                     const data = await response.json();
                     showNotification(data.error || 'Operation failed', 'error');
@@ -222,7 +230,11 @@
 
         async function activateUser(userId, username) {
             try {
-                const response = await fetch(`/api/admin/users/${userId}/activate`, { method: 'POST' });
+                const response = await fetch(`/api/admin/users/${userId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_active: true })
+                });
                 if (!response.ok) {
                     const data = await response.json();
                     showNotification(data.error || 'Operation failed', 'error');

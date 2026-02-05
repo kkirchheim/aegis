@@ -18,24 +18,33 @@ We use multiple blueprints to maintain separation of concerns, improve code orga
 
 ## auth.py - Authentication
 
-Handles user registration, login, logout, and password management.
+Handles user registration, login, logout, and password management. **Page routes only** (GET) - API endpoints are in `api.py`.
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/register` | GET, POST | User registration page and account creation |
-| `/login` | GET, POST | User login page and authentication |
+| `/register` | GET | User registration page |
+| `/login` | GET | User login page |
 | `/logout` | GET, POST | Clears session and redirects to login |
 | `/profile` | GET | Display user profile with account information |
 | `/change-password` | GET | Change password page |
 | `/api/change-password` | POST | Change password endpoint |
 
-**Auth Required:** Routes except `/register` and `/login` (when GET)
+**Auth Required:** All routes except `/register` and `/login`
+
+**Note:** User registration and login are handled by REST API endpoints in `api.py` at `/api/auth/register` and `/api/auth/login`.
 
 ---
 
 ## api.py - Core API
 
-Provides REST API endpoints for health checks, cache management, chat interactions, agent communication, and LLM integration.
+Provides REST API endpoints for authentication, health checks, cache management, chat interactions, agent communication, and LLM integration.
+
+### Authentication (REST API)
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/auth/login` | POST | User login (REST API) |
+| `/api/auth/register` | POST | User registration (REST API) |
 
 ### Health & Cache
 
@@ -94,9 +103,8 @@ Provides administrative functions for user management and system oversight.
 |-------|--------|---------|
 | `/admin` | GET | Admin panel page listing all users |
 | `/api/admin/users` | GET | Get list of all users (JSON) |
-| `/api/admin/users/<user_id>/activate` | POST | Activate a user account |
-| `/api/admin/users/<user_id>/deactivate` | POST | Deactivate a user account |
-| `/api/admin/users/<user_id>/delete` | POST | Delete a user and related jobs |
+| `/api/admin/users/<user_id>` | PATCH | Update user status (activate/deactivate) |
+| `/api/admin/users/<user_id>` | DELETE | Delete a user and related jobs |
 
 **Auth Required:** All (admin only)
 
@@ -108,8 +116,10 @@ Complete reference of all routes with HTTP methods, authentication requirements,
 
 | HTTP Method | Endpoint | Blueprint | Auth Required | Purpose |
 |-------------|----------|-----------|----------------|---------|
-| GET, POST | `/register` | auth | No | User registration |
-| GET, POST | `/login` | auth | No | User login |
+| GET | `/register` | auth | No | User registration page |
+| GET | `/login` | auth | No | User login page |
+| POST | `/api/auth/register` | api | No | User registration (REST API) |
+| POST | `/api/auth/login` | api | No | User login (REST API) |
 | GET, POST | `/logout` | auth | Yes | User logout |
 | GET | `/profile` | auth | Yes | User profile page |
 | GET | `/change-password` | auth | Yes | Change password form |
@@ -135,6 +145,5 @@ Complete reference of all routes with HTTP methods, authentication requirements,
 | GET | `/results/<job_id>` | jobs | Yes | View job results |
 | GET | `/admin` | admin | Yes (Admin) | Admin panel |
 | GET | `/api/admin/users` | admin | Yes (Admin) | List all users |
-| POST | `/api/admin/users/<user_id>/activate` | admin | Yes (Admin) | Activate user |
-| POST | `/api/admin/users/<user_id>/deactivate` | admin | Yes (Admin) | Deactivate user |
-| POST | `/api/admin/users/<user_id>/delete` | admin | Yes (Admin) | Delete user |
+| PATCH | `/api/admin/users/<user_id>` | admin | Yes (Admin) | Update user status (activate/deactivate) |
+| DELETE | `/api/admin/users/<user_id>` | admin | Yes (Admin) | Delete user |

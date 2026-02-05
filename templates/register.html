@@ -140,12 +140,23 @@
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const formData = new FormData(e.target);
+            const username = document.getElementById('username').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const confirm_password = document.getElementById('confirm_password').value;
             
             try {
-                const response = await fetch('/register', {
+                const response = await fetch('/api/auth/register', {
                     method: 'POST',
-                    body: formData
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username,
+                        email,
+                        password,
+                        confirm_password
+                    })
                 });
                 
                 const data = await response.json();
