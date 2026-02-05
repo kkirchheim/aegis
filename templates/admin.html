@@ -95,7 +95,9 @@
                     return;
                 }
 
-                const users = await response.json();
+                const data = await response.json();
+                // API returns envelope format: {users: [...], total: N}
+                const users = data.users || data || [];
                 renderUsers(users);
             } catch (error) {
                 console.error('Error loading users:', error);
