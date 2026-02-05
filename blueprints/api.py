@@ -949,6 +949,10 @@ def agent_complete():
 # OpenAPI Tags: "Jobs"
 
 @api_bp.route("/job/upload", methods=["POST"])
+@marshal_with(UploadJobResponseSchema, code=202)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=413)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     tags=["Jobs"],
     description="Upload a PDF paper for analysis",
@@ -956,12 +960,10 @@ def agent_complete():
     responses={
         202: {"description": "PDF uploaded successfully, analysis starting", "schema": UploadJobResponseSchema()},
         400: {"description": "Bad request - no file or invalid file", "schema": ErrorSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
         413: {"description": "Payload too large - PDF exceeds max size", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(UploadJobResponseSchema, code=202)
 def upload_pdf():
     """Upload PDF for analysis."""
     from services.llm_service import init_llm_provider
@@ -1034,10 +1036,14 @@ def upload_pdf():
     except Exception as e:
         update_job_status(job_id, "error", str(e))
     
-    return ({
-        "job_id": job_id,
-        "message": "Paper uploaded successfully. Analysis starting..."
-    }), 202
+    return (
+        {
+            "job_id": job_id,
+            "status": "pending",
+            "message": "Paper uploaded successfully. Analysis starting..."
+        },
+        202
+    )
 
 
 @api_bp.route("/job", methods=["GET"])
@@ -1054,11 +1060,19 @@ def upload_pdf():
     }
 )
 def list_jobs_api():
-    """List all jobs for current user."""
+    """List all jobs for current user.
+    
+    Returns:
+    - 200: {"jobs": [...], "total": N}
+    - 500: {"error": "..."}
+    """
     try:
         user_id = session.get('user_id')
         jobs = get_user_jobs(user_id)
-        return jobs
+        return {
+            "jobs": jobs if jobs else [],
+            "total": len(jobs) if jobs else 0
+        }
     except Exception as e:
         return {"error": str(e)}, 500
 

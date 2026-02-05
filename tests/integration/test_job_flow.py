@@ -21,7 +21,9 @@ class TestJobUpload:
         assert response.status_code == 202  # Accepted
         data = response.get_json()
         assert "job_id" in data
+        assert "status" in data
         assert "message" in data
+        assert data["status"] == "pending"
         job_id = data["job_id"]
         assert len(job_id) > 0
     
@@ -47,7 +49,7 @@ class TestJobUpload:
             data={'pdf': (large_file, 'large.pdf')}
         )
         
-        assert response.status_code == 400
+        assert response.status_code == 413  # Payload Too Large
         data = response.get_json()
         assert "error" in data
 
@@ -61,8 +63,12 @@ class TestJobList:
         
         assert response.status_code == 200
         data = response.get_json()
-        assert isinstance(data, list)
-        assert len(data) == 0
+        assert isinstance(data, dict)
+        assert "jobs" in data
+        assert "total" in data
+        assert isinstance(data["jobs"], list)
+        assert len(data["jobs"]) == 0
+        assert data["total"] == 0
     
     def test_list_jobs_with_jobs(self, authenticated_user, test_job):
         """Test listing jobs when jobs exist"""
@@ -70,8 +76,12 @@ class TestJobList:
         
         assert response.status_code == 200
         data = response.get_json()
-        assert isinstance(data, list)
-        assert len(data) >= 1
+        assert isinstance(data, dict)
+        assert "jobs" in data
+        assert "total" in data
+        assert isinstance(data["jobs"], list)
+        assert len(data["jobs"]) >= 1
+        assert data["total"] >= 1
     
     def test_list_jobs_unauthenticated(self, client):
         """Test listing requires authentication"""
@@ -90,7 +100,9 @@ class TestJobList:
         response = other_user.get('/api/job')
         data = response.get_json()
         
-        assert len(data) == 0  # Other user shouldn't see first user's jobs
+        assert "jobs" in data
+        assert len(data["jobs"]) == 0  # Other user shouldn't see first user's jobs
+        assert data["total"] == 0
 
 
 class TestJobDetail:
@@ -139,10 +151,7 @@ class TestJobDelete:
         
         response = authenticated_user.delete(f'/api/job/{job_id}')
         
-        assert response.status_code == 200  # OK with response
-        data = response.get_json()
-        assert data["ok"] is True
-        assert "message" in data
+        assert response.status_code == 204  # No Content (standard for DELETE)
         
         # Verify job is deleted
         response = authenticated_user.get(f'/api/job/{job_id}')
