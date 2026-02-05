@@ -92,10 +92,20 @@ def update_job_status(job_id, status, error_message=None, progress=None, current
         result = query.execute()
         print(f"[{job_id}]     ✓ Rows affected: {result}", file=sys.stderr)
         
+        # If no rows were affected, the job doesn't exist - return early
+        if result == 0:
+            print(f"[{job_id}]     ⚠️  Job not found in database - cannot update", file=sys.stderr)
+            return False
+        
         # Get values AFTER update
-        job_after = Job.get_by_id(job_id)
-        print(f"[{job_id}]     DB After: progress={job_after.progress}, status={job_after.status}, stage={job_after.current_stage}", file=sys.stderr)
-        print(f"[{job_id}]     ✓ CONFIRMED: progress type={type(job_after.progress).__name__}, value={job_after.progress}", file=sys.stderr)
+        try:
+            job_after = Job.get_by_id(job_id)
+            print(f"[{job_id}]     DB After: progress={job_after.progress}, status={job_after.status}, stage={job_after.current_stage}", file=sys.stderr)
+            print(f"[{job_id}]     ✓ CONFIRMED: progress type={type(job_after.progress).__name__}, value={job_after.progress}", file=sys.stderr)
+        except Job.DoesNotExist:
+            # This shouldn't happen since we just updated it, but handle gracefully
+            print(f"[{job_id}]     ⚠️  Could not fetch updated job", file=sys.stderr)
+            return False
         
         return True
     except Exception as e:

@@ -4,113 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>About - Paper Reproducibility Checker</title>
-    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
     
-    <!-- Tailwind CSS + DaisyUI -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
     
     <style>
-        /* Override primary color to blue */
         .text-primary { color: #0068b4 !important; }
         .bg-primary { background-color: #0068b4 !important; }
         .btn-primary { background-color: #0068b4 !important; border-color: #0068b4 !important; color: white !important; }
         .btn-primary:hover { background-color: #004d8f !important; }
-        .btn-primary:disabled { background-color: #0068b4 !important; border-color: #0068b4 !important; color: white !important; }
-        .badge-primary { background-color: #0068b4 !important; border-color: #0068b4 !important; color: white !important; }
-        .link-primary { color: #0068b4 !important; }
-        
-        /* Secondary button red */
-        .btn-secondary { background-color: #ef4444 !important; border-color: #ef4444 !important; color: white !important; }
-        .btn-secondary:hover { background-color: #dc2626 !important; }
-        
-        /* Progress bar */
-        .progress-primary { background-color: #0068b4 !important; }
-        .progress-primary::-webkit-progress-value { background-color: #0068b4 !important; }
-        .progress-primary::-moz-progress-bar { background-color: #0068b4 !important; }
-        
-        /* Steps component */
-        .step-content { text-align: left !important; }
-        .steps .step-primary::before, .steps .step-primary::after { background-color: #0068b4 !important; }
-        
-        /* Progress bar primary color */
-        .progress-primary {
-            background-color: #0068b4 !important;
-        }
-        
-        .progress-primary::-webkit-progress-bar {
-            background-color: #0068b4 !important;
-        }
-        
-        .progress-primary::-webkit-progress-value {
-            background-color: #0068b4 !important;
-        }
-        
-        .progress-primary::-moz-progress-bar {
-            background-color: #0068b4 !important;
-        }
-        
-        /* Override any violet/accent color to blue */
-        .badge-accent, .btn-accent, [class*="accent"] {
-            background-color: #0068b4 !important;
-            border-color: #0068b4 !important;
-            color: white !important;
-        }
-        
-        .badge-accent:hover, .btn-accent:hover {
-            background-color: #004d8f !important;
-            border-color: #004d8f !important;
-        }
-        
-        /* Override any element with background-color of violet to blue */
-        [style*="background-color: rgb(148, 0, 255)"],
-        [style*="background-color:#9400ff"],
-        [style*="background-color: #9400ff"] {
-            background-color: #0068b4 !important;
-        }
-        
-        html[data-theme="light"] {
-            color-scheme: light;
-        }
+        .step-primary::before, .step-primary::after { background-color: #0068b4 !important; }
     </style>
 </head>
 <body class="bg-base-100">
     {% include 'navbar.html' %}
 
-    <!-- Main Container -->
     <div class="container mx-auto px-4 py-8 max-w-4xl">
         
-        <!-- Hero Section -->
+        <!-- Hero -->
         <section class="mb-12 text-center">
             <h1 class="text-4xl font-bold mb-4">Paper Reproducibility Checker</h1>
-            <p class="text-lg text-base-content/70 mb-4">
+            <p class="text-lg text-base-content/70">
                 Automatically evaluate scientific research reproducibility using AI and code execution
-            </p>
-            <p class="text-base text-base-content/60">
-                Upload a PDF, let AI extract the methodology and code, execute it in a sandbox, 
-                and get detailed reproducibility assessment across 15 key aspects
             </p>
         </section>
 
-        <!-- What is Reproducibility? -->
+        <!-- What & Why -->
         <section class="mb-12">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2">
-                        <span>❓</span>
-                        <span>What is Reproducibility?</span>
-                    </h2>
-                    <p class="text-base-content/70">
-                        Scientific reproducibility means that the same experimental results can be obtained again 
-                        by following the same methodology. A reproducible paper clearly documents:
+                    <h2 class="card-title">📄 About This Project</h2>
+                    <p class="text-base-content/70 my-4">
+                        This tool helps assess whether scientific papers are reproducible by:
                     </p>
-                    <ul class="list-disc list-inside space-y-2 mt-4 text-base-content/70">
-                        <li><strong>Methodology:</strong> How the experiment was conducted</li>
-                        <li><strong>Data:</strong> Where and how to obtain the datasets used</li>
-                        <li><strong>Code:</strong> The source code that implements the methodology</li>
-                        <li><strong>Dependencies:</strong> Exact versions of libraries and tools</li>
-                        <li><strong>Environment:</strong> Hardware, OS, and Python version specifications</li>
+                    <ul class="list-disc list-inside space-y-2 text-base-content/70">
+                        <li>Extracting code artifacts and methodology from PDF papers</li>
+                        <li>Executing code in isolated Docker sandboxes</li>
+                        <li>Comparing claimed results with actual execution results</li>
+                        <li>Evaluating 15 reproducibility criteria across critical, high-value, and nice-to-have tiers</li>
+                        <li>Providing interactive chat for follow-up questions about papers</li>
                     </ul>
                 </div>
             </div>
@@ -120,40 +53,72 @@
         <section class="mb-12">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2">
-                        <span>⚙️</span>
-                        <span>How It Works</span>
-                    </h2>
-                    
-                    <div class="steps steps-vertical lg:steps-horizontal w-full">
+                    <h2 class="card-title">⚙️ How It Works</h2>
+                    <div class="steps steps-vertical lg:steps-horizontal w-full mt-4">
                         <div class="step step-primary">
                             <div class="step-content">
-                                <h3 class="font-semibold">📄 Upload & Extract</h3>
-                                <p class="text-sm text-base-content/70">Submit PDF, extract text & metadata</p>
+                                <h3 class="font-semibold">Upload</h3>
+                                <p class="text-xs text-base-content/70">Submit a PDF paper</p>
                             </div>
                         </div>
                         <div class="step step-primary">
                             <div class="step-content">
-                                <h3 class="font-semibold">🔍 AI Analysis</h3>
-                                <p class="text-sm text-base-content/70">Claude extracts code, dependencies, methodology</p>
+                                <h3 class="font-semibold">Analyze</h3>
+                                <p class="text-xs text-base-content/70">Claude extracts code & methodology</p>
                             </div>
                         </div>
                         <div class="step step-primary">
                             <div class="step-content">
-                                <h3 class="font-semibold">⚡ Execution</h3>
-                                <p class="text-sm text-base-content/70">Run code in isolated Docker sandbox</p>
+                                <h3 class="font-semibold">Execute</h3>
+                                <p class="text-xs text-base-content/70">Run code in Docker sandbox</p>
                             </div>
                         </div>
                         <div class="step step-primary">
                             <div class="step-content">
-                                <h3 class="font-semibold">📊 Evaluation</h3>
-                                <p class="text-sm text-base-content/70">Evaluate 15 reproducibility aspects</p>
+                                <h3 class="font-semibold">Evaluate</h3>
+                                <p class="text-xs text-base-content/70">Score reproducibility aspects</p>
                             </div>
                         </div>
-                        <div class="step step-primary">
-                            <div class="step-content">
-                                <h3 class="font-semibold">💬 Interactive Chat</h3>
-                                <p class="text-sm text-base-content/70">Ask follow-up questions about the paper</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Key Features -->
+        <section class="mb-12">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title">✨ Key Features</h2>
+                    <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
+                        <div class="flex gap-3">
+                            <span class="text-xl">👥</span>
+                            <div>
+                                <h3 class="font-semibold">Multi-User</h3>
+                                <p class="text-base-content/70">User registration with secure auth</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-3">
+                            <span class="text-xl">💬</span>
+                            <div>
+                                <h3 class="font-semibold">Interactive Chat</h3>
+                                <p class="text-base-content/70">Ask follow-up questions about papers</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-3">
+                            <span class="text-xl">⚡</span>
+                            <div>
+                                <h3 class="font-semibold">Caching</h3>
+                                <p class="text-base-content/70">Optional 3-layer caching for speed</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-3">
+                            <span class="text-xl">🧠</span>
+                            <div>
+                                <h3 class="font-semibold">LLM Flexibility</h3>
+                                <p class="text-base-content/70">Anthropic Claude or local Ollama</p>
                             </div>
                         </div>
                     </div>
@@ -165,67 +130,46 @@
         <section class="mb-12">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2">
-                        <span>📋</span>
-                        <span>15 Reproducibility Aspects</span>
-                    </h2>
+                    <h2 class="card-title">📋 15 Evaluation Criteria</h2>
+                    <p class="text-sm text-base-content/70 my-3">Papers are evaluated across three tiers:</p>
                     
-                    <p class="text-sm text-base-content/70 mb-4 mt-2">
-                        The tool evaluates papers across three tiers of reproducibility criteria:
-                    </p>
-                    
-                    <div class="grid md:grid-cols-2 gap-6">
-                        <!-- Tier 1 -->
+                    <div class="grid md:grid-cols-3 gap-4 text-sm">
                         <div class="card bg-error/10 border border-error/30">
-                            <div class="card-body p-4">
-                                <h3 class="font-semibold flex items-center gap-2">
-                                    <span>🔴</span>
-                                    <span>Critical (5)</span>
-                                </h3>
-                                <p class="text-xs text-base-content/60 mt-2 mb-2">Essential for reproducibility</p>
-                                <ul class="text-sm space-y-1 text-base-content/70">
-                                    <li>✓ Dependencies Pinned</li>
-                                    <li>✓ Results Reproducible</li>
-                                    <li>✓ Hyperparameters Documented</li>
-                                    <li>✓ Dataset Available</li>
-                                    <li>✓ Environment Documented</li>
+                            <div class="card-body p-3">
+                                <h3 class="font-semibold">🔴 Critical (5)</h3>
+                                <ul class="text-xs space-y-1 mt-2 text-base-content/70">
+                                    <li>• Dependencies Pinned</li>
+                                    <li>• Results Reproducible</li>
+                                    <li>• Hyperparameters Doc.</li>
+                                    <li>• Dataset Available</li>
+                                    <li>• Environment Doc.</li>
                                 </ul>
                             </div>
                         </div>
                         
-                        <!-- Tier 2 -->
                         <div class="card bg-warning/10 border border-warning/30">
-                            <div class="card-body p-4">
-                                <h3 class="font-semibold flex items-center gap-2">
-                                    <span>🟠</span>
-                                    <span>High Value (4)</span>
-                                </h3>
-                                <p class="text-xs text-base-content/60 mt-2 mb-2">Improves reproducibility quality</p>
-                                <ul class="text-sm space-y-1 text-base-content/70">
-                                    <li>✓ Test Suite Present</li>
-                                    <li>✓ Config File Present</li>
-                                    <li>✓ Documentation Quality</li>
-                                    <li>✓ Randomness Controlled</li>
+                            <div class="card-body p-3">
+                                <h3 class="font-semibold">🟠 High Value (4)</h3>
+                                <ul class="text-xs space-y-1 mt-2 text-base-content/70">
+                                    <li>• Test Suite</li>
+                                    <li>• Config File</li>
+                                    <li>• Documentation</li>
+                                    <li>• Randomness Control</li>
                                 </ul>
                             </div>
                         </div>
                         
-                        <!-- Tier 3 -->
-                        <div class="card col-span-1 md:col-span-2 bg-info/10 border border-info/30">
-                            <div class="card-body p-4">
-                                <h3 class="font-semibold flex items-center gap-2">
-                                    <span>🟡</span>
-                                    <span>Nice-to-Have (6)</span>
-                                </h3>
-                                <p class="text-xs text-base-content/60 mt-2 mb-2">Additional best practices</p>
-                                <div class="grid md:grid-cols-3 gap-2 text-sm text-base-content/70">
-                                    <div>✓ License Specified</div>
-                                    <div>✓ Continuous Integration</div>
-                                    <div>✓ Data Versioning</div>
-                                    <div>✓ Computational Requirements</div>
-                                    <div>✓ Output Format Documented</div>
-                                    <div>✓ Python Version Compatibility</div>
-                                </div>
+                        <div class="card bg-info/10 border border-info/30">
+                            <div class="card-body p-3">
+                                <h3 class="font-semibold">🟡 Nice-to-Have (6)</h3>
+                                <ul class="text-xs space-y-1 mt-2 text-base-content/70">
+                                    <li>• License</li>
+                                    <li>• CI/CD</li>
+                                    <li>• Data Versioning</li>
+                                    <li>• Requirements Spec</li>
+                                    <li>• Version Compat.</li>
+                                    <li>• Output Format</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -233,127 +177,46 @@
             </div>
         </section>
 
-        <!-- Features -->
+        <!-- Technology Stack -->
         <section class="mb-12">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2">
-                        <span>✨</span>
-                        <span>Key Features</span>
-                    </h2>
-                    
+                    <h2 class="card-title">🛠️ Technology Stack</h2>
                     <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
-                        <div class="flex gap-3">
-                            <span class="text-xl">👥</span>
-                            <div>
-                                <h3 class="font-semibold">Multi-User</h3>
-                                <p class="text-base-content/70">User registration with admin approval + password protection</p>
-                            </div>
-                        </div>
-                        
-                        <div class="flex gap-3">
-                            <span class="text-xl">🧠</span>
-                            <div>
-                                <h3 class="font-semibold">LLM Flexibility</h3>
-                                <p class="text-base-content/70">Support for Anthropic Claude & Ollama (local)</p>
-                            </div>
-                        </div>
-                        
-                        <div class="flex gap-3">
-                            <span class="text-xl">💬</span>
-                            <div>
-                                <h3 class="font-semibold">Interactive Chat</h3>
-                                <p class="text-base-content/70">Ask follow-up questions about analyzed papers</p>
-                            </div>
-                        </div>
-                        
-                        <div class="flex gap-3">
-                            <span class="text-xl">⚙️</span>
-                            <div>
-                                <h3 class="font-semibold">Configuration</h3>
-                                <p class="text-base-content/70">Customize CPU, memory, runtime, model, and storage limits</p>
-                            </div>
-                        </div>
-                        
-                        <div class="flex gap-3">
-                            <span class="text-xl">⚡</span>
-                            <div>
-                                <h3 class="font-semibold">Caching</h3>
-                                <p class="text-base-content/70">Optional 3-layer caching for 100x speedup on repeated papers</p>
-                            </div>
-                        </div>
-                        
-                        <div class="flex gap-3">
-                            <span class="text-xl">🔒</span>
-                            <div>
-                                <h3 class="font-semibold">Secure</h3>
-                                <p class="text-base-content/70">PBKDF2 password hashing, CSRF protection, auth checks</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Technology -->
-        <section class="mb-12">
-            <div class="card bg-base-100 shadow-lg">
-                <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2">
-                        <span>🛠️</span>
-                        <span>Technology Stack</span>
-                    </h2>
-                    
-                    <div class="grid md:grid-cols-2 gap-6 mt-4 text-sm">
                         <div>
-                            <h3 class="font-semibold mb-2 flex items-center gap-2">
-                                <span>🧠</span>
-                                AI & Analysis
-                            </h3>
-                            <ul class="space-y-1 text-base-content/70">
-                                <li>• Claude 3 (Anthropic)</li>
-                                <li>• Haiku model (80% cost savings)</li>
-                                <li>• Ollama for local inference</li>
-                                <li>• Multi-provider abstraction</li>
-                            </ul>
-                        </div>
-                        
-                        <div>
-                            <h3 class="font-semibold mb-2 flex items-center gap-2">
-                                <span>🐳</span>
-                                Execution
-                            </h3>
-                            <ul class="space-y-1 text-base-content/70">
-                                <li>• Docker containers</li>
-                                <li>• Isolated sandboxes</li>
-                                <li>• Storage/memory limits</li>
-                                <li>• Timeout protection</li>
-                            </ul>
-                        </div>
-                        
-                        <div>
-                            <h3 class="font-semibold mb-2 flex items-center gap-2">
-                                <span>⚡</span>
-                                Backend
-                            </h3>
-                            <ul class="space-y-1 text-base-content/70">
+                            <h3 class="font-semibold mb-2">Backend</h3>
+                            <ul class="text-base-content/70 space-y-1">
                                 <li>• Flask web framework</li>
-                                <li>• SQLite / PostgreSQL ready</li>
-                                <li>• Server-Sent Events (SSE)</li>
-                                <li>• Modular blueprint architecture</li>
+                                <li>• SQLite/PostgreSQL</li>
+                                <li>• Peewee ORM</li>
+                                <li>• Python 3.10+</li>
                             </ul>
                         </div>
-                        
                         <div>
-                            <h3 class="font-semibold mb-2 flex items-center gap-2">
-                                <span>🎨</span>
-                                Frontend
-                            </h3>
-                            <ul class="space-y-1 text-base-content/70">
+                            <h3 class="font-semibold mb-2">AI & Execution</h3>
+                            <ul class="text-base-content/70 space-y-1">
+                                <li>• Claude 3 API</li>
+                                <li>• Ollama (local)</li>
+                                <li>• Docker sandboxes</li>
+                                <li>• Resource limits</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold mb-2">Frontend</h3>
+                            <ul class="text-base-content/70 space-y-1">
                                 <li>• Tailwind CSS</li>
-                                <li>• DaisyUI components</li>
-                                <li>• Dark/light mode</li>
-                                <li>• Responsive design</li>
+                                <li>• DaisyUI</li>
+                                <li>• Vanilla JavaScript</li>
+                                <li>• Dark/Light mode</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold mb-2">Deployment</h3>
+                            <ul class="text-base-content/70 space-y-1">
+                                <li>• Docker & Compose</li>
+                                <li>• Environment config</li>
+                                <li>• Health checks</li>
+                                <li>• Production ready</li>
                             </ul>
                         </div>
                     </div>
@@ -361,108 +224,47 @@
             </div>
         </section>
 
-        <!-- Deployment -->
+        <!-- Quick Links -->
         <section class="mb-12">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2">
-                        <span>🚀</span>
-                        <span>Deployment</span>
-                    </h2>
-                    
-                    <p class="text-base-content/70 mb-4">
-                        Paper Reproducibility Checker is designed for flexible deployment:
-                    </p>
-                    
-                    <div class="grid md:grid-cols-2 gap-4 text-sm">
-                        <div class="flex gap-3">
-                            <span class="text-xl">📦</span>
-                            <div>
-                                <h3 class="font-semibold">Docker</h3>
-                                <p class="text-base-content/70">Complete Docker Compose setup included. Works with or without Traefik.</p>
-                            </div>
-                        </div>
-                        
-                        <div class="flex gap-3">
-                            <span class="text-xl">🌐</span>
-                            <div>
-                                <h3 class="font-semibold">Multi-Host Ready</h3>
-                                <p class="text-base-content/70">Configurable Docker networks for standalone or distributed setups.</p>
-                            </div>
-                        </div>
-                        
-                        <div class="flex gap-3">
-                            <span class="text-xl">🔐</span>
-                            <div>
-                                <h3 class="font-semibold">Environment Variables</h3>
-                                <p class="text-base-content/70">All secrets and config via env vars, no hardcoded values.</p>
-                            </div>
-                        </div>
-                        
-                        <div class="flex gap-3">
-                            <span class="text-xl">✅</span>
-                            <div>
-                                <h3 class="font-semibold">Health Checks</h3>
-                                <p class="text-base-content/70">/api/health endpoint for monitoring and load balancing.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Getting Started & Resources -->
-        <section class="mb-12">
-            <div class="card bg-base-100 shadow-lg">
-                <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2">
-                        <span>📚</span>
-                        <span>Resources & Quick Links</span>
-                    </h2>
-                    
-                    <div class="space-y-2 mt-4">
+                    <h2 class="card-title mb-4">📚 Get Started</h2>
+                    <div class="space-y-2">
+                        <a href="/" class="btn btn-primary gap-2 w-full justify-start">
+                            <span>📤</span>
+                            <span>Analyze a Paper</span>
+                        </a>
+                        <a href="/history" class="btn btn-outline gap-2 w-full justify-start">
+                            <span>📊</span>
+                            <span>View History</span>
+                        </a>
                         <a href="https://github.com/kkirchheim/paper-reproducibility" target="_blank" class="btn btn-outline gap-2 w-full justify-start">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
                                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v 3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"></path>
                             </svg>
-                            <span>GitHub Repository</span>
-                        </a>
-                        
-                        <a href="/history" class="btn btn-outline gap-2 w-full justify-start">
-                            <span>📊</span>
-                            <span>View Analysis History</span>
-                        </a>
-                        
-                        <a href="/" class="btn btn-primary gap-2 w-full justify-start">
-                            <span>📤</span>
-                            <span>Start Analyzing Papers</span>
+                            <span>GitHub</span>
                         </a>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Footer -->
         <footer class="text-center py-8 text-sm text-base-content/50">
-            <p>Paper Reproducibility Checker • Built with ❤️ • Open Source</p>
+            <p>Paper Reproducibility Checker • Open Source • MIT License</p>
         </footer>
 
     </div>
 
-    <!-- Theme Toggle Script -->
     <script>
         function toggleTheme() {
             const html = document.documentElement;
             const isDark = html.getAttribute('data-theme') === 'dark';
             html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
             localStorage.setItem('theme', isDark ? 'light' : 'dark');
         }
         
-        // Load saved theme
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
-        document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
     </script>
 </body>
 </html>

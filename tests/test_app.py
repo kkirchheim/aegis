@@ -100,10 +100,11 @@ class TestEventEmission:
         
         with app.app_context():
             # Create a job first
+            from datetime import datetime
             conn = get_db()
             c = conn.cursor()
-            c.execute("INSERT INTO jobs (id, status, pdf_path) VALUES (?, ?, ?)",
-                     (job_id, "processing", "/tmp/test.pdf"))
+            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0, datetime.now()))
             conn.commit()
             conn.close()
             
@@ -134,10 +135,11 @@ class TestStageEvents:
         job_id = "test-job-stage"
         
         with app.app_context():
+            from datetime import datetime
             conn = get_db()
             c = conn.cursor()
-            c.execute("INSERT INTO jobs (id, status, pdf_path) VALUES (?, ?, ?)",
-                     (job_id, "processing", "/tmp/test.pdf"))
+            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0, datetime.now()))
             conn.commit()
             conn.close()
             
@@ -172,10 +174,11 @@ class TestStageEvents:
         job_id = "test-job-all-stages"
         
         with app.app_context():
+            from datetime import datetime
             conn = get_db()
             c = conn.cursor()
-            c.execute("INSERT INTO jobs (id, status, pdf_path) VALUES (?, ?, ?)",
-                     (job_id, "processing", "/tmp/test.pdf"))
+            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0, datetime.now()))
             conn.commit()
             conn.close()
             
@@ -228,10 +231,11 @@ class TestJobRoutes:
             
             job_id = "test-job-create"
             # Add job with the authenticated user's ID
+            from datetime import datetime
             c.execute("""
-                INSERT INTO jobs (id, status, pdf_path, pdf_filename, user_id)
-                VALUES (?, ?, ?, ?, ?)
-            """, (job_id, "completed", "/tmp/test.pdf", "test.pdf", user_id))
+                INSERT INTO jobs (id, status, pdf_path, pdf_filename, user_id, current_stage, progress, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (job_id, "completed", "/tmp/test.pdf", "test.pdf", user_id, "completed", 100.0, datetime.now()))
             conn.commit()
             conn.close()
         
@@ -289,8 +293,8 @@ class TestDataIntegrity:
             c = conn.cursor()
             
             job_id = "test-exec-details"
-            c.execute("INSERT INTO jobs (id, status, pdf_path) VALUES (?, ?, ?)",
-                     (job_id, "processing", "/tmp/test.pdf"))
+            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress) VALUES (?, ?, ?, ?, ?)",
+                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0))
             
             c.execute("""
                 INSERT INTO execution_details
@@ -331,8 +335,8 @@ class TestDataIntegrity:
             c = conn.cursor()
             
             job_id = "test-aspects"
-            c.execute("INSERT INTO jobs (id, status, pdf_path) VALUES (?, ?, ?)",
-                     (job_id, "processing", "/tmp/test.pdf"))
+            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress) VALUES (?, ?, ?, ?, ?)",
+                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0))
             
             # Insert aspect evaluations
             aspects = [
@@ -368,8 +372,8 @@ class TestPaperAnalysisStorage:
             c = conn.cursor()
             
             job_id = "test-paper-analysis"
-            c.execute("INSERT INTO jobs (id, status, pdf_path) VALUES (?, ?, ?)",
-                     (job_id, "processing", "/tmp/test.pdf"))
+            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress) VALUES (?, ?, ?, ?, ?)",
+                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0))
             
             c.execute("""
                 INSERT INTO paper_analysis
@@ -405,8 +409,8 @@ class TestArtifactStorage:
             c = conn.cursor()
             
             job_id = "test-artifacts"
-            c.execute("INSERT INTO jobs (id, status, pdf_path) VALUES (?, ?, ?)",
-                     (job_id, "processing", "/tmp/test.pdf"))
+            c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress) VALUES (?, ?, ?, ?, ?)",
+                     (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0))
             
             artifacts = [
                 ("https://github.com/user/repo", "github_repo", "Main repository"),

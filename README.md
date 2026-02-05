@@ -1,65 +1,51 @@
 # Paper Reproducibility Checker 📄
 
-A production-ready web application that analyzes scientific papers for reproducibility by automatically extracting code artifacts, executing them in isolated Docker containers, and evaluating them against 15 reproducibility metrics.
+Analyze scientific papers for reproducibility. Automatically extracts code artifacts, executes them in isolated Docker containers, and evaluates them against 15 reproducibility metrics.
 
 ## Quick Start
 
 ### Prerequisites
 - Docker & Docker Compose
-- Anthropic API key (`ANTHROPIC_API_KEY`)
+- Anthropic API key
 
 ### Setup
-
 ```bash
-# Clone and run
 git clone https://github.com/kkirchheim/paper-reproducibility.git
 cd paper-reproducibility
 
-# Set API key
 export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Start
 docker-compose up
 
 # Open http://localhost:5000
 ```
 
-## Overview
+## How It Works
 
-The system implements a **three-stage evaluation pipeline**:
+**Three-stage pipeline:**
+1. **Paper Analysis** — Extract methodology, claims, datasets
+2. **Code Execution** — Clone and run code in isolated containers
+3. **Evaluation** — Compare paper claims vs execution results
 
-1. **Paper Analysis** — Extract methodology, claims, and datasets from PDFs
-2. **Code Execution** — Clone repos and execute code in Docker sandboxes
-3. **Multi-Source Evaluation** — Compare paper claims vs code vs execution results
-
-Result: Comprehensive reproducibility report scoring 15 key aspects.
+Result: Detailed reproducibility report with 15-aspect scoring.
 
 ## Documentation
 
-- **[API Reference](./docs/API.md)** — Full API documentation and examples
-- **[Architecture](./docs/ARCHITECTURE.md)** — Technical design, database schema, caching strategy
-- **[Development](./docs/DEVELOPMENT.md)** — Local setup, environment variables, contribution workflow
-- **[Testing](./docs/TESTING.md)** — Running tests, test suite overview
-- **[Troubleshooting](./docs/TROUBLESHOOTING.md)** — Common issues and solutions
-- **[LLM Providers](./docs/LLM_PROVIDERS.md)** — Supported LLM providers and configuration
+- **[Architecture](./docs/ARCHITECTURE.md)** — System design, database, caching
+- **[API Reference](./docs/API.md)** — REST endpoints
+- **[Development](./docs/DEVELOPMENT.md)** — Setup, configuration, workflow
+- **[Testing](./docs/TESTING.md)** — Running tests
+
+See `/docs` for full documentation.
 
 ## Performance
 
 - Paper extraction: 5-10s
-- Code execution: 2-5 min (repo-dependent)
+- Code execution: 2-5 min
 - Evaluation: 10-15s
 - **Total: ~3-5 min per paper**
 
-## License
+## Status
 
-MIT License - see [LICENSE](./LICENSE)
+✅ Production Ready | MIT License
 
-## Support
-
-- **Issues:** [GitHub Issues](https://github.com/kkirchheim/paper-reproducibility/issues)
-- **Docs:** See `/docs` directory
-- **Questions:** [GitHub Discussions](https://github.com/kkirchheim/paper-reproducibility/discussions)
-
----
-
-**Status:** ✅ Production Ready | **Repository:** https://github.com/kkirchheim/paper-reproducibility
+**Repository:** https://github.com/kkirchheim/paper-reproducibility

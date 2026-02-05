@@ -61,9 +61,8 @@ class EventDispatcher:
         if event.progress is not None:
             self.logger(f"[{event.job_id}] *** EVENT INCLUDES PROGRESS: step={event.step}, progress={event.progress} ***")
         
-        # NOTE: SSE queues disabled - now using polling for frontend
-        # Events are retrieved via /api/job/<id>/events endpoint
-        # self._emit_to_queues(event)
+        # Emit to SSE queues for real-time updates
+        self._emit_to_queues(event)
     
     def _persist_event(self, event: JobEvent) -> None:
         """Store event in database (non-chat events only)."""
