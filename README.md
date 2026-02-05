@@ -19,6 +19,20 @@ docker-compose up
 # Open http://localhost:5000
 ```
 
+## Usage
+
+### Web UI
+Open http://localhost:5000 to upload papers and view results.
+
+### Command Line
+```bash
+python scripts/repro-cli.py \
+  -u http://localhost:5000 \
+  -k <api_key> \
+  -p paper.pdf \
+  -o results.json
+```
+
 ## How It Works
 
 **Three-stage pipeline:**
@@ -44,8 +58,6 @@ See `/docs` for full documentation.
 - Evaluation: 10-15s
 - **Total: ~3-5 min per paper**
 
-## Status
+---
 
-✅ Production Ready | MIT License
-
-**Repository:** https://github.com/kkirchheim/paper-reproducibility
+MIT License | https://github.com/kkirchheim/paper-reproducibility
