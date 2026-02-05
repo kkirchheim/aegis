@@ -114,11 +114,16 @@ async function pollOnce() {
 // ============================================================================
 
 function updateProgressBar(job) {
-    if (!progressFill || !progressText) return;
+    console.log(`[update] progressBar: progressFill=${!!progressFill}, progressText=${!!progressText}`);
+    if (!progressFill || !progressText) {
+        console.warn(`[update] progressBar skipped - missing DOM elements`);
+        return;
+    }
     
     const percent = Math.round((job.progress || 0) * 100);
     progressFill.value = percent;
     progressText.textContent = `${percent}%`;
+    console.log(`[update] progressBar: Set to ${percent}%`);
 }
 
 function updateStages(job) {
@@ -166,7 +171,11 @@ function updateStages(job) {
 }
 
 function updateStatus(job) {
-    if (!statusContent) return;
+    console.log(`[update] status: statusContent=${!!statusContent}`);
+    if (!statusContent) {
+        console.warn(`[update] status skipped - missing statusContent`);
+        return;
+    }
     
     const statusText = {
         'pending': 'Pending',
@@ -189,10 +198,16 @@ function updateStatus(job) {
     if (job.error_message) {
         statusContent.innerHTML += `<div class="alert alert-error mt-2"><p>${job.error_message}</p></div>`;
     }
+    
+    console.log(`[update] status: Rendered as "${statusText}"`);
 }
 
 function updateEventLog(job) {
-    if (!eventLog) return;
+    console.log(`[update] eventLog: eventLog=${!!eventLog}, events=${job.events?.length || 0}`);
+    if (!eventLog) {
+        console.warn(`[update] eventLog skipped - missing eventLog element`);
+        return;
+    }
     
     // Clear and rebuild entire log from scratch
     eventLog.innerHTML = "";
@@ -223,11 +238,16 @@ function updateEventLog(job) {
         eventLog.appendChild(entry);
     });
     
-    logSection.scrollTop = logSection.scrollHeight;
+    if (logSection) logSection.scrollTop = logSection.scrollHeight;
+    console.log(`[update] eventLog: Rendered ${job.events.length} events`);
 }
 
 function updateMetadata(job) {
-    if (!metadataContent) return;
+    console.log(`[update] metadata: metadataContent=${!!metadataContent}`);
+    if (!metadataContent) {
+        console.warn(`[update] metadata skipped - missing metadataContent`);
+        return;
+    }
     
     const createdDate = new Date(job.created_at).toLocaleDateString();
     const completedDate = job.completed_at ? new Date(job.completed_at).toLocaleDateString() : "—";
