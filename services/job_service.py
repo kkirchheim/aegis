@@ -63,39 +63,46 @@ def update_job_status(job_id, status, error_message=None, progress=None, current
     THIS IS THE ONLY PLACE WHERE JOB PROGRESS SHOULD BE UPDATED IN DATABASE.
     All other code paths should call this function, never update Job directly.
     """
+    import sys
     try:
-        updates = {"status": status}
+        # Build update dict
+        updates = {Job.status: status}
         if progress is not None:
-            updates["progress"] = progress
+            updates[Job.progress] = progress
         if current_stage is not None:
-            updates["current_stage"] = current_stage
+            updates[Job.current_stage] = current_stage
         if error_message:
-            updates["error_message"] = error_message
+            updates[Job.error_message] = error_message
         
-        import sys
-        # Log BEFORE updating database (so we know what's being committed)
-        print(f"[{job_id}] *** UPDATING JOB STATUS IN DATABASE ***", file=sys.stderr)
-        print(f"[{job_id}]     status: {status}", file=sys.stderr)
-        if progress is not None:
-            print(f"[{job_id}]     progress: {progress} (0.0-1.0 scale)", file=sys.stderr)
-        if current_stage is not None:
-            print(f"[{job_id}]     current_stage: {current_stage}", file=sys.stderr)
-        if error_message:
-            print(f"[{job_id}]     error_message: {error_message}", file=sys.stderr)
+        # Log BEFORE updating database
+        print(f"[{job_id}] *** BEFORE DATABASE UPDATE ***", file=sys.stderr)
+        print(f"[{job_id}]     Incoming: status={status}, progress={progress}, stage={current_stage}", file=sys.stderr)
         
-        # Update using Peewee
-        result = Job.update(updates).where(Job.id == job_id).execute()
-        print(f"[{job_id}]     ✓ Committed to DB (rows affected: {result})", file=sys.stderr)
+        # Get current values BEFORE update
+        try:
+            job_before = Job.get_by_id(job_id)
+            print(f"[{job_id}]     DB Before: progress={job_before.progress}, status={job_before.status}, stage={job_before.current_stage}", file=sys.stderr)
+        except:
+            print(f"[{job_id}]     DB Before: (job not found)", file=sys.stderr)
         
-        # Verify what was written
-        job = Job.get_by_id(job_id)
-        print(f"[{job_id}]     ✓ Verified: progress={job.progress}, status={job.status}, stage={job.current_stage}", file=sys.stderr)
+        # Execute Peewee update with logging
+        query = Job.update(updates).where(Job.id == job_id)
+        print(f"[{job_id}]     SQL: {query.sql()}", file=sys.stderr)
+        
+        result = query.execute()
+        print(f"[{job_id}]     ✓ Rows affected: {result}", file=sys.stderr)
+        
+        # Get values AFTER update
+        job_after = Job.get_by_id(job_id)
+        print(f"[{job_id}]     DB After: progress={job_after.progress}, status={job_after.status}, stage={job_after.current_stage}", file=sys.stderr)
+        print(f"[{job_id}]     ✓ CONFIRMED: progress type={type(job_after.progress).__name__}, value={job_after.progress}", file=sys.stderr)
         
         return True
     except Exception as e:
-        import sys
         print(f"[{job_id}] *** UPDATE FAILED ***", file=sys.stderr)
         print(f"[{job_id}]     Error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         return False
 
 

@@ -119,12 +119,14 @@ class EventDispatcher:
             # Use event.progress if provided (event is the ground truth)
             if event.progress is not None:
                 updates["progress"] = event.progress
-                self.logger(f"[{event.job_id}] Updating progress to {event.progress} (from event)")
+                self.logger(f"[{event.job_id}] *** DISPATCHER PASSING progress={event.progress} to update_job_status ***")
             else:
-                self.logger(f"[{event.job_id}] No progress in event, not updating progress field")
+                self.logger(f"[{event.job_id}] *** DISPATCHER: No progress in event, NOT setting progress field ***")
             
             self.logger(f"[{event.job_id}] Calling update_job_status with: {updates}")
             update_job_status(event.job_id, **updates)
+        else:
+            self.logger(f"[{event.job_id}] No job_service available, skipping status update")
     
     def _emit_to_queues(self, event: JobEvent) -> None:
         """Emit event to SSE queues for real-time updates."""

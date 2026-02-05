@@ -203,6 +203,11 @@ def get_job_full(job_id):
     # Get current_stage, default to pending if not set
     current_stage = job.current_stage or "pending"
     
+    # Log raw database values before putting in response
+    print(f"[{job_id}] *** API /full READ FROM DB ***", file=__import__('sys').stderr)
+    print(f"[{job_id}]     job.progress type={type(job.progress).__name__}, raw value={repr(job.progress)}", file=__import__('sys').stderr)
+    print(f"[{job_id}]     job.status={job.status}, job.current_stage={job.current_stage}", file=__import__('sys').stderr)
+    
     response = {
         "id": job.id,
         "status": job.status,
@@ -219,7 +224,8 @@ def get_job_full(job_id):
     }
     
     # Log response for debugging
-    print(f"[{job_id}] API /full response: status={response['status']}, progress={response['progress']}, stage={response['current_stage']}, events={len(response['events'])}")
+    print(f"[{job_id}] *** API /full RESPONSE ***", file=__import__('sys').stderr)
+    print(f"[{job_id}]     status={response['status']}, progress={response['progress']}, stage={response['current_stage']}, events={len(response['events'])}", file=__import__('sys').stderr)
     
     return jsonify(response)
 
