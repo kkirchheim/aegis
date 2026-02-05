@@ -620,6 +620,10 @@ def _generate_chat_response(job_id, session_id, messages, llm_provider, emit_eve
 
 @api_bp.route("/job/<job_id>/chat/history", methods=["GET"])
 @require_auth
+@marshal_with(ChatHistorySchema, code=200)
+@marshal_with(ErrorSchema, code=403)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     tags=["Chat"],
     description="Get chat history for a job",
@@ -627,13 +631,11 @@ def _generate_chat_response(job_id, session_id, messages, llm_provider, emit_eve
     params={"job_id": {"description": "Job ID", "in": "path"}},
     responses={
         200: {"description": "Chat history retrieved", "schema": ChatHistorySchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(ChatHistorySchema, code=200)
 def get_chat_history_endpoint(job_id):
     """Get chat history."""
     user_id = session.get('user_id')
@@ -643,24 +645,27 @@ def get_chat_history_endpoint(job_id):
         
         # Check if job exists first (404) before checking permissions (403)
         if not job:
-            return ({"error": "Job not found"}), 404
+            return {"error": "Job not found"}, 404
         
         if job.user_id != user_id:
-            return ({"error": "Access denied"}), 403
+            return {"error": "Access denied"}, 403
         
         try:
             chat_session = ChatSession.get(ChatSession.job == job_id)
             history = get_chat_history(chat_session.id, limit=100)
-            return (history)
+            return history
         except ChatSession.DoesNotExist:
-            return ([])
+            return []
     
     except Exception as e:
-        return ({"error": str(e)}), 500
+        return {"error": str(e)}, 500
 
 
 @api_bp.route("/job/<job_id>/chat/history", methods=["DELETE"])
 @require_auth
+@marshal_with(ErrorSchema, code=403)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     tags=["Chat"],
     description="Delete chat history for a job",
@@ -668,7 +673,6 @@ def get_chat_history_endpoint(job_id):
     params={"job_id": {"description": "Job ID", "in": "path"}},
     responses={
         204: {"description": "Chat history deleted successfully"},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
@@ -683,10 +687,10 @@ def delete_chat_history_endpoint(job_id):
         
         # Check if job exists first (404) before checking permissions (403)
         if not job:
-            return ({"error": "Job not found"}), 404
+            return {"error": "Job not found"}, 404
         
         if job.user_id != user_id:
-            return ({"error": "Access denied"}), 403
+            return {"error": "Access denied"}, 403
         
         try:
             chat_session = ChatSession.get(ChatSession.job == job_id)
@@ -698,7 +702,7 @@ def delete_chat_history_endpoint(job_id):
         return "", 204
     
     except Exception as e:
-        return ({"error": str(e)}), 500
+        return {"error": str(e)}, 500
 
 
 # ============================================================================
@@ -1038,26 +1042,33 @@ def upload_pdf():
 
 @api_bp.route("/job", methods=["GET"])
 @require_auth
+@marshal_with(JobListSchema, code=200)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     tags=["Jobs"],
     description="List all jobs for the authenticated user",
     security=[{"sessionAuth": []}],
     responses={
         200: {"description": "List of jobs retrieved successfully", "schema": JobListSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(JobListSchema, code=200)
 def list_jobs_api():
     """List all jobs for current user."""
-    user_id = session.get('user_id')
-    jobs = get_user_jobs(user_id)
-    return (jobs)
+    try:
+        user_id = session.get('user_id')
+        jobs = get_user_jobs(user_id)
+        return jobs
+    except Exception as e:
+        return {"error": str(e)}, 500
 
 
 @api_bp.route("/job/<job_id>", methods=["GET"])
 @require_auth
+@marshal_with(JobSchema, code=200)
+@marshal_with(ErrorSchema, code=403)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     tags=["Jobs"],
     description="Get job status and report",
@@ -1065,43 +1076,47 @@ def list_jobs_api():
     params={"job_id": {"description": "Job ID", "in": "path"}},
     responses={
         200: {"description": "Job details retrieved successfully", "schema": JobSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(JobSchema, code=200)
 def get_job_detail(job_id):
     """Get job status and report."""
-    user_id = session.get('user_id')
-    
-    job = get_job(job_id)
-    
-    if not job:
-        return ({"error": "Job not found"}), 404
-    
-    if job.user_id != user_id:
-        return ({"error": "Access denied"}), 403
-    
-    response = {
-        "id": job.id,
-        "status": job.status,
-        "created_at": job.created_at,
-        "completed_at": job.completed_at
-    }
-    
-    if job.report:
-        response["report"] = json.loads(job.report) if isinstance(job.report, str) else job.report
-    
-    if job.error_message:
-        response["error"] = job.error_message
-    
-    return (response)
+    try:
+        user_id = session.get('user_id')
+        
+        job = get_job(job_id)
+        
+        if not job:
+            return {"error": "Job not found"}, 404
+        
+        if job.user_id != user_id:
+            return {"error": "Access denied"}, 403
+        
+        response = {
+            "id": job.id,
+            "status": job.status,
+            "created_at": job.created_at,
+            "completed_at": job.completed_at
+        }
+        
+        if job.report:
+            response["report"] = json.loads(job.report) if isinstance(job.report, str) else job.report
+        
+        if job.error_message:
+            response["error"] = job.error_message
+        
+        return response
+    except Exception as e:
+        return {"error": str(e)}, 500
 
 
 @api_bp.route("/job/<job_id>", methods=["DELETE"])
 @require_auth
+@marshal_with(ErrorSchema, code=403)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     tags=["Jobs"],
     description="Delete a job",
@@ -1109,7 +1124,6 @@ def get_job_detail(job_id):
     params={"job_id": {"description": "Job ID", "in": "path"}},
     responses={
         204: {"description": "Job deleted successfully"},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
@@ -1123,22 +1137,26 @@ def delete_job_route(job_id):
         job = get_job(job_id)
         
         if not job:
-            return ({"error": "Job not found"}), 404
+            return {"error": "Job not found"}, 404
         
         if job.user_id != user_id:
-            return ({"error": "Access denied"}), 403
+            return {"error": "Access denied"}, 403
         
         if delete_job(job_id):
             return "", 204
         else:
-            return ({"error": "Failed to delete job"}), 500
+            return {"error": "Failed to delete job"}, 500
     
     except Exception as e:
-        return ({"error": str(e)}), 500
+        return {"error": str(e)}, 500
 
 
 @api_bp.route("/job/<job_id>/full", methods=["GET"])
 @require_auth
+@marshal_with(JobDetailSchema, code=200)
+@marshal_with(ErrorSchema, code=403)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     tags=["Jobs"],
     description="Get full job data including details, events, and analysis",
@@ -1146,62 +1164,53 @@ def delete_job_route(job_id):
     params={"job_id": {"description": "Job ID", "in": "path"}},
     responses={
         200: {"description": "Full job data retrieved successfully", "schema": JobDetailSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-@marshal_with(JobDetailSchema, code=200)
 def get_job_full(job_id):
     """Get full job data including all details."""
-    user_id = session.get('user_id')
-    
-    job = get_job(job_id)
-    
-    if not job:
-        return ({"error": "Job not found"}), 404
-    
-    if job.user_id != user_id:
-        return ({"error": "Access denied"}), 403
-    
-    # Fetch related data
-    events_list = get_job_events(job_id)
-    artifacts = get_job_artifacts(job_id)
-    
-    # Fetch paper analysis
-    from services.analysis_service import get_paper_analysis
-    paper_analysis = get_paper_analysis(job_id) or {}
-    
-    # Get current_stage, default to pending if not set
-    current_stage = job.current_stage or "pending"
-    
-    # Log raw database values before putting in response
-    import sys
-    print(f"[{job_id}] *** API /full READ FROM DB ***", file=sys.stderr)
-    print(f"[{job_id}]     job.progress type={type(job.progress).__name__}, raw value={repr(job.progress)}", file=sys.stderr)
-    print(f"[{job_id}]     job.status={job.status}, job.current_stage={job.current_stage}", file=sys.stderr)
-    
-    response = {
-        "id": job.id,
-        "status": job.status,
-        "progress": job.progress if job.progress is not None else 0.0,  # 0.0-1.0
-        "current_stage": current_stage,  # pipeline stage
-        "pdf_filename": job.pdf_filename,
-        "created_at": job.created_at,
-        "completed_at": job.completed_at,
-        "report": json.loads(job.report) if job.report else {},
-        "error_message": job.error_message,
-        "events": events_list,
-        "artifacts": artifacts,
-        "paper_analysis": paper_analysis
-    }
-    
-    # Log response for debugging
-    print(f"[{job_id}] *** API /full RESPONSE ***", file=sys.stderr)
-    print(f"[{job_id}]     status={response['status']}, progress={response['progress']}, stage={response['current_stage']}, events={len(response['events'])}", file=sys.stderr)
-    
-    return (response)
+    try:
+        user_id = session.get('user_id')
+        
+        job = get_job(job_id)
+        
+        if not job:
+            return {"error": "Job not found"}, 404
+        
+        if job.user_id != user_id:
+            return {"error": "Access denied"}, 403
+        
+        # Fetch related data
+        events_list = get_job_events(job_id)
+        artifacts = get_job_artifacts(job_id)
+        
+        # Fetch paper analysis
+        from services.analysis_service import get_paper_analysis
+        paper_analysis = get_paper_analysis(job_id) or {}
+        
+        # Get current_stage, default to pending if not set
+        current_stage = job.current_stage or "pending"
+        
+        response = {
+            "id": job.id,
+            "status": job.status,
+            "progress": job.progress if job.progress is not None else 0.0,  # 0.0-1.0
+            "current_stage": current_stage,  # pipeline stage
+            "pdf_filename": job.pdf_filename,
+            "created_at": job.created_at,
+            "completed_at": job.completed_at,
+            "report": json.loads(job.report) if job.report else {},
+            "error_message": job.error_message,
+            "events": events_list,
+            "artifacts": artifacts,
+            "paper_analysis": paper_analysis
+        }
+        
+        return response
+    except Exception as e:
+        return {"error": str(e)}, 500
 
 
 @api_bp.route("/job/<job_id>/events", methods=["GET"])
@@ -1236,73 +1245,76 @@ def get_job_events_polling(job_id):
     """
     from datetime import timezone
     
-    user_id = session.get('user_id')
-    
-    job = get_job(job_id)
-    
-    if not job:
-        return ({"error": "Job not found"}), 404
-    
-    if job.user_id != user_id:
-        return ({"error": "Access denied"}), 403
-    
-    # Get all events for the job
-    all_events = EventRepository.list_by_job(job_id)
-    
-    # Handle 'since' parameter for filtering
-    since_param = request.args.get('since')
-    filtered_events = []
-    
-    if since_param:
-        try:
-            # Parse ISO format timestamp (e.g., "2024-01-01T12:00:00Z")
-            if since_param.endswith('Z'):
-                since_param = since_param[:-1] + '+00:00'
-            since_time = datetime.fromisoformat(since_param)
-            
-            # Ensure since_time is timezone-aware (UTC)
-            if since_time.tzinfo is None:
-                since_time = since_time.replace(tzinfo=timezone.utc)
-            
-            # Filter events by timestamp
-            for event in all_events:
-                event_time = event.timestamp
+    try:
+        user_id = session.get('user_id')
+        
+        job = get_job(job_id)
+        
+        if not job:
+            return {"error": "Job not found"}, 404
+        
+        if job.user_id != user_id:
+            return {"error": "Access denied"}, 403
+        
+        # Get all events for the job
+        all_events = EventRepository.list_by_job(job_id)
+        
+        # Handle 'since' parameter for filtering
+        since_param = request.args.get('since')
+        filtered_events = []
+        
+        if since_param:
+            try:
+                # Parse ISO format timestamp (e.g., "2024-01-01T12:00:00Z")
+                if since_param.endswith('Z'):
+                    since_param = since_param[:-1] + '+00:00'
+                since_time = datetime.fromisoformat(since_param)
                 
-                # Ensure event_time is timezone-aware (UTC) for comparison
-                if event_time.tzinfo is None:
-                    event_time = event_time.replace(tzinfo=timezone.utc)
+                # Ensure since_time is timezone-aware (UTC)
+                if since_time.tzinfo is None:
+                    since_time = since_time.replace(tzinfo=timezone.utc)
                 
-                if event_time > since_time:
-                    filtered_events.append(event)
-        except (ValueError, TypeError) as e:
-            return ({"error": f"Invalid timestamp format: {str(e)}"}), 400
-    else:
-        filtered_events = all_events
-    
-    # Enforce 500 event limit for safety
-    filtered_events = filtered_events[:500]
-    
-    # Convert events to dictionary format
-    events_data = []
-    for event in filtered_events:
-        event_dict = {
-            "id": str(event.id),
-            "job_id": str(event.job_id),
-            "step": event.step,
-            "message": event.message,
-            "severity": event.severity,
-            "timestamp": event.timestamp.isoformat() + 'Z' if hasattr(event.timestamp, 'isoformat') else str(event.timestamp),
-            "stage_duration_ms": event.stage_duration_ms
+                # Filter events by timestamp
+                for event in all_events:
+                    event_time = event.timestamp
+                    
+                    # Ensure event_time is timezone-aware (UTC) for comparison
+                    if event_time.tzinfo is None:
+                        event_time = event_time.replace(tzinfo=timezone.utc)
+                    
+                    if event_time > since_time:
+                        filtered_events.append(event)
+            except (ValueError, TypeError) as e:
+                return {"error": f"Invalid timestamp format: {str(e)}"}, 400
+        else:
+            filtered_events = all_events
+        
+        # Enforce 500 event limit for safety
+        filtered_events = filtered_events[:500]
+        
+        # Convert events to dictionary format
+        events_data = []
+        for event in filtered_events:
+            event_dict = {
+                "id": str(event.id),
+                "job_id": str(event.job_id),
+                "step": event.step,
+                "message": event.message,
+                "severity": event.severity,
+                "timestamp": event.timestamp.isoformat() + 'Z' if hasattr(event.timestamp, 'isoformat') else str(event.timestamp),
+                "stage_duration_ms": event.stage_duration_ms
+            }
+            events_data.append(event_dict)
+        
+        # Determine if job is completed
+        completed = job.status in ["completed", "failed", "cancelled"]
+        
+        response = {
+            "events": events_data,
+            "completed": completed,
+            "job_status": job.status
         }
-        events_data.append(event_dict)
-    
-    # Determine if job is completed
-    completed = job.status in ["completed", "failed", "cancelled"]
-    
-    response = {
-        "events": events_data,
-        "completed": completed,
-        "job_status": job.status
-    }
-    
-    return (response)
+        
+        return response
+    except Exception as e:
+        return {"error": str(e)}, 500
