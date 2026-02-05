@@ -5,7 +5,7 @@ import json
 from unittest.mock import Mock, MagicMock, patch
 from blueprints.jobs import emit_event, analyze_paper_background
 from services.job_service import update_job_status, create_job, get_job
-from database import get_db, init_db
+from models.database import get_db, init_db
 import uuid
 
 

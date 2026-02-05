@@ -12,7 +12,7 @@ Tests cover:
 import json
 import pytest
 from blueprints.jobs import emit_event
-from database import init_db, get_db
+from models.database import init_db, get_db
 
 
 class TestHomeAndBasics:

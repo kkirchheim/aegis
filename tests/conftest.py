@@ -40,7 +40,7 @@ def pytest_configure(config):
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from config import Config
-from database import init_db, get_db
+from models.database import init_db, get_db
 from services.auth_service import hash_password, create_user, get_user_by_username
 from app import create_app
 

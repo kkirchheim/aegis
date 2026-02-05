@@ -6,7 +6,7 @@ import hashlib
 import secrets
 import os
 from services.auth_service import hash_password, verify_password, create_user
-from database import get_db, init_db
+from models.database import get_db, init_db
 import uuid
 
 
