@@ -83,7 +83,8 @@ def api_login(username, password):
         session['user_id'] = user.id
         session['username'] = user.username
         
-        return {"message": "Login successful", "redirect": "/"}, 200
+        # Return dict only (no tuple) for 200 - @marshal_with handles it
+        return {"message": "Login successful", "redirect": "/"}
     
     except Exception as e:
         return {"error": str(e)}, 500
@@ -138,10 +139,14 @@ def api_register(username, email, password, confirm_password):
         if not user_id:
             return {"error": "Failed to create account"}, 500
         
-        return {
-            "message": "Account created. Awaiting activation by admin.",
-            "redirect": "/login"
-        }, 201
+        # Return dict only (no tuple) for 201 - @marshal_with with code=201 handles it
+        return (
+            {
+                "message": "Account created. Awaiting activation by admin.",
+                "redirect": "/login"
+            },
+            201  # Explicitly set 201 status
+        )
     
     except Exception as e:
         return {"error": str(e)}, 500
