@@ -191,19 +191,14 @@ class TestUnauthenticatedAccessToProtectedRoutes:
         response = client.get('/api/admin/users')
         assert response.status_code == 401
     
-    def test_unauthenticated_access_to_activate_user_api(self, client):
-        """POST /api/admin/users/1/activate without auth should return 401."""
-        response = client.post('/api/admin/users/1/activate')
-        assert response.status_code == 401
-    
-    def test_unauthenticated_access_to_deactivate_user_api(self, client):
-        """POST /api/admin/users/1/deactivate without auth should return 401."""
-        response = client.post('/api/admin/users/1/deactivate')
+    def test_unauthenticated_access_to_update_user_api(self, client):
+        """PATCH /api/admin/users/1 without auth should return 401."""
+        response = client.patch('/api/admin/users/1', json={"is_active": False})
         assert response.status_code == 401
     
     def test_unauthenticated_access_to_delete_user_api(self, client):
-        """POST /api/admin/users/1/delete without auth should return 401."""
-        response = client.post('/api/admin/users/1/delete')
+        """DELETE /api/admin/users/1 without auth should return 401."""
+        response = client.delete('/api/admin/users/1')
         assert response.status_code == 401
     
     def test_unauthenticated_access_to_events_sse(self, client):
@@ -419,19 +414,14 @@ class TestAdminAuthorization:
         response = user1_session.get('/api/admin/users')
         assert response.status_code == 403
     
-    def test_non_admin_cannot_activate_user(self, user1_session):
-        """Regular user cannot POST /api/admin/users/<id>/activate."""
-        response = user1_session.post('/api/admin/users/2/activate')
-        assert response.status_code == 403
-    
-    def test_non_admin_cannot_deactivate_user(self, user1_session):
-        """Regular user cannot POST /api/admin/users/<id>/deactivate."""
-        response = user1_session.post('/api/admin/users/2/deactivate')
+    def test_non_admin_cannot_update_user_status(self, user1_session):
+        """Regular user cannot PATCH /api/admin/users/<id>."""
+        response = user1_session.patch('/api/admin/users/2', json={"is_active": False})
         assert response.status_code == 403
     
     def test_non_admin_cannot_delete_user(self, user1_session):
-        """Regular user cannot POST /api/admin/users/<id>/delete."""
-        response = user1_session.post('/api/admin/users/2/delete')
+        """Regular user cannot DELETE /api/admin/users/<id>."""
+        response = user1_session.delete('/api/admin/users/2')
         assert response.status_code == 403
     
     def test_admin_can_access_admin_panel(self, admin_session):
@@ -449,29 +439,22 @@ class TestAdminAuthorization:
         # Should see all users including themselves
         assert len(data) >= 3
     
-    def test_admin_can_activate_user(self, admin_session):
-        """Admin user can activate a user."""
-        response = admin_session.post('/api/admin/users/1/activate')
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data.get('ok') == True
-    
-    def test_admin_can_deactivate_user(self, admin_session):
-        """Admin user can deactivate a user (except admin)."""
-        response = admin_session.post('/api/admin/users/1/deactivate')
+    def test_admin_can_update_user_status(self, admin_session):
+        """Admin user can update user status via PATCH."""
+        response = admin_session.patch('/api/admin/users/1', json={"is_active": False})
         assert response.status_code == 200
         data = response.get_json()
         assert data.get('ok') == True
     
     def test_admin_cannot_delete_self(self, admin_session):
         """Admin cannot delete themselves."""
-        response = admin_session.post('/api/admin/users/3/delete')
+        response = admin_session.delete('/api/admin/users/3')
         # Should fail - cannot delete admin user
         assert response.status_code == 400
     
     def test_admin_can_delete_regular_user(self, admin_session):
         """Admin can delete a regular user."""
-        response = admin_session.post('/api/admin/users/1/delete')
+        response = admin_session.delete('/api/admin/users/1')
         assert response.status_code == 200
         data = response.get_json()
         assert data.get('ok') == True
