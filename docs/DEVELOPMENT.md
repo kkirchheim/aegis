@@ -2,6 +2,21 @@
 
 Setup, testing, and development practices for contributors.
 
+## Table of Contents
+- [Local Setup](#local-setup)
+- [Project Structure](#project-structure)
+- [Code Organization](#code-organization)
+- [Testing](#testing)
+- [Agent Container](#agent-container-docker)
+- [Code Style](#code-style)
+- [Debugging](#debugging)
+- [Building & Deployment](#building--deployment)
+- [Contributing Workflow](#contributing-workflow)
+- [Performance Optimization](#performance-optimization)
+- [FAQ for Developers](#faq-for-developers)
+
+---
+
 ## Local Setup
 
 ### Prerequisites
@@ -50,35 +65,136 @@ Visit `http://localhost:5000`
 
 ---
 
+## Environment Variables
+
+Key environment variables for development and deployment:
+
+| Variable | Purpose | Example | Default |
+|----------|---------|---------|---------|
+| `ANTHROPIC_API_KEY` | Claude API key | `sk-ant-...` | *required* |
+| `CLAUDE_MODEL` | Claude model to use | `claude-haiku-4-5` | `claude-opus-4-1` |
+| `AGENT_CONTEXT_LIMIT` | Agent output context window (chars) | `10000` | `10000` |
+| `BACKEND_URL` | Backend API URL (for agents) | `http://paper-reproducibility:5000` | `http://localhost:5000` |
+| `REPO_URL` | Repository to analyze (agent only) | `https://github.com/user/repo` | - |
+| `JOB_ID` | Job identifier (agent only) | `abc-123-def` | - |
+
+---
+
 ## Project Structure
 
 ```
 paper-reproducibility/
-├── app.py                    # Flask backend
-├── agent.py                  # Docker agent
-├── requirements.txt          # Python dependencies
-├── Dockerfile                # Flask container
-├── Dockerfile.agent          # Agent sandbox container
-├── docker-compose.yml        # Multi-container setup
-├── reproducibility.db        # SQLite (auto-created)
-├── templates/
-│   ├── index.html           # Home page
-│   └── detail.html          # Report page
-├── static/
-│   ├── app.js               # Frontend logic
-│   ├── detail.js            # Report logic
-│   └── style.css            # Minimal styles
-├── tests/
-│   └── test_agent_api.py   # Test suite
-├── docs/                    # Documentation
-│   ├── API.md              # API reference
-│   ├── ARCHITECTURE.md     # System design
-│   ├── DEVELOPMENT.md      # This file
-│   ├── DEPLOYMENT.md       # Production
-│   ├── TROUBLESHOOTING.md  # Debugging
-│   └── CHANGELOG.md        # Version history
-└── README.md               # Project overview
+├── app.py                      # Flask app initialization
+├── agent.py                    # Agent sandbox orchestration
+├── config.py                   # Configuration management
+├── repositories.py             # Data access layer
+├── requirements.txt            # Python dependencies
+├── Dockerfile                  # Flask container
+├── Dockerfile.agent            # Agent sandbox container
+├── docker-compose.yml          # Multi-container setup
+├── pytest.ini                  # Test configuration
+├── reproducibility.db          # SQLite (auto-created)
+│
+├── models/                     # Database models & ORM
+│   ├── database.py            # Peewee ORM models (User, Job, Event)
+│   └── events.py              # Event model definitions
+│
+├── services/                   # Business logic services
+│   ├── analysis_service.py     # PDF analysis & extraction
+│   ├── evaluation_service.py   # Reproducibility evaluation
+│   ├── auth_service.py         # User authentication
+│   ├── cache_service.py        # Caching & optimization
+│   ├── docker_service.py       # Docker container management
+│   ├── event_dispatcher.py     # Event publishing system
+│   ├── job_service.py          # Job lifecycle management
+│   ├── llm_service.py          # LLM provider wrapper
+│   └── pipeline_orchestrator.py # Analysis pipeline coordination
+│
+├── blueprints/                 # Flask route handlers
+│   ├── auth.py                 # Login, logout, user management
+│   ├── api.py                  # Agent communication endpoints
+│   ├── jobs.py                 # Job CRUD & SSE streams
+│   └── admin.py                # Admin dashboard & utilities
+│
+├── llm/                        # LLM provider abstraction
+│   ├── provider.py             # Abstract provider interface
+│   ├── anthropic_provider.py   # Anthropic Claude implementation
+│   ├── ollama_provider.py      # Ollama local model support
+│   └── factory.py              # Provider selection factory
+│
+├── utils/                      # Utility functions
+│   ├── pdf_utils.py           # PDF manipulation
+│   ├── validators.py          # Input validation
+│   └── decorators.py          # Custom decorators
+│
+├── templates/                  # HTML templates
+│   ├── index.html             # Dashboard & job upload
+│   └── detail.html            # Results detail view
+│
+├── static/                     # Frontend assets
+│   ├── app.js                 # Dashboard logic
+│   ├── detail.js              # Results page logic
+│   └── style.css              # Minimal styles
+│
+├── tests/                      # Test suite
+│   ├── conftest.py            # Pytest configuration
+│   ├── test_api.py            # API endpoint tests
+│   ├── test_services.py       # Service unit tests
+│   ├── test_auth_security.py  # Auth tests
+│   ├── test_page_count.py     # PDF utility tests
+│   ├── test_sse_integration.py # Event streaming tests
+│   └── test_event_dispatcher_integration.py
+│
+├── docs/                       # Documentation
+│   ├── API.md                 # API reference
+│   ├── ARCHITECTURE.md        # System design
+│   ├── DEVELOPMENT.md         # This file
+│   ├── DEPLOYMENT.md          # Production deployment
+│   ├── TROUBLESHOOTING.md     # Debugging guide
+│   └── CHANGELOG.md           # Version history
+│
+└── README.md                   # Project overview
 ```
+
+---
+
+## Code Organization
+
+### Blueprints
+Flask route handlers are organized by domain:
+
+- **`auth.py`** - User authentication & session management. Handles login, logout, registration, and token validation.
+- **`api.py`** - Agent communication endpoints. Manages `/api/agent/*` requests for job orchestration and Claude interactions.
+- **`jobs.py`** - Job CRUD operations & Server-Sent Events (SSE) streaming. Upload PDFs, check status, stream progress logs.
+- **`admin.py`** - Admin dashboard features. User management, system diagnostics, and configuration utilities.
+
+### Services
+Business logic is abstracted into service classes:
+
+- **`analysis_service.py`** - Extracts text, metadata, and dependencies from PDFs using Claude vision.
+- **`evaluation_service.py`** - Evaluates reproducibility aspects (data availability, code, environment, etc.).
+- **`auth_service.py`** - User authentication, password hashing, token generation.
+- **`cache_service.py`** - Redis-backed caching for PDFs and analysis results to reduce API calls.
+- **`docker_service.py`** - Spawns and monitors Docker containers for isolated agent execution.
+- **`event_dispatcher.py`** - Publishes job events to connected SSE clients (progress tracking).
+- **`job_service.py`** - Manages job lifecycle (create, update status, retrieve results).
+- **`llm_service.py`** - Wrapper for LLM provider factory; selects Claude, Ollama, or other backends.
+- **`pipeline_orchestrator.py`** - Orchestrates multi-step analysis pipeline (extract → analyze → evaluate).
+
+### Models and ORM
+Database schema is defined using Peewee ORM:
+
+- **`models/database.py`** - Core models: `User` (authentication), `Job` (analysis jobs), `Event` (activity log).
+- **`models/events.py`** - Event type definitions and schemas for SSE streaming.
+- **`repositories.py`** - Data access layer; provides query builders and persistence methods for all models.
+
+### LLM Provider
+Pluggable abstraction for language models:
+
+- **`llm/provider.py`** - Abstract base interface for LLM providers (defines `generate()` contract).
+- **`llm/anthropic_provider.py`** - Anthropic Claude integration using official SDK.
+- **`llm/ollama_provider.py`** - Local Ollama support for offline/self-hosted models.
+- **`llm/factory.py`** - Provider factory; selects implementation based on `CLAUDE_MODEL` config.
 
 ---
 
@@ -174,17 +290,6 @@ docker run \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   paper-reproducibility-agent:latest
 ```
-
-### Key Environment Variables
-
-| Variable | Purpose | Example | Default |
-|----------|---------|---------|---------|
-| `ANTHROPIC_API_KEY` | Claude API key | `sk-ant-...` | *required* |
-| `CLAUDE_MODEL` | Claude model to use | `claude-haiku-4-5` | `claude-opus-4-1` |
-| `AGENT_CONTEXT_LIMIT` | Agent output context window (chars) | `10000` | `10000` |
-| `BACKEND_URL` | Backend API URL (for agents) | `http://paper-reproducibility:5000` | `http://localhost:5000` |
-| `REPO_URL` | Repository to analyze (agent only) | `https://github.com/user/repo` | - |
-| `JOB_ID` | Job identifier (agent only) | `abc-123-def` | - |
 
 ### Agent Communication
 
@@ -448,7 +553,7 @@ stats.sort_stats('cumulative').print_stats(10)
 ## FAQ for Developers
 
 **Q: How do I add a new reproducibility aspect?**
-A: Add to Claude prompt in `evaluate_reproducibility_aspects()`. Frontend renders dynamically.
+A: Add to Claude prompt in `evaluate_reproducibility_aspects()` in `evaluation_service.py`. Frontend renders dynamically.
 
 **Q: How do I test a change locally?**
 A: Run `docker-compose up`, upload PDF via browser, check logs/database.
