@@ -20,7 +20,7 @@ from services.job_service import (
 )
 from schemas import (
     JobSchema, JobListSchema, JobDetailSchema, ErrorSchema,
-    ChatMessageSchema, ChatMessageResponseSchema, ChatHistorySchema,
+    ChatMessageSchema, ChatMessageRequestSchema, ChatMessageResponseSchema, ChatHistorySchema,
     LoginSchema, RegisterSchema, ChangePasswordSchema, SessionSchema, UserSchema,
     SuccessMessageSchema, EventSchema, HealthResponseSchema, CacheStatsResponseSchema,
     UploadJobResponseSchema
@@ -385,6 +385,12 @@ def get_chat_history(session_id, limit=20):
 
 @api_bp.route("/job/<job_id>/chat", methods=["POST"])
 @require_auth
+@use_kwargs(ChatMessageRequestSchema, location="json")
+@marshal_with(SuccessMessageSchema, code=200)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=403)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
 @doc(
     tags=["Chat"],
     description="Send a message to chat with paper analysis",
@@ -393,37 +399,43 @@ def get_chat_history(session_id, limit=20):
     responses={
         200: {"description": "Message sent successfully", "schema": SuccessMessageSchema()},
         400: {"description": "Bad request - empty message", "schema": ErrorSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-def chat_with_paper(job_id):
-    """Chat with paper analysis."""
+def chat_with_paper(job_id, message):
+    """Chat with paper analysis.
+    
+    Input validated by ChatMessageRequestSchema (@use_kwargs):
+    - message: 1-5000 chars, required
+    
+    Returns:
+    - 200: {"ok": True}
+    - 400: {"error": "Job analysis not complete"}
+    - 403: {"error": "Access denied"}
+    - 404: {"error": "Job not found"}
+    - 500: {"error": "..."}
+    """
     from services.llm_service import init_llm_provider
     from blueprints.jobs import emit_event
     from repositories import PaperAnalysisRepository, ExecutionDetailsRepository, AspectEvaluationRepository
     
     user_id = session.get('user_id')
-    data = request.json
-    user_message = data.get("message", "").strip()
-    
-    if not user_message:
-        return ({"error": "Empty message"}), 400
+    user_message = message.strip()
     
     try:
         # Verify job exists and user owns it
         job = JobRepository.get(job_id)
         
         if not job:
-            return ({"error": "Job not found"}), 404
+            return {"error": "Job not found"}, 404
         
         if job.user_id != user_id:
-            return ({"error": "Access denied"}), 403
+            return {"error": "Access denied"}, 403
         
         if job.status not in ["completed", "processing"]:
-            return ({"error": "Job analysis not complete"}), 400
+            return {"error": "Job analysis not complete"}, 400
         
         # FETCH PAPER AND ANALYSIS DATA
         paper_analysis = PaperAnalysisRepository.get(job_id)
@@ -457,9 +469,9 @@ def chat_with_paper(job_id):
             )
             thread.start()
         except Exception as e:
-            return ({"error": str(e)}), 500
+            return {"error": str(e)}, 500
         
-        return ({"ok": True})
+        return {"ok": True}
     
     except Exception as e:
         return ({"error": str(e)}), 500
@@ -653,9 +665,15 @@ def get_chat_history_endpoint(job_id):
         try:
             chat_session = ChatSession.get(ChatSession.job == job_id)
             history = get_chat_history(chat_session.id, limit=100)
-            return history
+            return {
+                "messages": history if history else [],
+                "total": len(history) if history else 0
+            }
         except ChatSession.DoesNotExist:
-            return []
+            return {
+                "messages": [],
+                "total": 0
+            }
     
     except Exception as e:
         return {"error": str(e)}, 500

@@ -53,8 +53,12 @@ class TestChatHistory:
         
         assert response.status_code == 200
         data = response.get_json()
-        assert isinstance(data, list)
-        assert len(data) == 0
+        assert isinstance(data, dict)
+        assert "messages" in data
+        assert "total" in data
+        assert isinstance(data["messages"], list)
+        assert len(data["messages"]) == 0
+        assert data["total"] == 0
     
     def test_get_chat_history_with_messages(self, authenticated_user, test_job_with_chat):
         """Test getting chat history with messages"""
@@ -62,10 +66,14 @@ class TestChatHistory:
         
         assert response.status_code == 200
         data = response.get_json()
-        assert isinstance(data, list)
-        assert len(data) > 0
+        assert isinstance(data, dict)
+        assert "messages" in data
+        assert "total" in data
+        assert isinstance(data["messages"], list)
+        assert len(data["messages"]) > 0
+        assert data["total"] > 0
         # Each message should have role and content
-        for msg in data:
+        for msg in data["messages"]:
             assert "role" in msg
             assert "content" in msg
     
@@ -88,7 +96,9 @@ class TestChatClear:
         """Test clearing chat history"""
         # Verify history exists
         response = authenticated_user.get(f'/api/job/{test_job_with_chat["id"]}/chat/history')
-        assert len(response.get_json()) > 0
+        data = response.get_json()
+        assert data["total"] > 0
+        assert len(data["messages"]) > 0
         
         # Clear history
         response = authenticated_user.delete(f'/api/job/{test_job_with_chat["id"]}/chat/history')
@@ -96,7 +106,9 @@ class TestChatClear:
         
         # Verify history is empty
         response = authenticated_user.get(f'/api/job/{test_job_with_chat["id"]}/chat/history')
-        assert len(response.get_json()) == 0
+        data = response.get_json()
+        assert data["total"] == 0
+        assert len(data["messages"]) == 0
     
     def test_clear_empty_history(self, authenticated_user, test_job):
         """Test clearing empty history"""
