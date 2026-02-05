@@ -3,34 +3,18 @@
  * 
  * Handles:
  * - PDF upload
- * - SSE connection for live progress
- * - Report display
+ * - Redirect to report page
  * - Job history
  */
 
 // State
 let currentJobId = null;
-let eventSource = null;
-let pollInterval = null;
-let lastStage = null;
-let finalCompleteReceived = false;  // Track if we've seen SSE "complete" event
-let stages = {
-  paper_analysis: { name: '📄 Paper Analysis', status: 'pending', start: null, duration: null },
-  code_execution: { name: '⚙️ Code Execution', status: 'pending', start: null, duration: null },
-  reproducibility_evaluation: { name: '📊 Evaluation', status: 'pending', start: null, duration: null }
-};
 
 // DOM Elements
 const pdfInput = document.getElementById("pdfInput");
 const analyzeBtn = document.getElementById("analyzeBtn");
 const uploadArea = document.querySelector(".upload-area");
 const uploadSection = document.getElementById("uploadSection");
-const progressSection = document.getElementById("progressSection");
-const reportSection = document.getElementById("reportSection");
-const progressLog = document.getElementById("progressLog");
-const progressFill = document.getElementById("progressFill");
-const progressText = document.getElementById("progressText");
-const reportContent = document.getElementById("reportContent");
 const jobsList = document.getElementById("jobsList");
 
 // ============================================================================
@@ -105,21 +89,6 @@ async function handleAnalyzeClick() {
     
     try {
         analyzeBtn.disabled = true;
-        progressSection.style.display = "block";
-        reportSection.style.display = "none";
-        progressLog.innerHTML = "";
-        progressFill.value = 0;
-        progressText.textContent = "Uploading...";
-        
-        // Reset state
-        finalCompleteReceived = false;
-        lastStage = null;
-        
-        // Reset stages
-        Object.keys(stages).forEach(key => {
-            stages[key] = { name: stages[key].name, status: 'pending', start: null, duration: null };
-        });
-        updateStagesUI();
         
         // Upload PDF
         const response = await fetch("/upload", {
@@ -129,7 +98,7 @@ async function handleAnalyzeClick() {
         
         if (!response.ok) {
             const error = await response.json();
-            logError(`Upload failed: ${error.error}`);
+            alert(`Upload failed: ${error.error}`);
             analyzeBtn.disabled = false;
             return;
         }
@@ -137,522 +106,13 @@ async function handleAnalyzeClick() {
         const result = await response.json();
         currentJobId = result.job_id;
         
-        addLog(`Job started: ${currentJobId.substring(0, 8)}...`);
-        
-        // Connect to SSE stream
-        connectToEventStream(currentJobId);
+        // Redirect immediately to report page
+        window.location.href = `/reports/${currentJobId}`;
         
     } catch (error) {
-        logError(`Upload error: ${error.message}`);
+        alert(`Upload error: ${error.message}`);
         analyzeBtn.disabled = false;
     }
-}
-
-// ============================================================================
-// Polling + SSE Architecture
-// ============================================================================
-
-function connectToEventStream(jobId) {
-    addLog("Starting analysis...");
-    
-    // Start polling job progress (1-2 second intervals)
-    startProgressPolling(jobId);
-    
-    // Connect to SSE for logs only
-    eventSource = new EventSource(`/events/${jobId}`);
-    
-    eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        handleLogEvent(data);
-    };
-    
-    eventSource.onerror = (error) => {
-        console.error("SSE connection error:", error);
-        // Don't log this every time - just close silently
-        eventSource.close();
-    };
-}
-
-function startProgressPolling(jobId) {
-    // Poll every 100ms for job progress
-    pollInterval = setInterval(async () => {
-        try {
-            const response = await fetch(`/api/job/${jobId}/full`, {
-                credentials: 'include'  // Send session cookie with request
-            });
-            if (!response.ok) {
-                console.error(`Poll failed: HTTP ${response.status}`);
-                return;
-            }
-            
-            const job = await response.json();
-            updateProgressFromJob(job);
-            
-            // Stop polling only after final "complete" event has arrived via SSE
-            if (finalCompleteReceived) {
-                stopProgressPolling();
-                handleJobComplete(job);
-            }
-        } catch (error) {
-            console.error("Polling error:", error);
-        }
-    }, 100);
-}
-
-function stopProgressPolling() {
-    if (pollInterval) {
-        clearInterval(pollInterval);
-        pollInterval = null;
-    }
-}
-
-function updateProgressFromJob(job) {
-    // Update progress bar from backend field
-    const progressPercentage = Math.round((job.progress || 0) * 100);
-    if (progressFill && progressText) {
-        progressFill.value = progressPercentage;
-        progressText.textContent = `${progressPercentage}%`;
-    }
-    
-    // Update stages based on current_stage field
-    if (job.current_stage && job.current_stage !== lastStage) {
-        lastStage = job.current_stage;
-        updateStagesFromStage(job.current_stage);
-    }
-}
-
-function handleLogEvent(event) {
-    // SSE now only handles logs/events, not progress
-    const { step, message, error, stage_duration_ms } = event;
-    
-    // Capture stage durations before skipping stage events
-    if (step && step.includes('stage_') && step.includes('complete')) {
-        if (stage_duration_ms) {
-            // Map stage number to internal stage key
-            if (step.includes('stage_1')) {
-                stages['paper_analysis'].duration = stage_duration_ms;
-            } else if (step.includes('stage_2')) {
-                stages['code_execution'].duration = stage_duration_ms;
-            } else if (step.includes('stage_3')) {
-                stages['reproducibility_evaluation'].duration = stage_duration_ms;
-            }
-            updateStagesUI();
-        }
-        return;  // Skip logging stage events
-    }
-    
-    // Handle final completion - mark all stages as done
-    if (step === "complete") {
-        finalCompleteReceived = true;  // Signal polling to stop after next cycle
-        Object.keys(stages).forEach(key => {
-            stages[key].status = 'complete';
-        });
-        updateStagesUI();
-        // Log the completion
-        addLog(`[${step}] ${message}`);
-        
-        // Show completion UI with link to report
-        setTimeout(() => {
-            // Fetch latest job data to get report
-            fetch(`/api/job/${currentJobId}/full`, {
-                credentials: 'include'
-            })
-            .then(r => r.json())
-            .then(job => {
-                handleAnalysisComplete(job.report || { status: job.status, message: "Analysis complete" });
-                analyzeBtn.disabled = false;
-            })
-            .catch(e => console.error("Failed to fetch job for completion:", e));
-        }, 500);
-        return;
-    }
-    
-    // Skip other stage events (progress is handled by polling)
-    if (step && step.includes('stage_')) {
-        return;
-    }
-    
-    // Add to log
-    if (error) {
-        logError(`[${step}] ${message}`);
-    } else if (step && message) {
-        addLog(`[${step}] ${message}`);
-    }
-}
-
-function updateStagesFromStage(currentStage) {
-    // Map backend stage names to our internal stage keys
-    const stageMap = {
-        'paper_analysis': 'paper_analysis',
-        'code_execution': 'code_execution',
-        'evaluation': 'reproducibility_evaluation'
-    };
-    
-    const stageOrder = ['paper_analysis', 'code_execution', 'reproducibility_evaluation'];
-    let currentIndex = -1;
-    
-    // NOTE: Don't transition to "completed" based on polling alone
-    // Only SSE's "complete" event should trigger final completion
-    // This prevents stages from closing before durations arrive
-    if (currentStage === 'completed' || currentStage === 'failed') {
-        // Stay in current stage - wait for SSE event to handle final completion
-        return;
-    }
-    
-    const stageKey = stageMap[currentStage];
-    currentIndex = stageOrder.indexOf(stageKey);
-    
-    // Update stages in the object
-    stageOrder.forEach((key, index) => {
-        if (index < currentIndex) {
-            stages[key].status = 'complete';
-        } else if (index === currentIndex) {
-            stages[key].status = 'active';
-            stages[key].start = Date.now();
-        } else {
-            stages[key].status = 'pending';
-        }
-    });
-    
-    updateStagesUI();
-}
-
-function handleJobComplete(job) {
-    // Stop polling - SSE will handle final "complete" event
-    stopProgressPolling();
-    // Keep SSE open to receive stage completion events and final "complete"
-    // Polling will just keep the progress bar updated while SSE handles UI transitions
-}
-
-function updateStagesUI() {
-    const stageMap = {
-        paper_analysis: { id: 'stage1', icon: 'stage1Icon', time: 'stage1Time' },
-        code_execution: { id: 'stage2', icon: 'stage2Icon', time: 'stage2Time' },
-        reproducibility_evaluation: { id: 'stage3', icon: 'stage3Icon', time: 'stage3Time' }
-    };
-    
-    Object.entries(stages).forEach(([key, stage]) => {
-        const map = stageMap[key];
-        const iconEl = document.getElementById(map.icon);
-        const timeEl = document.getElementById(map.time);
-        
-        if (!iconEl || !timeEl) return;  // Skip if elements don't exist
-        
-        if (stage.status === 'complete') {
-            iconEl.textContent = '✓';
-            iconEl.className = 'text-2xl mb-1 text-green-500';
-            if (stage.duration) {
-                const seconds = (stage.duration / 1000).toFixed(1);
-                timeEl.textContent = `${seconds}s`;
-            } else {
-                timeEl.textContent = 'done';
-            }
-        } else if (stage.status === 'active') {
-            iconEl.textContent = '▶';
-            iconEl.className = 'text-2xl mb-1 text-orange-500 animate-pulse';
-            timeEl.textContent = 'running...';
-        } else {
-            iconEl.textContent = '○';
-            iconEl.className = 'text-2xl mb-1';
-            timeEl.textContent = 'pending';
-        }
-    });
-}
-
-function addLog(message) {
-    const entry = document.createElement("div");
-    entry.className = "log-entry";
-    entry.textContent = message;
-    progressLog.appendChild(entry);
-    progressLog.scrollTop = progressLog.scrollHeight;
-}
-
-function logError(message) {
-    const entry = document.createElement("div");
-    entry.className = "log-entry error";
-    entry.textContent = `❌ ${message}`;
-    progressLog.appendChild(entry);
-    progressLog.scrollTop = progressLog.scrollHeight;
-}
-
-// ============================================================================
-// Report Display
-// ============================================================================
-
-function handleAnalysisComplete(report) {
-    progressSection.style.display = "block";
-    reportSection.style.display = "block";
-    
-    if (!report) {
-        reportContent.innerHTML = "<p>No report data available</p>";
-        return;
-    }
-    
-    // Add completion card with "View Full Results" button
-    let html = `
-        <div class="card bg-success text-success-content shadow-lg mb-6">
-            <div class="card-body">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="card-title">✓ Analysis Complete</h3>
-                        <p>Your reproducibility analysis is ready</p>
-                    </div>
-                    <button class="btn btn-success-content gap-2" onclick="window.location.href='/results/${currentJobId}'">
-                        <span>→</span>
-                        <span>View Full Results</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Get existing report HTML
-    const reportHtml = getReportHtml(report);
-    
-    reportContent.innerHTML = html + reportHtml;
-    loadJobsHistory();
-}
-
-function getReportHtml(report) {
-    let html = "";
-    
-    // Status Badge (for agent completion)
-    if (report.status) {
-        const statusClass = report.status === "success" ? "success" : "error";
-        const statusEmoji = report.status === "success" ? "✓" : "✗";
-        const statusText = report.status === "success" ? "Reproducibility Check Passed" : "Reproducibility Check Failed";
-        html += `
-            <div class="status-badge ${statusClass}">
-                ${statusEmoji} ${statusText}
-            </div>
-        `;
-        
-        // Add completion message
-        if (report.message) {
-            html += `
-                <div class="report-section">
-                    <h4>Analysis Result</h4>
-                    <p style="line-height: 1.6; color: #555;">${escapeHtml(report.message)}</p>
-                </div>
-            `;
-        }
-        
-        // Add reproducibility score if available
-        if (report.reproducibility_score !== undefined) {
-            const percentage = Math.round(report.reproducibility_score * 100);
-            const scoreClass = percentage >= 80 ? "success" : percentage >= 50 ? "warning" : "error";
-            html += `
-                <div class="report-section">
-                    <h4>Reproducibility Score</h4>
-                    <div class="reproducibility-check">
-                        <span class="check-label">Score</span>
-                        <span class="check-value ${scoreClass}">${percentage}%</span>
-                    </div>
-                </div>
-            `;
-        }
-    }
-    
-    // Code Found Badge (for paper analysis)
-    if (report.code_found !== undefined) {
-        const codeStatus = report.code_found ? "found" : "not-found";
-        const codeEmoji = report.code_found ? "✓" : "✗";
-        html += `
-            <div class="status-badge ${codeStatus}">
-                ${codeEmoji} Code Artifacts: ${report.code_found ? "Found" : "Not Found"}
-            </div>
-        `;
-    }
-    
-    // Artifacts Section
-    if (report.artifacts && report.artifacts.length > 0) {
-        html += `
-            <div class="report-section">
-                <h4>Code Artifacts Found</h4>
-                <ul class="artifact-list">
-        `;
-        
-        for (const artifact of report.artifacts) {
-            html += `
-                <li class="artifact-item">
-                    <div class="artifact-url">🔗 ${escapeHtml(artifact.url)}</div>
-                    <div class="artifact-type">${escapeHtml(artifact.type || "unknown")}</div>
-                    ${artifact.description ? `<div class="artifact-description">${escapeHtml(artifact.description)}</div>` : ""}
-                </li>
-            `;
-        }
-        
-        html += `
-                </ul>
-            </div>
-        `;
-    }
-    
-    // Summary
-    if (report.summary) {
-        html += `
-            <div class="report-section">
-                <h4>Summary</h4>
-                <p style="line-height: 1.6; color: #555;">${escapeHtml(report.summary)}</p>
-            </div>
-        `;
-    }
-    
-    return html;
-}
-
-function displayReport(report) {
-    let html = "";
-    
-    // Status Badge (for agent completion)
-    if (report.status) {
-        const statusClass = report.status === "success" ? "success" : "error";
-        const statusEmoji = report.status === "success" ? "✓" : "✗";
-        const statusText = report.status === "success" ? "Reproducibility Check Passed" : "Reproducibility Check Failed";
-        html += `
-            <div class="status-badge ${statusClass}">
-                ${statusEmoji} ${statusText}
-            </div>
-        `;
-        
-        // Add completion message
-        if (report.message) {
-            html += `
-                <div class="report-section">
-                    <h4>Analysis Result</h4>
-                    <p style="line-height: 1.6; color: #555;">${escapeHtml(report.message)}</p>
-                </div>
-            `;
-        }
-        
-        // Add reproducibility score if available
-        if (report.reproducibility_score !== undefined) {
-            const percentage = Math.round(report.reproducibility_score * 100);
-            const scoreClass = percentage >= 80 ? "success" : percentage >= 50 ? "warning" : "error";
-            html += `
-                <div class="report-section">
-                    <h4>Reproducibility Score</h4>
-                    <div class="reproducibility-check">
-                        <span class="check-label">Score</span>
-                        <span class="check-value ${scoreClass}">${percentage}%</span>
-                    </div>
-                </div>
-            `;
-        }
-    }
-    
-    // Code Found Badge (for paper analysis)
-    if (report.code_found !== undefined) {
-        const codeStatus = report.code_found ? "found" : "not-found";
-        const codeEmoji = report.code_found ? "✓" : "✗";
-        html += `
-            <div class="status-badge ${codeStatus}">
-                ${codeEmoji} Code Artifacts: ${report.code_found ? "Found" : "Not Found"}
-            </div>
-        `;
-    }
-    
-    // Artifacts Section
-    if (report.artifacts && report.artifacts.length > 0) {
-        html += `
-            <div class="report-section">
-                <h4>Code Artifacts Found</h4>
-                <ul class="artifact-list">
-        `;
-        
-        for (const artifact of report.artifacts) {
-            html += `
-                <li class="artifact-item">
-                    <div class="artifact-url">🔗 ${escapeHtml(artifact.url)}</div>
-                    <div class="artifact-type">${escapeHtml(artifact.type || "unknown")}</div>
-                    ${artifact.description ? `<div class="artifact-description">${escapeHtml(artifact.description)}</div>` : ""}
-                </li>
-            `;
-        }
-        
-        html += `
-                </ul>
-            </div>
-        `;
-    }
-    
-    // Reproducibility Aspects
-    if (report.reproducibility_aspects) {
-        const aspects = report.reproducibility_aspects;
-        html += `
-            <div class="report-section">
-                <h4>Reproducibility Aspects</h4>
-        `;
-        
-        if (aspects.hyperparameters_documented !== undefined) {
-            const check = aspects.hyperparameters_documented ? "✓" : "✗";
-            const checkClass = aspects.hyperparameters_documented ? "success" : "error";
-            html += `
-                <div class="reproducibility-check">
-                    <span class="check-icon ${checkClass}">${check}</span>
-                    <span class="check-label">Hyperparameters Documented</span>
-                    <span class="check-value">${aspects.hyperparameters_documented ? "Yes" : "No"}</span>
-                </div>
-            `;
-        }
-        
-        if (aspects.implementation_details) {
-            const statusClass = aspects.implementation_details === "sufficient" ? "success" : aspects.implementation_details === "partial" ? "warning" : "error";
-            html += `
-                <div class="reproducibility-check">
-                    <span class="check-icon">${aspects.implementation_details === "sufficient" ? "✓" : "⚠"}</span>
-                    <span class="check-label">Implementation Details</span>
-                    <span class="check-value">${aspects.implementation_details}</span>
-                </div>
-            `;
-        }
-        
-        if (aspects.dataset_description) {
-            html += `
-                <div class="reproducibility-check">
-                    <span class="check-icon">📊</span>
-                    <span class="check-label">Dataset</span>
-                    <span class="check-value">${escapeHtml(aspects.dataset_description)}</span>
-                </div>
-            `;
-        }
-        
-        if (aspects.environment_requirements) {
-            html += `
-                <div class="reproducibility-check">
-                    <span class="check-icon">⚙️</span>
-                    <span class="check-label">Environment Requirements</span>
-                    <span class="check-value">${escapeHtml(aspects.environment_requirements)}</span>
-                </div>
-            `;
-        }
-        
-        html += `</div>`;
-    }
-    
-    // Summary
-    if (report.summary) {
-        html += `
-            <div class="report-section">
-                <h4>Summary</h4>
-                <p style="line-height: 1.6; color: #555;">${escapeHtml(report.summary)}</p>
-            </div>
-        `;
-    }
-    
-    reportContent.innerHTML = html;
-}
-
-function escapeHtml(text) {
-    if (!text) return "";
-    const map = {
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
-    };
-    return text.replace(/[&<>"']/g, m => map[m]);
 }
 
 // ============================================================================
@@ -745,16 +205,22 @@ async function viewJob(jobId) {
     window.location.href = `/reports/${jobId}`;
 }
 
+function escapeHtml(text) {
+    if (!text) return "";
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+
 // ============================================================================
 // Initialization
 // ============================================================================
 
 document.addEventListener("DOMContentLoaded", () => {
     loadJobsHistory();
-});
-
-// Cleanup on page unload
-window.addEventListener("beforeunload", () => {
-    stopProgressPolling();
-    if (eventSource) eventSource.close();
 });
