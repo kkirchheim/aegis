@@ -200,6 +200,9 @@ function updateStatus(job) {
     }
     
     console.log(`[update] status: Rendered as "${statusText}"`);
+    console.log(`[update] status: innerHTML is now:`, statusContent.innerHTML);
+    console.log(`[update] status: computed display:`, window.getComputedStyle(statusContent).display);
+    console.log(`[update] status: statusContent parent:`, statusContent.parentElement?.id || statusContent.parentElement?.className);
 }
 
 function updateEventLog(job) {
