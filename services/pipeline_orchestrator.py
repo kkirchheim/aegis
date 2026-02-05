@@ -80,10 +80,10 @@ class PipelineOrchestrator:
         """
         try:
             self.logger(f"[{job_id}] ===== ANALYSIS STARTED =====")
-            self.emit_event(job_id, "starting", "Analysis starting...", progress=0)
+            self.emit_event(job_id, "starting", "Analysis starting...", progress=0.0)
             
             # Mark job as processing
-            update_job_status(job_id, "processing")
+            update_job_status(job_id, "processing", progress=0.0)
             
             # Stage 1: Extract and analyze PDF
             if not self._run_stage_1(job_id, pdf_path, llm_provider):
@@ -97,33 +97,34 @@ class PipelineOrchestrator:
             if not self._run_stage_3(job_id, llm_provider):
                 return False
             
-            # Final completion
-            self.logger(f"[{job_id}] >>> EMITTING FINAL COMPLETE EVENT")
-            self.emit_event(job_id, "complete", "Analysis complete", progress=100)
-            
+            # Final completion - only update job status (don't emit progress event)
             self.logger(f"[{job_id}] >>> MARKING JOB AS COMPLETED")
             update_job_status(job_id, "completed", progress=1.0, current_stage="completed")
+            self.emit_event(job_id, "complete", "Analysis complete")
             self.logger(f"[{job_id}] ===== ANALYSIS COMPLETE =====")
             
             return True
         
         except Exception as e:
             self.logger(f"[{job_id}] ERROR: {str(e)}")
-            self.emit_event(job_id, "error", f"Error: {str(e)}", progress=100)
+            # On error: update status first, then emit event (no progress in event)
             update_job_status(job_id, "failed", error_message=str(e), progress=0.0, 
                             current_stage="failed")
+            self.emit_event(job_id, "error", f"Error: {str(e)}")
             return False
     
     def _run_stage_1(self, job_id: str, pdf_path: str, llm_provider) -> bool:
         """
         Stage 1: Extract and analyze PDF.
         
+        Progress: 0.0 -> 0.33
+        
         Returns True if successful, False otherwise.
         """
         try:
             self.logger(f"[{job_id}] >>> STAGE 1 STARTING")
             self.emit_event(job_id, "stage_1_starting", 
-                          "Stage 1: Analyzing Paper...", progress=5)
+                          "Stage 1: Analyzing Paper...", progress=0.05)
             
             self.emit_event(job_id, "extracting_pdf", 
                           "Extracting text from PDF...")
@@ -133,7 +134,7 @@ class PipelineOrchestrator:
             
             self.emit_event(job_id, "pdf_extracted",
                           f"Extracted {len(pdf_text)} characters from PDF",
-                          progress=40)
+                          progress=0.25)
             
             # Store artifacts
             artifacts = paper_info.get("artifacts", [])
@@ -142,7 +143,7 @@ class PipelineOrchestrator:
             self.logger(f"[{job_id}] >>> STAGE 1 COMPLETE")
             self.emit_event(job_id, "stage_1_complete",
                           f"Found {len(artifacts)} artifacts",
-                          progress=40)
+                          progress=0.33)
             
             # Store for next stage
             self._artifacts = artifacts
@@ -157,13 +158,15 @@ class PipelineOrchestrator:
         """
         Stage 2: Execute code from artifacts.
         
+        Progress: 0.33 -> 0.66
+        
         Returns True if successful (or no artifacts), False on error.
         """
         try:
             self.logger(f"[{job_id}] >>> STAGE 2 STARTING")
             self.emit_event(job_id, "stage_2_starting",
                           "Stage 2: Executing Code...",
-                          progress=45)
+                          progress=0.35)
             
             # Get GitHub artifacts from stage 1
             artifacts = getattr(self, '_artifacts', [])
@@ -174,9 +177,11 @@ class PipelineOrchestrator:
             if github_artifacts:
                 for i, artifact in enumerate(github_artifacts, 1):
                     repo_url = artifact.get("url")
+                    # Progress from 0.35 to 0.66 as we process artifacts
+                    progress = 0.35 + (0.31 * i / len(github_artifacts))
                     self.emit_event(job_id, "running_agent",
                                   f"[{i}/{len(github_artifacts)}] Running agent on {repo_url}",
-                                  progress=45 + int(30 * i / len(github_artifacts)))
+                                  progress=progress)
                     
                     try:
                         spawn_agent_container(job_id, repo_url, config, 
@@ -190,7 +195,7 @@ class PipelineOrchestrator:
             self.logger(f"[{job_id}] >>> STAGE 2 COMPLETE")
             self.emit_event(job_id, "stage_2_complete",
                           "Code execution complete",
-                          progress=75)
+                          progress=0.66)
             
             return True
         
@@ -203,13 +208,15 @@ class PipelineOrchestrator:
         """
         Stage 3: Evaluate reproducibility.
         
+        Progress: 0.66 -> 1.0
+        
         Returns True if successful, False otherwise.
         """
         try:
             self.logger(f"[{job_id}] >>> STAGE 3 STARTING")
             self.emit_event(job_id, "stage_3_starting",
                           "Stage 3: Evaluating Reproducibility...",
-                          progress=80)
+                          progress=0.75)
             
             # Run evaluation (synchronous - wait for completion)
             self.logger(f"[{job_id}] === Calling evaluate_reproducibility_aspects ===")
@@ -229,7 +236,7 @@ class PipelineOrchestrator:
             self.logger(f"[{job_id}] >>> STAGE 3 COMPLETE")
             self.emit_event(job_id, "stage_3_complete",
                           "Evaluation complete",
-                          progress=100)
+                          progress=0.99)
             
             return True
         

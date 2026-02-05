@@ -300,18 +300,12 @@ def create_test_job(app, peewee_test_db, authenticated_user_id):
 
 @pytest.fixture(autouse=True)
 def cleanup_sse_queues():
-    """Clean up SSE event queues before each test."""
-    from blueprints.jobs import event_queues, event_queues_lock
+    """SSE queues fixture (deprecated - now using polling).
     
-    # Clear before test
-    with event_queues_lock:
-        event_queues.clear()
-    
+    This fixture is kept for backward compatibility but does nothing
+    since we switched from SSE to polling architecture.
+    """
     yield
-    
-    # Clear after test
-    with event_queues_lock:
-        event_queues.clear()
 
 
 @pytest.fixture

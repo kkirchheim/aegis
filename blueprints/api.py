@@ -481,10 +481,12 @@ def agent_complete():
     """
     Agent reports completion.
     
+    NOTE: Agent does NOT control job status. Only emits event.
+    Pipeline orchestrator manages job lifecycle (pending -> processing -> completed).
+    
     Security: Validates job_id exists before accepting completion.
     """
     from blueprints.jobs import emit_event
-    from services.job_service import update_job_status
     
     data = request.json
     job_id = data.get("job_id")
@@ -503,21 +505,15 @@ def agent_complete():
         return jsonify({"error": "Failed to validate job"}), 500
     
     try:
-        # Update job status based on success flag
-        status = "completed" if success else "failed"
-        progress = 1.0 if success else 0.0  # 100% if complete, 0% if failed
-        current_stage = "completed" if success else "failed"
-        
-        result = update_job_status(job_id, status, progress=progress, current_stage=current_stage)
-        
+        # Just emit event - don't update job status (pipeline orchestrator handles that)
+        status_label = "success" if success else "failed"
         emit_event(job_id, {
             "step": "agent_finished",
             "message": f"Agent finished: {message}",
-            "status": status,
-            "progress": 100
+            "agent_status": status_label
         })
         
-        return jsonify({"ok": True, "status": status})
+        return jsonify({"ok": True})
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
