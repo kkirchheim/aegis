@@ -109,7 +109,9 @@ def verify_api_key(api_key: str) -> int:
         db_key.last_used_at = datetime.utcnow()
         db_key.save()
         
-        return db_key.user_id
+        # Return the user ID (Peewee stores as user_id_id when accessed as raw value)
+        # db_key.user_id returns the User object, we need the ID
+        return int(db_key.user_id_id) if db_key.user_id_id else int(db_key.user_id.id)
     
     except (InvalidAPIKeyError, ExpiredAPIKeyError):
         raise

@@ -500,19 +500,24 @@
         // Copy key to clipboard
         function copyKeyToClipboard() {
             const keyInput = document.getElementById('modalKeyValue');
-            keyInput.select();
-            document.execCommand('copy');
+            const keyValue = keyInput.value;
 
-            // Show feedback
-            const btn = event.target;
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '✓ Copied!';
-            btn.disabled = true;
+            // Use modern Clipboard API (works on disabled inputs too)
+            navigator.clipboard.writeText(keyValue).then(() => {
+                // Show feedback
+                const btn = event.target;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '✓ Copied!';
+                btn.disabled = true;
 
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }, 2000);
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy. Please copy manually.');
+            });
         }
 
         // Close key modal
