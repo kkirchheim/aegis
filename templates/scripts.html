@@ -103,7 +103,7 @@
                             </button>
                         </div>
                         
-                        <div class="grid grid-cols-1 gap-3" id="custom-scripts">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" id="custom-scripts">
                             <!-- Loaded via JS -->
                         </div>
 
@@ -128,7 +128,7 @@
                             <p class="text-sm text-base-content/60 mt-2">System-provided validation scripts</p>
                         </div>
                         
-                        <div class="grid grid-cols-1 gap-3" id="default-scripts">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" id="default-scripts">
                             <!-- Loaded via JS -->
                         </div>
                     </div>
@@ -146,24 +146,25 @@
                 <h2 id="modalTitle" class="text-2xl font-bold">Create Execution Script</h2>
                 <button class="btn btn-sm btn-circle btn-ghost" onclick="closeCreateModal()">✕</button>
             </div>
-            
+
             <div class="divider my-4"></div>
-            
+
             <form onsubmit="handleCreateScript(event)" class="space-y-4">
                 <!-- Script Name -->
                 <div class="form-control">
                     <label class="label">
-                        <span class="label-text font-semibold">Script Name *</span>
+                        <span class="label-text font-semibold">Script Name <span class="text-error">*</span></span>
                     </label>
                     <input 
                         id="scriptName" 
                         type="text" 
                         placeholder="e.g., verify_tests, check_documentation"
                         class="input input-bordered w-full" 
+                        maxlength="255"
                         required
                     />
                     <label class="label">
-                        <span class="label-text-alt text-base-content/60">A short name for your script</span>
+                        <span class="label-text-alt">1-255 characters</span>
                     </label>
                 </div>
 
@@ -176,21 +177,19 @@
                         id="scriptDescription" 
                         placeholder="What does this script check? (e.g., Validates that all tests are in /tests directory)"
                         class="textarea textarea-bordered w-full h-20"
+                        rows="3"
                     ></textarea>
-                    <label class="label">
-                        <span class="label-text-alt text-base-content/60">Briefly explain what this script validates</span>
-                    </label>
                 </div>
 
                 <!-- Script Code -->
                 <div class="form-control">
                     <label class="label">
-                        <span class="label-text font-semibold">Script Code *</span>
+                        <span class="label-text font-semibold">Script Code <span class="text-error">*</span></span>
                     </label>
                     <textarea 
                         id="scriptText" 
                         placeholder="#!/bin/bash&#10;# Your validation script here&#10;test -f README.md && exit 0 || exit 1"
-                        class="textarea textarea-bordered font-mono text-xs w-full h-40"
+                        class="textarea textarea-bordered font-mono text-sm w-full h-40"
                         required
                     ></textarea>
                     <label class="label">

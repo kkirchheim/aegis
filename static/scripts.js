@@ -127,15 +127,15 @@ function renderScripts() {
     } else {
         customScriptsContainer.style.display = 'grid';
         emptyCustomScripts.style.display = 'none';
-        customScriptsContainer.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4';
+        customScriptsContainer.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3';
         customScriptsContainer.innerHTML = customScripts.map(renderScriptCard).join('');
     }
     
     // Render default scripts
-    defaultScriptsContainer.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4';
+    defaultScriptsContainer.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3';
     defaultScriptsContainer.innerHTML = defaultScripts.length > 0 
         ? defaultScripts.map(renderScriptCard).join('')
-        : '<p class="text-base-content/50">No default scripts available</p>';
+        : '<p class="text-base-content/50 text-center py-8">No default scripts available</p>';
 }
 
 function renderScriptCard(script) {
@@ -148,21 +148,27 @@ function renderScriptCard(script) {
     const createdDate = new Date(script.created_at).toLocaleDateString();
     
     return `
-        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow border border-base-300">
+        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-all">
             <div class="card-body p-4">
+                <!-- Header: Name + Badge -->
                 <div class="flex items-start justify-between gap-2 mb-2">
-                    <h3 class="card-title text-base flex-1">${escapeHtml(script.name)}</h3>
+                    <h3 class="card-title text-sm flex-1">${escapeHtml(script.name)}</h3>
                     ${statusBadge}
                 </div>
                 
-                ${script.description ? `<p class="text-sm text-base-content/70 mb-3">${escapeHtml(script.description)}</p>` : '<p class="text-sm text-base-content/50 italic mb-3">No description</p>'}
+                <!-- Description -->
+                <p class="text-xs text-base-content/70 mb-3">
+                    ${script.description ? escapeHtml(script.description) : '<span class="text-base-content/50 italic">No description</span>'}
+                </p>
                 
-                <div class="text-xs text-base-content/50 mb-4 space-y-1">
+                <!-- Metadata -->
+                <div class="text-xs text-base-content/50 mb-4">
                     <div>By: <strong>${escapeHtml(script.created_by)}</strong></div>
-                    <div>Created: ${createdDate}</div>
+                    <div>${createdDate}</div>
                 </div>
                 
-                <div class="card-actions justify-end gap-1 flex-wrap">
+                <!-- Actions -->
+                <div class="card-actions justify-end gap-1">
                     ${actionButtons}
                 </div>
             </div>
@@ -174,20 +180,20 @@ function renderScriptActions(script) {
     if (script.is_default) {
         // Default scripts: only enable/disable
         if (script.is_active) {
-            return `<button class="btn btn-sm btn-outline btn-xs" onclick="deactivateScript('${script.script_hash}')">Disable</button>`;
+            return `<button class="btn btn-xs btn-outline" onclick="deactivateScript('${script.script_hash}')">Disable</button>`;
         } else {
-            return `<button class="btn btn-sm btn-primary btn-xs" onclick="activateScript('${script.script_hash}')">Enable</button>`;
+            return `<button class="btn btn-xs btn-primary" onclick="activateScript('${script.script_hash}')">Enable</button>`;
         }
     } else {
         // User scripts: enable/disable + edit + delete
         const toggleBtn = script.is_active
-            ? `<button class="btn btn-sm btn-outline btn-xs" onclick="deactivateScript('${script.script_hash}')">Disable</button>`
-            : `<button class="btn btn-sm btn-primary btn-xs" onclick="activateScript('${script.script_hash}')">Enable</button>`;
+            ? `<button class="btn btn-xs btn-outline" onclick="deactivateScript('${script.script_hash}')">Disable</button>`
+            : `<button class="btn btn-xs btn-primary" onclick="activateScript('${script.script_hash}')">Enable</button>`;
         
         return `
-            <button class="btn btn-sm btn-info btn-xs" onclick="openEditModal('${script.script_hash}')">Edit</button>
+            <button class="btn btn-xs" onclick="openEditModal('${script.script_hash}')">Edit</button>
             ${toggleBtn}
-            <button class="btn btn-sm btn-error btn-xs" onclick="deleteScript('${script.script_hash}')">Delete</button>
+            <button class="btn btn-xs btn-error" onclick="deleteScript('${script.script_hash}')">Del</button>
         `;
     }
 }
