@@ -217,6 +217,16 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
         
         storage_limit_str = f"{storage_limit}g"
         
+        # Get all execution scripts for this job
+        from models.execution_script import ExecutionScript
+        scripts_list = list(ExecutionScript.select())
+        scripts_data = {}
+        for script in scripts_list:
+            scripts_data[script.script_hash] = {
+                "name": script.name,
+                "script_text": script.script_text
+            }
+        
         # Prepare network configuration
         # If DOCKER_NETWORK is empty, Docker uses default bridge network
         container_kwargs = {
@@ -227,7 +237,8 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
                 "JOB_ID": job_id,
                 "BACKEND_URL": backend_url,
                 "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
-                "STORAGE_LIMIT": storage_limit_str
+                "STORAGE_LIMIT": storage_limit_str,
+                "SCRIPTS": json.dumps(scripts_data)
             },
             "mem_limit": "2g",
             "memswap_limit": "2g",

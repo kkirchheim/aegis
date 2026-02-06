@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from flask import Blueprint, request, jsonify, session
 from flask_apispec import doc, marshal_with, use_kwargs
-from marshmallow import ValidationError
+from marshmallow import ValidationError, fields
 from utils.decorators import require_auth, require_admin
 from services.cache_service import get_cache_stats, clear_cache
 from models.database import User, db, Job, ChatSession, ChatMessage
@@ -1185,6 +1185,73 @@ def agent_complete(job_id, success=None, message=None):
         return {"error": str(e)}, 500
 
 
+# INTERNAL: Called by agent container, not documented in OpenAPI
+@api_bp.route("/agent/script_result", methods=["POST"])
+@use_kwargs({
+    "job_id": fields.Str(required=True),
+    "script_hash": fields.Str(required=True),
+    "exit_code": fields.Int(required=True),
+    "stdout": fields.Str(required=False, missing=""),
+    "stderr": fields.Str(required=False, missing=""),
+    "duration_ms": fields.Int(required=False, missing=0),
+}, location="json")
+@marshal_with(AgentResponseSchema, code=200)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=404)
+@marshal_with(ErrorSchema, code=500)
+def agent_script_result(job_id, script_hash, exit_code, stdout, stderr, duration_ms):
+    """
+    Agent reports script execution result.
+    
+    Input: job_id, script_hash, exit_code, stdout, stderr, duration_ms
+    Returns: {"ok": True}
+    """
+    from models.database import Job
+    from models.execution_script import ExecutionScript, ExecutionScriptResult
+    from blueprints.jobs import emit_event
+    import uuid
+    
+    # Validate job exists
+    try:
+        job = Job.get_by_id(job_id)
+    except:
+        return {"error": "Invalid job_id"}, 404
+    
+    # Validate script exists
+    try:
+        script = ExecutionScript.get_by_id(script_hash)
+    except:
+        return {"error": "Invalid script_hash"}, 404
+    
+    try:
+        # Store result
+        result = ExecutionScriptResult.create(
+            id=uuid.uuid4(),
+            job=job,
+            script_hash=script_hash,
+            exit_code=exit_code,
+            stdout=stdout[:5000] if stdout else "",  # Limit output size
+            stderr=stderr[:5000] if stderr else "",
+            duration_ms=duration_ms
+        )
+        
+        # Emit event for live display
+        emit_event(job_id, {
+            'event': 'script_executed',
+            'script_name': script.name,
+            'script_hash': script_hash,
+            'exit_code': exit_code,
+            'stdout': stdout[:500] if stdout else '',
+            'stderr': stderr[:200] if stderr else '',
+            'duration_ms': duration_ms
+        })
+        
+        return {"ok": True}
+    
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
 # ============================================================================
 # Job Management API
 # ============================================================================
@@ -1640,5 +1707,71 @@ def get_job_events_polling(job_id):
         }
         
         return response
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@api_bp.route("/job/<job_id>/script_results", methods=["GET"])
+@require_auth
+@doc(
+    tags=["Jobs"],
+    description="Get script execution results for a job",
+    security=[{"sessionAuth": []}],
+    params={"job_id": {"description": "Job ID", "in": "path"}},
+    responses={
+        200: {"description": "Script results retrieved successfully", "schema": {"type": "object"}},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
+        404: {"description": "Job not found", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+def get_script_results(job_id):
+    """Get all script execution results for a job."""
+    from models.database import Job
+    from models.execution_script import ExecutionScript, ExecutionScriptResult
+    
+    try:
+        user_id = session.get('user_id')
+        
+        # Validate job access
+        job = get_job(job_id)
+        if not job:
+            return {"error": "Job not found"}, 404
+        
+        if job.user_id != user_id:
+            return {"error": "Access denied"}, 403
+        
+        # Get all script results for this job
+        results = (
+            ExecutionScriptResult
+            .select()
+            .where(ExecutionScriptResult.job == job_id)
+            .order_by(ExecutionScriptResult.created_at.asc())
+        )
+        
+        results_data = []
+        for r in results:
+            try:
+                script = ExecutionScript.get_by_id(r.script_hash)
+                script_name = script.name
+            except:
+                script_name = "Unknown"
+            
+            results_data.append({
+                "script_name": script_name,
+                "script_hash": r.script_hash,
+                "exit_code": r.exit_code,
+                "stdout": r.stdout or '',
+                "stderr": r.stderr or '',
+                "duration_ms": r.duration_ms,
+                "created_at": r.created_at.isoformat() if hasattr(r.created_at, 'isoformat') else str(r.created_at)
+            })
+        
+        return {
+            "results": results_data,
+            "total": len(results_data)
+        }
+    
     except Exception as e:
         return {"error": str(e)}, 500

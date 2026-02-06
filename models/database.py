@@ -297,6 +297,7 @@ def init_db(app_logger=None):
     # Import APIKey here to avoid circular imports
     from models.api_key import APIKey
     from models.aspect import Aspect, UserAspect
+    from models.execution_script import ExecutionScript, ExecutionScriptResult
     
     models = [
         User, Job, Artifact, Event,
@@ -305,6 +306,7 @@ def init_db(app_logger=None):
         ChatSession, ChatMessage,
         APIKey,
         Aspect, UserAspect,
+        ExecutionScript, ExecutionScriptResult,
     ]
     
     db.create_tables(models, safe=True)

@@ -35,6 +35,13 @@ def create_app():
     init_peewee_db(app.logger)
     create_default_admin_user(app.logger)
     
+    # Seed default execution scripts
+    try:
+        from utils.script_utils import seed_default_scripts
+        seed_default_scripts()
+    except Exception as e:
+        app.logger.error(f"Failed to seed execution scripts: {e}")
+    
     # Initialize LLM provider
     try:
         llm_provider = init_llm_provider(app.logger)
