@@ -1,6 +1,8 @@
 """Pipeline orchestrator - orchestrates the 3-stage analysis pipeline."""
 
 import sys
+import json
+from datetime import datetime
 from typing import Callable, Optional
 from services.analysis_service import extract_and_analyze_pdf
 from services.docker_service import spawn_agent_container
@@ -206,44 +208,278 @@ class PipelineOrchestrator:
     
     def _run_stage_3(self, job_id: str, llm_provider) -> bool:
         """
-        Stage 3: Evaluate reproducibility.
+        Stage 3: Evaluate reproducibility across all active aspects.
+        
+        Single LLM call evaluates all active aspects in one pass.
+        Stores per-aspect results in job.evaluation_results.
         
         Progress: 0.66 -> 1.0
         
         Returns True if successful, False otherwise.
         """
+        from services.aspect_service import AspectService
+        from services.evaluation_service import evaluate_paper
+        from models.database import Job, PaperAnalysis, ExecutionDetails
+        import json
+        import time
+        
         try:
             self.logger(f"[{job_id}] >>> STAGE 3 STARTING")
+            
+            job = Job.get_by_id(job_id)
+            
+            # Get active aspects for this user
+            active_aspects = AspectService.get_active_aspects_for_evaluation(job.user_id)
+            self.logger(f"[{job_id}] Stage 3: {len(active_aspects)} active aspects for evaluation")
+            
+            # Emit progress event: evaluation starting
             self.emit_event(job_id, "stage_3_starting",
-                          "Stage 3: Evaluating Reproducibility...",
+                          f"Stage 3: Evaluating across {len(active_aspects)} aspects",
                           progress=0.75)
             
-            # Run evaluation (synchronous - wait for completion)
-            self.logger(f"[{job_id}] === Calling evaluate_reproducibility_aspects ===")
-            evaluation_result = evaluate_reproducibility_aspects(
-                job_id,
-                llm_provider,
-                emit_event=lambda job_id, event_dict: 
-                    self.emit_event(job_id, **event_dict)
-            )
-            self.logger(f"[{job_id}] === evaluate_reproducibility_aspects returned: {evaluation_result} ===")
+            # If no active aspects, skip evaluation (complete with empty results)
+            if not active_aspects:
+                self.logger(f"[{job_id}] No active aspects, skipping evaluation")
+                job.evaluation_results = '{}'
+                job.status = 'completed'
+                job.current_stage = 'evaluation'
+                job.progress = 1.0
+                job.save()
+                
+                self.emit_event(job_id, "stage_3_complete",
+                              "Evaluation skipped (no active aspects)",
+                              progress=1.0)
+                return True
             
-            if not evaluation_result:
-                self.logger(f"[{job_id}] Evaluation failed")
-                self.emit_event(job_id, "stage_3_error", "Evaluation failed")
-                return False
+            # Get paper analysis and execution details
+            paper_analysis = None
+            execution = None
+            
+            try:
+                paper_analysis = PaperAnalysis.get(PaperAnalysis.job == job_id)
+                execution = ExecutionDetails.get(ExecutionDetails.job == job_id)
+            except:
+                pass
+            
+            if not paper_analysis or not execution:
+                raise Exception("Missing paper analysis or execution details")
+            
+            # Evaluate paper across all active aspects
+            start_time = time.time()
+            
+            evaluation_results = evaluate_paper(
+                job_id=job_id,
+                paper_analysis=paper_analysis,
+                code_output=execution.stdout_combined or "",
+                execution_log=execution.errors_summary or "",
+                llm_provider=llm_provider,
+                app_logger=self.logger
+            )
+            
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            
+            # Count results
+            total_aspects = len(evaluation_results)
+            passed = sum(1 for r in evaluation_results.values() if r.get('status') == 'PASS')
+            failed = sum(1 for r in evaluation_results.values() if r.get('status') == 'FAIL')
+            unclear = sum(1 for r in evaluation_results.values() if r.get('status') == 'UNCLEAR')
+            
+            self.logger(
+                f"[{job_id}] Evaluation complete: {passed} PASS, {failed} FAIL, {unclear} UNCLEAR"
+            )
+            
+            # Update job with results
+            job.evaluation_results = json.dumps(evaluation_results)
+            job.status = 'completed'
+            job.current_stage = 'evaluation'
+            job.progress = 1.0
+            job.completed_at = datetime.now()
+            job.save()
+            
+            # Emit completion event
+            self.emit_event(job_id, "stage_3_complete",
+                          f"Evaluation complete: {passed} passed, {failed} failed",
+                          progress=1.0)
             
             self.logger(f"[{job_id}] >>> STAGE 3 COMPLETE")
-            self.emit_event(job_id, "stage_3_complete",
-                          "Evaluation complete",
-                          progress=0.99)
             
             return True
         
         except Exception as e:
             self.logger(f"[{job_id}] Stage 3 failed: {str(e)}")
-            self.emit_event(job_id, "stage_3_error", f"Stage 3 failed: {str(e)}")
+            
+            try:
+                job = Job.get_by_id(job_id)
+                job.status = 'error'
+                job.error_message = f"Evaluation failed: {str(e)}"
+                job.current_stage = 'evaluation'
+                job.save()
+            except:
+                pass
+            
+            self.emit_event(job_id, "stage_3_error", 
+                          f"Stage 3 failed: {str(e)}")
             return False
+
+
+# ============================================================================
+# Phase 5: Standalone stage_3_evaluation function for testing
+# ============================================================================
+
+def stage_3_evaluation(job_id, app_logger=None):
+    """
+    Stage 3: Evaluate paper across all active reproducibility aspects.
+    
+    Single LLM call evaluates all active aspects in one pass.
+    Stores per-aspect results in job.evaluation_results.
+    
+    Args:
+        job_id: Job ID
+        app_logger: Optional logger function
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    from services.aspect_service import AspectService
+    from services.evaluation_service import evaluate_paper
+    from models.database import Job, PaperAnalysis, ExecutionDetails
+    from services.event_dispatcher import EventDispatcher
+    
+    if not app_logger:
+        app_logger = lambda msg: None
+    
+    job = None
+    try:
+        job = Job.get_by_id(job_id)
+    except:
+        app_logger(f"[Job {job_id}] ERROR: Job not found")
+        return False
+    
+    try:
+        # Get active aspects for this user
+        active_aspects = AspectService.get_active_aspects_for_evaluation(job.user_id)
+        app_logger(f"[Job {job_id}] Stage 3: {len(active_aspects)} active aspects for evaluation")
+        
+        # Emit progress event: evaluation starting
+        EventDispatcher().emit_event(
+            job_id=job_id,
+            event_type="stage_3_start",
+            data={
+                "stage": "evaluation",
+                "message": f"Evaluating across {len(active_aspects)} aspects",
+                "aspects_count": len(active_aspects),
+                "progress": 0.66  # Stage 3 of 3
+            },
+            stage_duration_ms=None
+        )
+        
+        # If no active aspects, skip evaluation (complete with empty results)
+        if not active_aspects:
+            app_logger(f"[Job {job_id}] No active aspects, skipping evaluation")
+            job.evaluation_results = '{}'
+            job.status = 'completed'
+            job.current_stage = 'evaluation'
+            job.progress = 1.0
+            job.save()
+            
+            EventDispatcher().emit_event(
+                job_id=job_id,
+                event_type="stage_3_complete",
+                data={
+                    "stage": "evaluation",
+                    "message": "Evaluation skipped (no active aspects)",
+                    "aspects_evaluated": 0,
+                    "progress": 1.0
+                },
+                stage_duration_ms=0
+            )
+            return True
+        
+        # Get paper analysis and execution details
+        paper_analysis = None
+        execution = None
+        
+        try:
+            paper_analysis = PaperAnalysis.get(PaperAnalysis.job == job_id)
+            execution = ExecutionDetails.get(ExecutionDetails.job == job_id)
+        except:
+            pass
+        
+        if not paper_analysis or not execution:
+            raise Exception("Missing paper analysis or execution details")
+        
+        # Evaluate paper across all active aspects
+        import time
+        start_time = time.time()
+        
+        evaluation_results = evaluate_paper(
+            job_id=job_id,
+            paper_analysis=paper_analysis,
+            code_output=execution.stdout_combined or "",
+            execution_log=execution.errors_summary or "",
+            llm_provider=None,  # Will use default from config
+            app_logger=app_logger
+        )
+        
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        
+        # Count results
+        total_aspects = len(evaluation_results)
+        passed = sum(1 for r in evaluation_results.values() if r.get('status') == 'PASS')
+        failed = sum(1 for r in evaluation_results.values() if r.get('status') == 'FAIL')
+        unclear = sum(1 for r in evaluation_results.values() if r.get('status') == 'UNCLEAR')
+        
+        app_logger(
+            f"[Job {job_id}] Evaluation complete: {passed} PASS, {failed} FAIL, {unclear} UNCLEAR"
+        )
+        
+        # Update job with results
+        job.evaluation_results = json.dumps(evaluation_results)
+        job.status = 'completed'
+        job.current_stage = 'evaluation'
+        job.progress = 1.0
+        job.completed_at = datetime.now()
+        job.save()
+        
+        # Emit completion event
+        EventDispatcher().emit_event(
+            job_id=job_id,
+            event_type="stage_3_complete",
+            data={
+                "stage": "evaluation",
+                "message": f"Evaluation complete: {passed} passed, {failed} failed",
+                "aspects_evaluated": total_aspects,
+                "passed": passed,
+                "failed": failed,
+                "unclear": unclear,
+                "progress": 1.0
+            },
+            stage_duration_ms=elapsed_ms
+        )
+        
+        return True
+    
+    except Exception as e:
+        app_logger(f"[Job {job_id}] Stage 3 evaluation failed: {e}")
+        
+        if job:
+            job.status = 'error'
+            job.error_message = f"Evaluation failed: {str(e)}"
+            job.current_stage = 'evaluation'
+            job.save()
+        
+        EventDispatcher().emit_event(
+            job_id=job_id,
+            event_type="stage_3_error",
+            data={
+                "stage": "evaluation",
+                "message": f"Evaluation error: {str(e)}",
+                "progress": 1.0
+            },
+            stage_duration_ms=0
+        )
+        
+        return False
 
 
 class PipelineOrchestratorFactory:

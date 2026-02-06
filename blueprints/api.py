@@ -1505,7 +1505,8 @@ def get_job_full(job_id):
             "error_message": job.error_message,
             "events": events_list,
             "artifacts": artifacts,
-            "paper_analysis": paper_analysis
+            "paper_analysis": paper_analysis,
+            "evaluation_results": job.get_evaluation_results()  # NEW: Include evaluation results
         }
         
         return response
