@@ -139,11 +139,11 @@
 
     </div>
 
-    <!-- Create Script Modal -->
+    <!-- Create/Edit Script Modal -->
     <div id="script-modal" class="modal" style="display: none;">
         <div class="modal-box w-11/12 max-w-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-2xl font-bold">Create Execution Script</h2>
+                <h2 id="modalTitle" class="text-2xl font-bold">Create Execution Script</h2>
                 <button class="btn btn-sm btn-circle btn-ghost" onclick="closeCreateModal()">✕</button>
             </div>
             
@@ -205,7 +205,7 @@
                 <!-- Buttons -->
                 <div class="flex gap-2 justify-end">
                     <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Create Script</button>
+                    <button id="submitBtn" type="submit" class="btn btn-primary">Create Script</button>
                 </div>
             </form>
         </div>

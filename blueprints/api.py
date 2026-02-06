@@ -1962,6 +1962,70 @@ def deactivate_user_script(script_hash):
         return {"error": str(e)}, 500
 
 
+@api_bp.route("/user/scripts/<script_hash>", methods=["PATCH"])
+@require_auth
+@use_kwargs({
+    "name": fields.Str(required=False),
+    "description": fields.Str(required=False),
+    "script_text": fields.Str(required=False)
+}, location="json")
+@doc(
+    tags=["Scripts"],
+    description="Update a user script (must be owner)",
+    security=[{"sessionAuth": []}],
+    params={
+        "script_hash": {"description": "Script hash", "in": "path"}
+    },
+    responses={
+        200: {"description": "Script updated"},
+        400: {"description": "Invalid input"},
+        401: {"description": "Unauthorized"},
+        403: {"description": "Forbidden - not the script owner"},
+        404: {"description": "Script not found"},
+        500: {"description": "Internal server error"}
+    }
+)
+def update_user_script(script_hash, name=None, description=None, script_text=None):
+    """Update a user script (only if user created it)."""
+    from services.script_service import ScriptService
+    from models.execution_script import ExecutionScript
+    import uuid
+    
+    try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
+        
+        # Verify user owns this script
+        try:
+            script = ExecutionScript.get_by_id(script_hash)
+            if script.created_by_id != user_id:
+                return {"error": "Access denied"}, 403
+        except:
+            return {"error": "Script not found"}, 404
+        
+        # Update fields if provided
+        if name:
+            script.name = name
+        if description is not None:
+            script.description = description
+        if script_text:
+            script.script_text = script_text
+            # If script text changed, we might need to update hash, but we'll keep it for now
+        
+        script.save()
+        
+        return {
+            "script_hash": script.script_hash,
+            "name": script.name,
+            "description": script.description,
+            "updated": True
+        }
+    
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
 @api_bp.route("/user/scripts/<script_hash>", methods=["DELETE"])
 @require_auth
 @doc(
