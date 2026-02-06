@@ -747,3 +747,172 @@ Reasoning: Code is available (✓) with full documentation (✓).
         
         assert result["aspect-1"]["status"] == "PASS"
         assert "✓" in result["aspect-1"]["reasoning"]
+
+
+# ============================================================================
+# Aspect Metadata Tests (CRITICAL: descriptions must be included)
+# ============================================================================
+
+@pytest.mark.db
+class TestAspectMetadataInResults:
+    """Tests that aspect descriptions are properly included in results."""
+    
+    def test_parse_includes_aspect_descriptions(self, app, user_with_aspects):
+        """Test that parse_evaluation_response includes aspect descriptions."""
+        with app.app_context():
+            # Get active aspects (should have descriptions from DEFAULT_ASPECTS)
+            active_aspects = AspectService.get_active_aspects_for_evaluation(user_with_aspects.id)
+            
+            # Verify aspects have description field
+            assert all("description" in a for a in active_aspects), \
+                "Active aspects missing description field"
+            assert all(a["description"] for a in active_aspects), \
+                "Active aspects have empty descriptions"
+            
+            # Simulate LLM response with JSON array
+            response = json.dumps([
+                {
+                    "aspect": aspect["name"],
+                    "status": "PASS",
+                    "reasoning": f"Evaluated {aspect['name']}"
+                }
+                for aspect in active_aspects
+            ])
+            
+            # Parse response
+            result = parse_evaluation_response(response, active_aspects)
+            
+            # Verify each result includes aspect_description
+            assert len(result) == len(active_aspects), \
+                f"Expected {len(active_aspects)} results, got {len(result)}"
+            
+            for aspect_id, aspect_result in result.items():
+                # Check all required fields present
+                assert "aspect_name" in aspect_result, f"Missing aspect_name for {aspect_id}"
+                assert "aspect_description" in aspect_result, f"Missing aspect_description for {aspect_id}"
+                assert "status" in aspect_result, f"Missing status for {aspect_id}"
+                assert "reasoning" in aspect_result, f"Missing reasoning for {aspect_id}"
+                
+                # Check descriptions are non-empty
+                assert aspect_result["aspect_description"], \
+                    f"Aspect {aspect_id} has empty description: {aspect_result}"
+                
+                # Verify it matches one of the original aspects
+                matching_aspect = next(
+                    (a for a in active_aspects if str(a["id"]) == aspect_id),
+                    None
+                )
+                assert matching_aspect, f"No original aspect for {aspect_id}"
+                assert aspect_result["aspect_description"] == matching_aspect["description"], \
+                    f"Description mismatch for {aspect_id}"
+    
+    def test_evaluate_paper_returns_descriptions(self, app, user_with_aspects, mock_llm_provider):
+        """Integration test: evaluate_paper returns descriptions in results."""
+        with app.app_context():
+            # Create job and supporting data
+            job = Job.create(
+                id=str(uuid4()),
+                user=user_with_aspects,
+                pdf_path="/tmp/test.pdf",
+                status="processing"
+            )
+            
+            paper_analysis = PaperAnalysis.create(
+                job=job,
+                pdf_hash="test-hash",
+                title="Test Paper",
+                abstract="Test abstract",
+                extracted_text="This is test paper content.",
+                methodology="Test methodology",
+                dependencies=json.dumps(["numpy", "pandas"]),
+                dataset_description="Test dataset",
+                claimed_results=json.dumps({"accuracy": 0.95})
+            )
+            
+            execution = ExecutionDetails.create(
+                job=job,
+                stdout_combined="Test output",
+                commands_run=json.dumps(["python test.py"]),
+                dependencies_used=json.dumps(["numpy", "pandas"]),
+                errors_summary="No errors",
+                test_info="All tests passed",
+                randomness_info="seed=42",
+                discovered_files=json.dumps(["file1.py"]),
+                actual_results=json.dumps({"accuracy": 0.95})
+            )
+            
+            # Get active aspects
+            active_aspects = AspectService.get_active_aspects_for_evaluation(user_with_aspects.id)
+            
+            # Mock LLM response with valid JSON
+            llm_response = json.dumps([
+                {
+                    "aspect": aspect["name"],
+                    "status": "PASS",
+                    "reasoning": f"Test evaluation for {aspect['name']}"
+                }
+                for aspect in active_aspects
+            ])
+            mock_llm_provider.complete.return_value = llm_response
+            
+            # Call evaluate_paper
+            result = evaluate_paper(
+                job_id=job.id,
+                paper_analysis=paper_analysis,
+                code_output=execution.stdout_combined,
+                execution_log=execution.errors_summary,
+                llm_provider=mock_llm_provider,
+                app_logger=None
+            )
+            
+            # Verify descriptions are in results
+            assert len(result) == len(active_aspects), \
+                f"Expected {len(active_aspects)} results, got {len(result)}"
+            
+            for aspect_id, res in result.items():
+                # Critical: description must not be empty
+                assert "aspect_description" in res, \
+                    f"Missing aspect_description in result for {aspect_id}"
+                assert res["aspect_description"], \
+                    f"EMPTY aspect_description for {aspect_id}: {res}"
+                
+                # Verify it's the actual description, not empty string
+                matching = next(
+                    (a for a in active_aspects if str(a["id"]) == aspect_id),
+                    None
+                )
+                assert matching, f"Could not find aspect {aspect_id} in active list"
+                assert res["aspect_description"] == matching["description"], \
+                    f"Description mismatch for {aspect_id}"
+    
+    def test_custom_aspects_include_descriptions(self, app, user_with_aspects):
+        """Integration test: custom aspects must have descriptions in evaluation results."""
+        with app.app_context():
+            # Create a custom aspect WITH description
+            custom = AspectService.create_custom_aspect(
+                user_id=user_with_aspects.id,
+                name="Custom Reproducibility Check",
+                description="Verify that custom aspects preserve descriptions through evaluation",
+                prompt="Can this custom aspect be evaluated?"
+            )
+            
+            # Verify it was created with description
+            all_aspects = AspectService.get_all_aspects_for_user(user_with_aspects.id)
+            custom_from_db = next(
+                (a for a in all_aspects if a["id"] == custom["id"]),
+                None
+            )
+            assert custom_from_db is not None, "Custom aspect not found in get_all_aspects"
+            assert custom_from_db["description"], "Custom aspect has empty description in get_all_aspects"
+            
+            # Get active aspects for evaluation
+            active = AspectService.get_active_aspects_for_evaluation(user_with_aspects.id)
+            custom_active = next(
+                (a for a in active if a["id"] == custom["id"]),
+                None
+            )
+            assert custom_active is not None, "Custom aspect not in active aspects"
+            assert custom_active["description"], \
+                f"Custom aspect lost description in get_active_aspects_for_evaluation: {custom_active}"
+            assert custom_active["description"] == custom["description"], \
+                f"Description mismatch: {custom_active['description']} vs {custom['description']}"
