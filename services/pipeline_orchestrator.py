@@ -352,24 +352,33 @@ def stage_3_evaluation(job_id, app_logger=None):
             self.original = original_logger
         
         def info(self, msg):
+            if self.original is None:
+                return  # Silent
             if callable(self.original):
                 self.original(f"[INFO] {msg}")
             elif hasattr(self.original, 'info'):
                 self.original.info(msg)
         
         def warning(self, msg):
+            if self.original is None:
+                return  # Silent
             if callable(self.original):
                 self.original(f"[WARNING] {msg}")
             elif hasattr(self.original, 'warning'):
                 self.original.warning(msg)
         
         def error(self, msg, exc_info=False):
+            if self.original is None:
+                print(f"[ERROR] {msg}", flush=True)  # At least print to stdout/stderr
+                return
             if callable(self.original):
                 self.original(f"[ERROR] {msg}")
             elif hasattr(self.original, 'error'):
                 self.original.error(msg, exc_info=exc_info)
         
         def debug(self, msg):
+            if self.original is None:
+                return  # Silent
             if callable(self.original):
                 self.original(f"[DEBUG] {msg}")
             elif hasattr(self.original, 'debug'):
@@ -385,14 +394,14 @@ def stage_3_evaluation(job_id, app_logger=None):
     job = None
     try:
         job = Job.get_by_id(job_id)
-    except:
-        logger(f"[Job {job_id}] ERROR: Job not found")
+    except Exception as e:
+        logger.error(f"[Job {job_id}] ERROR: Job not found - {e}", exc_info=True)
         return False
     
     try:
         # Get active aspects for this user
         active_aspects = AspectService.get_active_aspects_for_evaluation(job.user_id)
-        logger(f"[Job {job_id}] Stage 3: {len(active_aspects)} active aspects for evaluation")
+        logger.info(f"[Job {job_id}] Stage 3: {len(active_aspects)} active aspects for evaluation")
         
         # Emit progress event: evaluation starting
         EventDispatcher().emit_event(
@@ -409,7 +418,7 @@ def stage_3_evaluation(job_id, app_logger=None):
         
         # If no active aspects, skip evaluation (complete with empty results)
         if not active_aspects:
-            logger(f"[Job {job_id}] No active aspects, skipping evaluation")
+            logger.warning(f"[Job {job_id}] No active aspects, skipping evaluation")
             job.evaluation_results = '{}'
             job.status = 'completed'
             job.current_stage = 'evaluation'
@@ -463,7 +472,7 @@ def stage_3_evaluation(job_id, app_logger=None):
         failed = sum(1 for r in evaluation_results.values() if r.get('status') == 'FAIL')
         unclear = sum(1 for r in evaluation_results.values() if r.get('status') == 'UNCLEAR')
         
-        logger(
+        logger.info(
             f"[Job {job_id}] Evaluation complete: {passed} PASS, {failed} FAIL, {unclear} UNCLEAR"
         )
         
@@ -494,11 +503,13 @@ def stage_3_evaluation(job_id, app_logger=None):
         return True
     
     except Exception as e:
-        logger(f"[Job {job_id}] Stage 3 evaluation failed: {e}")
+        import traceback
+        logger.error(f"[Job {job_id}] Stage 3 evaluation failed: {e}", exc_info=True)
+        logger.error(f"[Job {job_id}] Traceback: {traceback.format_exc()}")
         
         if job:
             job.status = 'error'
-            job.error_message = f"Evaluation failed: {str(e)}"
+            job.error_message = f"Evaluation failed: {str(e)}\n{traceback.format_exc()}"
             job.current_stage = 'evaluation'
             job.save()
         
