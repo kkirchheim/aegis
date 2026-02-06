@@ -20,8 +20,9 @@ async function loadAspects() {
         const defaults = aspects.filter(a => a.is_default);
         const custom = aspects.filter(a => !a.is_default);
         
-        renderAspects(defaults, 'default-aspects');
+        // Render CUSTOM aspects first (appear at top), then defaults
         renderAspects(custom, 'custom-aspects');
+        renderAspects(defaults, 'default-aspects');
         
         // Show/hide empty state for custom aspects
         const emptyState = document.getElementById('emptyCustomAspects');
@@ -41,7 +42,7 @@ async function loadAspects() {
     }
 }
 
-// Render aspect cards
+// Render aspect cards (compact for 4-column grid)
 function renderAspects(aspects, containerId) {
     const container = document.getElementById(containerId);
     
@@ -51,44 +52,43 @@ function renderAspects(aspects, containerId) {
     }
     
     container.innerHTML = aspects.map(aspect => `
-        <div class="card bg-base-200 shadow-md" data-aspect-id="${aspect.id}">
-            <div class="card-body">
-                <div class="flex justify-between items-start gap-2">
-                    <div class="flex-1">
-                        <h3 class="card-title text-lg">${escapeHtml(aspect.name)}</h3>
-                        <p class="text-sm text-base-content/70 mt-2">${escapeHtml(aspect.description)}</p>
-                    </div>
-                    <span class="badge ${aspect.is_default ? 'badge-secondary' : 'badge-primary'}">
+        <div class="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow" data-aspect-id="${aspect.id}">
+            <div class="card-body p-4">
+                <div class="flex justify-between items-start gap-2 mb-2">
+                    <h3 class="card-title text-base leading-snug flex-1">${escapeHtml(aspect.name)}</h3>
+                    <span class="badge badge-sm ${aspect.is_default ? 'badge-secondary' : 'badge-primary'} whitespace-nowrap flex-shrink-0">
                         ${aspect.is_default ? 'DEFAULT' : 'CUSTOM'}
                     </span>
                 </div>
                 
-                <div class="card-actions justify-between items-center mt-4">
-                    <div class="flex items-center gap-2">
+                <p class="text-xs text-base-content/60 mb-3 line-clamp-2">${escapeHtml(aspect.description)}</p>
+                
+                <div class="flex flex-col gap-2 mt-auto">
+                    <label class="label cursor-pointer p-0 gap-2">
                         <input 
                             type="checkbox" 
-                            class="checkbox aspect-toggle" 
+                            class="checkbox checkbox-sm aspect-toggle" 
                             ${aspect.is_active ? 'checked' : ''}
                             onchange="toggleAspect('${aspect.id}', this.checked)"
                         >
-                        <span class="text-sm font-semibold">${aspect.is_active ? 'ENABLED' : 'DISABLED'}</span>
-                    </div>
+                        <span class="label-text text-xs">${aspect.is_active ? 'Active' : 'Inactive'}</span>
+                    </label>
                     
                     ${!aspect.is_default ? `
-                        <div class="flex gap-2">
+                        <div class="flex gap-1">
                             <button 
-                                class="btn btn-sm btn-ghost" 
+                                class="btn btn-xs btn-ghost flex-1" 
                                 onclick="editAspect('${aspect.id}')" 
-                                title="Edit aspect"
+                                title="Edit"
                             >
-                                ✎
+                                ✎ Edit
                             </button>
                             <button 
-                                class="btn btn-sm btn-ghost text-error" 
+                                class="btn btn-xs btn-ghost text-error" 
                                 onclick="deleteAspect('${aspect.id}')" 
-                                title="Delete aspect"
+                                title="Delete"
                             >
-                                🗑️
+                                🗑
                             </button>
                         </div>
                     ` : ''}

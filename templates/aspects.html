@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aspects - Paper Reproducibility</title>
+    <title>Reproducibility Aspects</title>
     
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
@@ -14,7 +14,7 @@
     
     <!-- Custom styles -->
     <style>
-        /* Override primary color to blue */
+        /* Override primary color to blue - match other pages */
         .text-primary { color: #0068b4; }
         .bg-primary { background-color: #0068b4; }
         .btn-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
@@ -27,12 +27,15 @@
         .btn-secondary { background-color: #ef4444; border-color: #ef4444; color: white; }
         .btn-secondary:hover { background-color: #dc2626; }
         
-        /* Delete button red */
+        /* Error button red */
         .btn-error { background-color: #ef4444; border-color: #ef4444; color: white; }
         .btn-error:hover { background-color: #dc2626; }
+        
+        html[data-theme="light"] {
+            color-scheme: light;
+        }
     </style>
     
-    <link rel="stylesheet" href="/static/aspects.css">
     <script src="/static/aspects.js"></script>
 </head>
 <body class="bg-base-100">
@@ -85,7 +88,18 @@
     </div>
 
     <!-- Main Container -->
-    <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        
+        <!-- Page Header -->
+        <section class="mb-8">
+            <h1 class="text-4xl font-bold mb-4">🎯 Reproducibility Aspects</h1>
+            <p class="text-lg text-base-content/70 mb-6">
+                Manage reproducibility evaluation criteria. Activate or disable aspects to customize what gets evaluated for your papers.
+            </p>
+            <p class="text-base text-base-content/60">
+                <strong>Default aspects</strong> are provided by the system. <strong>Custom aspects</strong> are created by you to evaluate specific criteria.
+            </p>
+        </section>
         
         <!-- Error Alert -->
         <div id="errorAlert" class="alert alert-error shadow-lg mb-4" style="display: none;">
@@ -103,45 +117,51 @@
         <!-- Content (hidden during loading) -->
         <div id="contentState" style="display: none;">
             
-            <!-- Default Aspects Section -->
-            <section class="mb-8">
-                <div class="card bg-base-100 shadow-lg">
-                    <div class="card-body">
-                        <h2 class="card-title flex items-center gap-2 mb-6">
-                            <span>📋</span>
-                            <span>Default Aspects</span>
-                        </h2>
-                        
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" id="default-aspects">
-                            <!-- Loaded via JS -->
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Custom Aspects Section -->
+            <!-- Custom Aspects Section (First!) -->
             <section class="mb-8">
                 <div class="card bg-base-100 shadow-lg">
                     <div class="card-body">
                         <div class="flex justify-between items-center mb-6">
-                            <h2 class="card-title flex items-center gap-2">
-                                <span>🎨</span>
-                                <span>Custom Aspects</span>
-                            </h2>
+                            <div>
+                                <h2 class="card-title flex items-center gap-2">
+                                    <span>✨</span>
+                                    <span>Custom Aspects</span>
+                                </h2>
+                                <p class="text-sm text-base-content/60 mt-2">Create custom evaluation criteria tailored to your papers</p>
+                            </div>
                             <button class="btn btn-primary btn-sm gap-2" onclick="openCreateModal()">
                                 <span>+</span>
-                                <span>Add Custom Aspect</span>
+                                <span>Add</span>
                             </button>
                         </div>
                         
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" id="custom-aspects">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" id="custom-aspects">
                             <!-- Loaded via JS -->
                         </div>
 
                         <!-- Empty state for custom aspects -->
                         <div id="emptyCustomAspects" class="text-center py-8 text-base-content/60">
                             <p class="text-lg">No custom aspects yet</p>
-                            <p class="text-sm">Create your first custom aspect to get started</p>
+                            <p class="text-sm">Click "Add" to create your first custom aspect</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Default Aspects Section -->
+            <section class="mb-8">
+                <div class="card bg-base-100 shadow-lg">
+                    <div class="card-body">
+                        <div class="mb-6">
+                            <h2 class="card-title flex items-center gap-2">
+                                <span>📋</span>
+                                <span>Default Aspects</span>
+                            </h2>
+                            <p class="text-sm text-base-content/60 mt-2">System-provided reproducibility criteria</p>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" id="default-aspects">
+                            <!-- Loaded via JS -->
                         </div>
                     </div>
                 </div>
