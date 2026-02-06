@@ -48,6 +48,10 @@ class JobSchema(Schema):
         allow_none=True,
         description="Original PDF filename"
     )
+    thumbnail_path = fields.Str(
+        allow_none=True,
+        description="Path to PDF thumbnail image"
+    )
     user_id = fields.Int(
         allow_none=True,
         description="ID of the user who created the job"
@@ -122,6 +126,10 @@ class JobDetailSchema(Schema):
     pdf_filename = fields.Str(
         allow_none=True,
         description="Original PDF filename"
+    )
+    thumbnail_path = fields.Str(
+        allow_none=True,
+        description="Path to PDF thumbnail image"
     )
     user_id = fields.Int(
         allow_none=True,

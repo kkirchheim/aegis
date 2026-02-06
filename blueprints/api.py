@@ -1376,6 +1376,10 @@ def get_job_detail(job_id):
         response = {
             "id": job.id,
             "status": job.status,
+            "progress": job.progress if job.progress is not None else 0.0,
+            "current_stage": job.current_stage or "pending",
+            "pdf_filename": job.pdf_filename,
+            "thumbnail_path": job.thumbnail_path,
             "created_at": job.created_at,
             "completed_at": job.completed_at
         }
@@ -1517,6 +1521,7 @@ def get_job_full(job_id):
             "progress": job.progress if job.progress is not None else 0.0,  # 0.0-1.0
             "current_stage": current_stage,  # pipeline stage
             "pdf_filename": job.pdf_filename,
+            "thumbnail_path": job.thumbnail_path,  # Thumbnail URL for UI display
             "created_at": job.created_at,
             "completed_at": job.completed_at,
             "report": json.loads(job.report) if job.report else {},
