@@ -467,7 +467,7 @@ def run_scripts():
     """Execute all scripts from SCRIPTS environment variable.
     
     Phase 1 MVP: Run user-provided scripts before Claude loop.
-    Scripts are identified by hash and stored in /scripts/{hash}.
+    Scripts are identified by hash and stored in /workspace/scripts/{hash}.
     Results are reported to /agent/script_result endpoint.
     """
     scripts_json = os.getenv('SCRIPTS', '{}')
@@ -488,9 +488,9 @@ def run_scripts():
     
     log_message(f"🔬 Running {len(scripts)} execution script(s)...")
     
-    # Create scripts directory
-    scripts_dir = Path('/scripts')
-    scripts_dir.mkdir(exist_ok=True)
+    # Create scripts directory (in /workspace where agent user has write permission)
+    scripts_dir = Path('/workspace/scripts')
+    scripts_dir.mkdir(exist_ok=True, parents=True)
     
     for script_hash, script_data in scripts.items():
         script_name = script_data.get('name', script_hash[:8])
