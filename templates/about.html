@@ -14,7 +14,6 @@
         .bg-primary { background-color: #0068b4 !important; }
         .btn-primary { background-color: #0068b4 !important; border-color: #0068b4 !important; color: white !important; }
         .btn-primary:hover { background-color: #004d8f !important; }
-        .step-primary::before, .step-primary::after { background-color: #0068b4 !important; }
     </style>
 </head>
 <body class="bg-base-100">
@@ -23,69 +22,61 @@
     <div class="container mx-auto px-4 py-8 max-w-4xl">
         
         <!-- Hero -->
-        <section class="mb-12 text-center">
-            <h1 class="text-4xl font-bold mb-2">Paper Reproducibility Checker</h1>
+        <section class="mb-10 text-center">
+            <h1 class="text-4xl font-bold mb-3">Paper Reproducibility Checker</h1>
             <p class="text-lg text-base-content/70">
-                Automatically evaluate if scientific papers are reproducible using AI-powered analysis and code execution
+                Automatically evaluate scientific paper reproducibility using AI-powered analysis, code execution, and validation scripts.
             </p>
         </section>
 
-        <!-- What & Why -->
-        <section class="mb-12">
+        <!-- What We Do -->
+        <section class="mb-10">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title">📄 About</h2>
-                    <p class="text-base-content/70 my-4">
-                        Automatically evaluate scientific paper reproducibility using AI, code execution, and intelligent analysis.
-                    </p>
-                    <ul class="list-disc list-inside space-y-2 text-base-content/70">
-                        <li><strong>Analyze</strong> — Extract code, methodology, and citations from PDF papers</li>
-                        <li><strong>Execute</strong> — Run code in isolated Docker sandboxes with resource limits</li>
-                        <li><strong>Compare</strong> — Verify claimed results against actual execution outputs</li>
-                        <li><strong>Score</strong> — Rate reproducibility across 15 criteria (critical, high-value, nice-to-have)</li>
-                        <li><strong>Chat</strong> — Ask follow-up questions about papers with full context</li>
+                    <h2 class="card-title">🎯 What We Do</h2>
+                    <ul class="list-disc list-inside space-y-2 text-base-content/70 mt-4">
+                        <li><strong>Extract</strong> — Code, methodology, and dependencies from papers</li>
+                        <li><strong>Execute</strong> — Run code in isolated Docker sandboxes</li>
+                        <li><strong>Validate</strong> — Run custom scripts to check reproducibility criteria</li>
+                        <li><strong>Evaluate</strong> — Score 15 reproducibility aspects using AI</li>
+                        <li><strong>Interact</strong> — Chat with AI about papers using full context</li>
                     </ul>
                 </div>
             </div>
         </section>
 
         <!-- How It Works -->
-        <section class="mb-12">
+        <section class="mb-10">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title">⚙️ How It Works</h2>
-                    <div class="steps steps-vertical lg:steps-horizontal w-full mt-4">
-                        <div class="step step-primary">
-                            <div class="step-content">
-                                <h3 class="font-semibold">Upload</h3>
-                                <p class="text-xs text-base-content/70">Submit a PDF paper</p>
-                            </div>
+                    <h2 class="card-title">⚙️ Pipeline</h2>
+                    <div class="grid md:grid-cols-4 gap-2 mt-4 text-sm">
+                        <div class="text-center p-3 bg-base-200 rounded">
+                            <p class="font-semibold">📤 Upload</p>
+                            <p class="text-xs text-base-content/70">PDF paper</p>
                         </div>
-                        <div class="step step-primary">
-                            <div class="step-content">
-                                <h3 class="font-semibold">Analyze</h3>
-                                <p class="text-xs text-base-content/70">Claude extracts code & methodology</p>
-                            </div>
+                        <div class="hidden md:flex items-center justify-center">→</div>
+                        <div class="text-center p-3 bg-base-200 rounded">
+                            <p class="font-semibold">🔍 Analyze</p>
+                            <p class="text-xs text-base-content/70">Extract code</p>
                         </div>
-                        <div class="step step-primary">
-                            <div class="step-content">
-                                <h3 class="font-semibold">Execute</h3>
-                                <p class="text-xs text-base-content/70">Run code in Docker sandbox</p>
-                            </div>
+                        <div class="hidden md:flex items-center justify-center">→</div>
+                        <div class="text-center p-3 bg-base-200 rounded">
+                            <p class="font-semibold">⚡ Execute</p>
+                            <p class="text-xs text-base-content/70">Run code</p>
                         </div>
-                        <div class="step step-primary">
-                            <div class="step-content">
-                                <h3 class="font-semibold">Evaluate</h3>
-                                <p class="text-xs text-base-content/70">Score reproducibility aspects</p>
-                            </div>
+                        <div class="hidden md:flex items-center justify-center">→</div>
+                        <div class="text-center p-3 bg-base-200 rounded">
+                            <p class="font-semibold">✅ Score</p>
+                            <p class="text-xs text-base-content/70">Evaluate</p>
                         </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Key Features -->
-        <section class="mb-12">
+        <!-- Features -->
+        <section class="mb-10">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title">✨ Features</h2>
@@ -93,32 +84,32 @@
                         <div class="flex gap-3">
                             <span class="text-xl">💬</span>
                             <div>
-                                <h3 class="font-semibold">Interactive Chat</h3>
-                                <p class="text-base-content/70">Q&A with full analysis context</p>
+                                <p class="font-semibold">Interactive Chat</p>
+                                <p class="text-base-content/70">Q&A with full context</p>
                             </div>
                         </div>
                         
                         <div class="flex gap-3">
-                            <span class="text-xl">🔑</span>
+                            <span class="text-xl">🔧</span>
                             <div>
-                                <h3 class="font-semibold">API & CLI</h3>
-                                <p class="text-base-content/70">Automation via API keys</p>
+                                <p class="font-semibold">Custom Scripts</p>
+                                <p class="text-base-content/70">User-defined validation</p>
                             </div>
                         </div>
                         
                         <div class="flex gap-3">
                             <span class="text-xl">⚡</span>
                             <div>
-                                <h3 class="font-semibold">Fast</h3>
-                                <p class="text-base-content/70">3-layer caching, real-time progress</p>
+                                <p class="font-semibold">Fast & Cached</p>
+                                <p class="text-base-content/70">3-layer caching</p>
                             </div>
                         </div>
                         
                         <div class="flex gap-3">
-                            <span class="text-xl">🧠</span>
+                            <span class="text-xl">🔐</span>
                             <div>
-                                <h3 class="font-semibold">Flexible LLM</h3>
-                                <p class="text-base-content/70">Claude or local Ollama</p>
+                                <p class="font-semibold">API & CLI</p>
+                                <p class="text-base-content/70">Automation via API keys</p>
                             </div>
                         </div>
                     </div>
@@ -127,118 +118,69 @@
         </section>
 
         <!-- Evaluation Criteria -->
-        <section class="mb-12">
+        <section class="mb-10">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title">📋 Evaluation Criteria</h2>
-                    <p class="text-sm text-base-content/70 my-3">15 criteria across three importance tiers:</p>
-                    
-                    <div class="grid md:grid-cols-3 gap-4 text-sm">
-                        <div class="card bg-error/10 border border-error/30">
-                            <div class="card-body p-3">
-                                <h3 class="font-semibold text-sm">Critical (5)</h3>
-                                <ul class="text-xs space-y-1 mt-2 text-base-content/70">
-                                    <li>• Results reproducible</li>
-                                    <li>• Dependencies pinned</li>
-                                    <li>• Environment documented</li>
-                                    <li>• Hyperparameters documented</li>
-                                    <li>• Dataset available</li>
-                                </ul>
-                            </div>
+                    <h2 class="card-title">📋 Evaluation Aspects</h2>
+                    <p class="text-sm text-base-content/70 mt-3">15 reproducibility criteria across three tiers:</p>
+                    <div class="grid md:grid-cols-3 gap-3 mt-4 text-xs">
+                        <div class="p-3 bg-error/10 rounded border border-error/30">
+                            <p class="font-semibold mb-2">Critical (5)</p>
+                            <p class="text-base-content/70">Results reproducibility, dependencies, environment, hyperparameters, dataset availability</p>
                         </div>
-                        
-                        <div class="card bg-warning/10 border border-warning/30">
-                            <div class="card-body p-3">
-                                <h3 class="font-semibold text-sm">High Value (4)</h3>
-                                <ul class="text-xs space-y-1 mt-2 text-base-content/70">
-                                    <li>• Configuration file</li>
-                                    <li>• Test suite</li>
-                                    <li>• Good documentation</li>
-                                    <li>• Randomness controlled</li>
-                                </ul>
-                            </div>
+                        <div class="p-3 bg-warning/10 rounded border border-warning/30">
+                            <p class="font-semibold mb-2">High Value (4)</p>
+                            <p class="text-base-content/70">Configuration, tests, documentation, randomness control</p>
                         </div>
-                        
-                        <div class="card bg-info/10 border border-info/30">
-                            <div class="card-body p-3">
-                                <h3 class="font-semibold text-sm">Nice-to-Have (6)</h3>
-                                <ul class="text-xs space-y-1 mt-2 text-base-content/70">
-                                    <li>• CI/CD pipeline</li>
-                                    <li>• License specified</li>
-                                    <li>• Data versioning</li>
-                                    <li>• Version compatibility</li>
-                                    <li>• Output format doc</li>
-                                    <li>• Requirements spec</li>
-                                </ul>
-                            </div>
+                        <div class="p-3 bg-info/10 rounded border border-info/30">
+                            <p class="font-semibold mb-2">Nice-to-Have (6)</p>
+                            <p class="text-base-content/70">CI/CD, license, data versioning, version compatibility</p>
                         </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Technology Stack -->
-        <section class="mb-12">
+        <!-- Tech Stack -->
+        <section class="mb-10">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title">🛠️ Tech Stack</h2>
-                    <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
+                    <div class="grid md:grid-cols-2 gap-6 mt-4 text-sm">
                         <div>
-                            <h3 class="font-semibold mb-2">Backend</h3>
-                            <ul class="text-base-content/70 space-y-1">
-                                <li>Flask, Peewee ORM</li>
-                                <li>SQLite/PostgreSQL</li>
-                                <li>Python 3.10+</li>
-                            </ul>
+                            <p class="font-semibold mb-2">Backend</p>
+                            <p class="text-base-content/70">Flask, Peewee ORM, SQLite/PostgreSQL, Python 3.10+</p>
                         </div>
                         <div>
-                            <h3 class="font-semibold mb-2">AI & Execution</h3>
-                            <ul class="text-base-content/70 space-y-1">
-                                <li>Claude API / Ollama</li>
-                                <li>Docker sandboxes</li>
-                                <li>Resource isolation</li>
-                            </ul>
+                            <p class="font-semibold mb-2">Frontend</p>
+                            <p class="text-base-content/70">Tailwind CSS, DaisyUI, Vanilla JS, Dark/Light themes</p>
                         </div>
                         <div>
-                            <h3 class="font-semibold mb-2">Frontend</h3>
-                            <ul class="text-base-content/70 space-y-1">
-                                <li>Tailwind + DaisyUI</li>
-                                <li>Vanilla JavaScript</li>
-                                <li>Dark/Light themes</li>
-                            </ul>
+                            <p class="font-semibold mb-2">AI & Execution</p>
+                            <p class="text-base-content/70">Claude API / Ollama, Docker sandboxes, Resource isolation</p>
                         </div>
                         <div>
-                            <h3 class="font-semibold mb-2">DevOps</h3>
-                            <ul class="text-base-content/70 space-y-1">
-                                <li>Docker Compose</li>
-                                <li>Environment config</li>
-                                <li>Production ready</li>
-                            </ul>
+                            <p class="font-semibold mb-2">DevOps</p>
+                            <p class="text-base-content/70">Docker Compose, Environment config, Production-ready</p>
                         </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Quick Links -->
+        <!-- Quick Start -->
         <section class="mb-12">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title mb-4">🚀 Quick Start</h2>
-                    <div class="space-y-2">
-                        <a href="/" class="btn btn-primary gap-2 w-full justify-start">
-                            <span>📤</span>
-                            <span>Analyze a Paper</span>
-                        </a>
-                        <a href="/history" class="btn btn-outline gap-2 w-full justify-start">
-                            <span>📊</span>
-                            <span>View History</span>
-                        </a>
-                        <div class="pt-2 text-sm text-base-content/70">
-                            <p class="font-semibold mb-1">Use the CLI:</p>
-                            <p class="font-mono text-xs">python repro-cli.py -u &lt;url&gt; -k &lt;api_key&gt; -p paper.pdf</p>
-                        </div>
-                    </div>
+                    <h2 class="card-title mb-4">🚀 Get Started</h2>
+                    <a href="/" class="btn btn-primary gap-2 w-full justify-start mb-3">
+                        <span>📤</span>
+                        <span>Analyze a Paper</span>
+                    </a>
+                    <a href="/history" class="btn btn-outline gap-2 w-full justify-start">
+                        <span>📚</span>
+                        <span>View History</span>
+                    </a>
                 </div>
             </div>
         </section>
