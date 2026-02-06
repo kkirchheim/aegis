@@ -461,7 +461,7 @@ def stage_3_evaluation(job_id, app_logger=None):
             code_output=execution.stdout_combined or "",
             execution_log=execution.errors_summary or "",
             llm_provider=None,  # Will use default from config
-            app_logger=app_logger
+            app_logger=logger  # Pass wrapped logger that handles both function and object
         )
         
         elapsed_ms = int((time.time() - start_time) * 1000)
