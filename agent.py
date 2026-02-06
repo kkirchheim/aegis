@@ -38,7 +38,7 @@ def log_message(message: str, severity: str = "info"):
     
     try:
         requests.post(
-            f"{BACKEND_URL}/agent/log",
+            f"{BACKEND_URL}/api/agent/log",
             json={
                 "job_id": JOB_ID,
                 "message": message,
@@ -180,7 +180,7 @@ def ask_claude(state: Dict[str, Any]) -> Optional[Dict[str, str]]:
     """Ask Claude (via backend) what to do next."""
     try:
         response = requests.post(
-            f"{BACKEND_URL}/agent/think",
+            f"{BACKEND_URL}/api/agent/think",
             json={
                 "job_id": JOB_ID,
                 "repo_state": state
@@ -216,7 +216,7 @@ def report_execution_details(state: Dict[str, Any]) -> bool:
         }
         
         response = requests.post(
-            f"{BACKEND_URL}/agent/execution",
+            f"{BACKEND_URL}/api/agent/execution",
             json=execution_details,
             timeout=10
         )
@@ -430,7 +430,7 @@ def report_completion(success: bool, message: str = "", accuracy: Optional[float
             payload["reproducibility_aspects"] = build_reproducibility_aspects(state)
         
         response = requests.post(
-            f"{BACKEND_URL}/agent/complete",
+            f"{BACKEND_URL}/api/agent/complete",
             json=payload,
             timeout=10
         )
@@ -565,7 +565,7 @@ def report_script_result(script_hash: str, exit_code: int, stdout: str,
         }
         
         response = requests.post(
-            f"{BACKEND_URL}/agent/script_result",
+            f"{BACKEND_URL}/api/agent/script_result",
             json=payload,
             timeout=10
         )

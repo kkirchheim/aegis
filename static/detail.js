@@ -21,6 +21,7 @@ const statusSection = document.getElementById("statusSection");
 const progressSection = document.getElementById("progressSection");
 const metadataSection = document.getElementById("metadataSection");
 const citationsSection = document.getElementById("citationsSection");
+const scriptResultsSection = document.getElementById("scriptResultsSection");
 const artifactsSection = document.getElementById("artifactsSection");
 const aspectsSection = document.getElementById("aspectsSection");
 const logSection = document.getElementById("logSection");
@@ -34,6 +35,8 @@ const eventLog = document.getElementById("eventLog");
 const metadataContent = document.getElementById("metadataContent");
 const citationsContent = document.getElementById("citationsContent");
 const citationCount = document.getElementById("citationCount");
+const scriptResultsContent = document.getElementById("scriptResultsContent");
+const scriptResultCount = document.getElementById("scriptResultCount");
 const artifactsContent = document.getElementById("artifactsContent");
 const aspectsContent = document.getElementById("aspectsContent");
 
@@ -210,6 +213,7 @@ async function pollOnce() {
         try { updateMetadata(job); } catch (e) { console.error(`[update] metadata failed:`, e); }
         try { updateCitations(job); } catch (e) { console.error(`[update] citations failed:`, e); }
         try { updateArtifacts(job); } catch (e) { console.error(`[update] artifacts failed:`, e); }
+        try { updateScriptResults(job); } catch (e) { console.error(`[update] scriptResults failed:`, e); }
         try { updateAspects(job); } catch (e) { console.error(`[update] aspects failed:`, e); }
         try { updateAssessment(job); } catch (e) { console.error(`[update] assessment failed:`, e); }
         
@@ -253,6 +257,12 @@ function showRelevantSections(job) {
         const show = Array.isArray(job.artifacts) && job.artifacts.length > 0;
         artifactsSection.style.display = show ? "block" : "none";
         console.log(`[sections] artifactsSection: ${show ? "shown" : "hidden"} (count=${job.artifacts?.length || 0})`);
+    }
+    
+    if (scriptResultsSection) {
+        const show = Array.isArray(job.script_results) && job.script_results.length > 0;
+        scriptResultsSection.style.display = show ? "block" : "none";
+        console.log(`[sections] scriptResultsSection: ${show ? "shown" : "hidden"} (count=${job.script_results?.length || 0})`);
     }
     
     if (aspectsSection) {
@@ -565,6 +575,60 @@ function updateArtifacts(job) {
             return `<div class="mb-4 p-3 bg-base-200 rounded-lg">${type}<div class="text-sm font-semibold">${a.description || a.url || "Artifact"}</div>${description}${link}</div>`;
         })
         .join("");
+}
+
+function updateScriptResults(job) {
+    if (!scriptResultsContent || !scriptResultCount) return;
+    
+    const results = job.script_results || [];
+    
+    // Update badge count
+    scriptResultCount.textContent = results.length;
+    
+    if (results.length === 0) {
+        scriptResultsContent.innerHTML = "<p class='text-base-content/50'>No script results available</p>";
+        return;
+    }
+    
+    scriptResultsContent.innerHTML = results
+        .map(r => {
+            // Status badge: green for exit 0, red for exit 1 or 2
+            const statusColor = r.exit_code === 0 ? "badge-success" : "badge-error";
+            const statusText = r.exit_code === 0 ? "✓ PASS" : "✗ FAIL";
+            
+            // Duration formatting
+            const duration = r.duration_ms ? `${(r.duration_ms / 1000).toFixed(2)}s` : "N/A";
+            
+            // Output sections
+            const stdout = r.stdout ? `<div class="text-xs"><div class="font-semibold text-base-content/70 mb-1">Output:</div><pre class="bg-black text-green-400 p-2 rounded text-xs overflow-x-auto max-h-32">${escapeHtml(r.stdout)}</pre></div>` : "";
+            const stderr = r.stderr ? `<div class="text-xs mt-2"><div class="font-semibold text-base-content/70 mb-1">Errors:</div><pre class="bg-black text-red-400 p-2 rounded text-xs overflow-x-auto max-h-32">${escapeHtml(r.stderr)}</pre></div>` : "";
+            
+            return `<div class="collapse bg-base-200">
+                <input type="checkbox" />
+                <div class="collapse-title font-semibold flex items-center gap-2">
+                    <span class="badge ${statusColor}">${statusText}</span>
+                    <span>${r.script_name}</span>
+                    <span class="text-xs text-base-content/60 ml-auto">Exit: ${r.exit_code} | ${duration}</span>
+                </div>
+                <div class="collapse-content">
+                    ${stdout}
+                    ${stderr}
+                    <div class="text-xs text-base-content/60 mt-2">Executed: ${new Date(r.created_at).toLocaleString()}</div>
+                </div>
+            </div>`;
+        })
+        .join("");
+}
+
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
 }
 
 function updateAspects(job) {

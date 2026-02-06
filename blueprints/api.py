@@ -1582,6 +1582,37 @@ def get_job_full(job_id):
                     if 'aspect_description' not in result:
                         result['aspect_description'] = aspect_info.get('prompt_to_use', '') or aspect_info.get('prompt', '')
         
+        # Fetch and enrich execution script results
+        script_results_data = []
+        try:
+            from models.execution_script import ExecutionScript, ExecutionScriptResult
+            
+            script_results = (
+                ExecutionScriptResult
+                .select()
+                .where(ExecutionScriptResult.job == job_id)
+                .order_by(ExecutionScriptResult.created_at.asc())
+            )
+            
+            for r in script_results:
+                try:
+                    script = ExecutionScript.get_by_id(r.script_hash)
+                    script_name = script.name
+                except:
+                    script_name = "Unknown"
+                
+                script_results_data.append({
+                    "script_name": script_name,
+                    "script_hash": r.script_hash,
+                    "exit_code": r.exit_code,
+                    "stdout": r.stdout or '',
+                    "stderr": r.stderr or '',
+                    "duration_ms": r.duration_ms,
+                    "created_at": r.created_at.isoformat() if hasattr(r.created_at, 'isoformat') else str(r.created_at)
+                })
+        except Exception as e:
+            current_app.logger.error(f"Failed to fetch script results: {e}")
+        
         response = {
             "id": job.id,
             "status": job.status,
@@ -1596,7 +1627,8 @@ def get_job_full(job_id):
             "events": events_list,
             "artifacts": artifacts,
             "paper_analysis": paper_analysis,
-            "evaluation_results": evaluation_results  # Enriched with aspect metadata
+            "evaluation_results": evaluation_results,  # Enriched with aspect metadata
+            "script_results": script_results_data  # Execution script results with names
         }
         
         return response

@@ -163,6 +163,11 @@ class JobDetailSchema(Schema):
         allow_none=True,
         description="Aspect evaluation results: {aspect_id: {status, reasoning}}"
     )
+    script_results = fields.List(
+        fields.Dict(),
+        allow_none=True,
+        description="Execution script results with name, exit code, output, duration"
+    )
     
     class Meta:
         """Metadata configuration for JobDetailSchema."""
