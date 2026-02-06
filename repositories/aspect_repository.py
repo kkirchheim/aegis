@@ -1,6 +1,6 @@
 """Repository layer for Aspect and UserAspect models."""
 
-from typing import Optional, List
+from typing import Optional, List, Union
 from uuid import UUID
 
 from models.aspect import Aspect, UserAspect
@@ -95,7 +95,7 @@ class UserAspectRepository:
     """Data access layer for UserAspect model."""
     
     @staticmethod
-    def get_user_aspects(user_id: UUID) -> List[UserAspect]:
+    def get_user_aspects(user_id: Union[int, UUID]) -> List[UserAspect]:
         """Get all aspects for a user (including deleted)."""
         try:
             return list(
@@ -107,7 +107,7 @@ class UserAspectRepository:
             return []
     
     @staticmethod
-    def get_active_aspects(user_id: UUID) -> List[Aspect]:
+    def get_active_aspects(user_id: Union[int, UUID]) -> List[Aspect]:
         """Get only active aspects for a user (JOIN with Aspect)."""
         try:
             return list(
@@ -125,8 +125,8 @@ class UserAspectRepository:
     
     @staticmethod
     def get_user_aspect(
-        user_id: UUID,
-        aspect_id: UUID
+        user_id: Union[int, UUID],
+        aspect_id: Union[str, UUID]
     ) -> Optional[UserAspect]:
         """Get specific user aspect."""
         try:
@@ -139,8 +139,8 @@ class UserAspectRepository:
     
     @staticmethod
     def create_user_aspect(
-        user_id: UUID,
-        aspect_id: UUID,
+        user_id: Union[int, UUID],
+        aspect_id: Union[str, UUID],
         custom_prompt: Optional[str] = None
     ) -> UserAspect:
         """Create user aspect entry."""
@@ -153,8 +153,8 @@ class UserAspectRepository:
     
     @staticmethod
     def update_user_aspect(
-        user_id: UUID,
-        aspect_id: UUID,
+        user_id: Union[int, UUID],
+        aspect_id: Union[str, UUID],
         is_active: Optional[bool] = None,
         custom_prompt: Optional[str] = None
     ) -> Optional[UserAspect]:
@@ -172,7 +172,7 @@ class UserAspectRepository:
         return user_aspect
     
     @staticmethod
-    def delete_user_aspect(user_id: UUID, aspect_id: UUID) -> bool:
+    def delete_user_aspect(user_id: Union[int, UUID], aspect_id: Union[str, UUID]) -> bool:
         """Soft delete user aspect (mark deleted_at)."""
         from datetime import datetime
         

@@ -1,6 +1,6 @@
 """Aspect service layer - business logic for aspect management."""
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from uuid import UUID
 
 from repositories.aspect_repository import AspectRepository, UserAspectRepository
@@ -40,7 +40,7 @@ class AspectService:
     """Business logic for aspect management."""
     
     @staticmethod
-    def get_or_create_default_aspects(user_id: UUID) -> None:
+    def get_or_create_default_aspects(user_id: Union[int, UUID]) -> None:
         """Seed default aspects for a user on first login (idempotent)."""
         for aspect_data in DEFAULT_ASPECTS:
             # Get or create the global default aspect
@@ -66,13 +66,20 @@ class AspectService:
                 )
     
     @staticmethod
-    def get_all_aspects_for_user(user_id: UUID) -> List[Dict[str, Any]]:
+    def get_all_aspects_for_user(user_id: Union[int, UUID]) -> List[Dict[str, Any]]:
         """Get all aspects for user with their settings.
         
         Returns list of dicts with: {id, name, description, is_default, is_active, custom_prompt}
         """
+        import sys
+        
         # Ensure default aspects are seeded for this user
-        AspectService.get_or_create_default_aspects(user_id)
+        try:
+            AspectService.get_or_create_default_aspects(user_id)
+        except Exception as e:
+            print(f"ERROR seeding default aspects: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
         
         user_aspects = UserAspectRepository.get_user_aspects(user_id)
         results = []
@@ -95,7 +102,7 @@ class AspectService:
     
     @staticmethod
     def create_custom_aspect(
-        user_id: UUID,
+        user_id: Union[int, UUID],
         name: str,
         description: str,
         prompt: str,
@@ -130,8 +137,8 @@ class AspectService:
     
     @staticmethod
     def update_custom_aspect(
-        user_id: UUID,
-        aspect_id: UUID,
+        user_id: Union[int, UUID],
+        aspect_id: Union[str, UUID],
         name: Optional[str] = None,
         description: Optional[str] = None,
         prompt: Optional[str] = None,
@@ -172,7 +179,7 @@ class AspectService:
         }
     
     @staticmethod
-    def delete_custom_aspect(user_id: UUID, aspect_id: UUID) -> None:
+    def delete_custom_aspect(user_id: Union[int, UUID], aspect_id: Union[str, UUID]) -> None:
         """Delete a custom aspect.
         
         Only non-default aspects can be deleted.
@@ -195,7 +202,7 @@ class AspectService:
         UserAspectRepository.delete_user_aspect(user_id, aspect_id)
     
     @staticmethod
-    def activate_aspect(user_id: UUID, aspect_id: UUID) -> None:
+    def activate_aspect(user_id: Union[int, UUID], aspect_id: Union[str, UUID]) -> None:
         """Activate an aspect for a user."""
         user_aspect = UserAspectRepository.get_user_aspect(user_id, aspect_id)
         if not user_aspect:
@@ -208,7 +215,7 @@ class AspectService:
         )
     
     @staticmethod
-    def deactivate_aspect(user_id: UUID, aspect_id: UUID) -> None:
+    def deactivate_aspect(user_id: Union[int, UUID], aspect_id: Union[str, UUID]) -> None:
         """Deactivate an aspect for a user."""
         user_aspect = UserAspectRepository.get_user_aspect(user_id, aspect_id)
         if not user_aspect:
@@ -222,8 +229,8 @@ class AspectService:
     
     @staticmethod
     def override_prompt(
-        user_id: UUID,
-        aspect_id: UUID,
+        user_id: Union[int, UUID],
+        aspect_id: Union[str, UUID],
         custom_prompt: str,
     ) -> None:
         """Override the prompt for a user's aspect."""
@@ -239,7 +246,7 @@ class AspectService:
     
     @staticmethod
     def get_active_aspects_for_evaluation(
-        user_id: UUID,
+        user_id: Union[int, UUID],
     ) -> List[Dict[str, str]]:
         """Get active aspects ready for evaluation.
         
