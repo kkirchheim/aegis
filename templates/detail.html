@@ -272,30 +272,13 @@
 
         <!-- Reproducibility Assessment Section -->
         <section id="assessmentSection" class="mb-8" style="display: none;">
-            <div class="card bg-base-100 shadow-lg">
-                <div class="card-body">
-                    <h2 class="card-title flex items-center gap-2 mb-4">
-                        <span>✅</span>
-                        <span>Reproducibility Assessment</span>
-                    </h2>
-                    
-                    <!-- Assessment Grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4" id="assessment-grid">
-                        <!-- Loaded via JS -->
-                    </div>
-                    
-                    <!-- Assessment Details (collapsible) -->
-                    <details class="collapse bg-base-200">
-                        <summary class="collapse-title font-semibold cursor-pointer">
-                            View Assessment Details
-                        </summary>
-                        <div class="collapse-content">
-                            <div id="assessment-list" class="space-y-4">
-                                <!-- Per-aspect details -->
-                            </div>
-                        </div>
-                    </details>
-                </div>
+            <h2 class="text-2xl font-bold flex items-center gap-2 mb-4">
+                <span>✅</span>
+                <span>Reproducibility Assessment</span>
+            </h2>
+            
+            <div id="assessment-list" class="space-y-2">
+                <!-- Expandable aspect items loaded via JS -->
             </div>
         </section>
 

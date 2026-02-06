@@ -840,15 +840,15 @@ function renderAspectsList(evaluationResults) {
         }[status] || 'badge-secondary';
         
         return `
-            <div class="collapse collapse-arrow border border-base-300 bg-base-100 mb-2">
+            <div class="collapse collapse-arrow border border-base-300 bg-base-100">
                 <input type="checkbox" />
-                <div class="collapse-title flex items-center gap-3 font-semibold cursor-pointer">
-                    <span class="text-xl">${statusIcon}</span>
+                <div class="collapse-title flex items-center gap-3 font-semibold cursor-pointer py-3">
+                    <span class="text-lg">${statusIcon}</span>
                     <span class="flex-1">${escapeHtml(result.aspect_name || 'Aspect')}</span>
                     <span class="badge ${statusBadgeClass} text-xs">${escapeHtml(status)}</span>
                 </div>
-                <div class="collapse-content bg-base-50">
-                    <p class="whitespace-pre-wrap text-sm leading-relaxed">${escapeHtml(result.reasoning || 'No reasoning provided')}</p>
+                <div class="collapse-content">
+                    <p class="text-sm leading-relaxed">${escapeHtml(result.reasoning || 'No reasoning provided')}</p>
                 </div>
             </div>
         `;
