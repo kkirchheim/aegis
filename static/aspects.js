@@ -155,7 +155,7 @@ async function editAspect(aspectId) {
         document.getElementById('modal-title').textContent = 'Edit Aspect';
         document.getElementById('aspect-name').value = aspect.name || '';
         document.getElementById('aspect-description').value = aspect.description || '';
-        document.getElementById('aspect-prompt').value = aspect.custom_prompt || aspect.prompt || '';
+        document.getElementById('aspect-prompt').value = aspect.prompt_to_use || aspect.custom_prompt || aspect.prompt || '';
         
         const form = document.getElementById('aspect-form');
         form.dataset.mode = 'edit';

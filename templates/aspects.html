@@ -34,58 +34,28 @@
         html[data-theme="light"] {
             color-scheme: light;
         }
+        
+        /* Modal centering */
+        .modal {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.modal-open {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal-box {
+            position: relative;
+            margin: 0;
+        }
     </style>
     
     <script src="/static/aspects.js"></script>
 </head>
 <body class="bg-base-100">
-    <!-- Header -->
-    <div class="navbar bg-base-200 shadow-md sticky top-0 z-50">
-        <div class="flex-1 px-4">
-            <a href="/" class="btn btn-ghost gap-2">
-                <span>←</span>
-                <span>Back</span>
-            </a>
-        </div>
-        <div class="flex-auto px-4">
-            <h1 class="text-2xl font-bold">🎯 Reproducibility Aspects</h1>
-        </div>
-        <div class="flex-none px-4 gap-2">
-            <button class="btn btn-sm btn-ghost" onclick="toggleTheme()">
-                <span id="themeIcon">🌙</span>
-            </button>
-
-            <!-- User Menu Dropdown -->
-            {% if session.get('username') %}
-            <div class="dropdown dropdown-end">
-                <button tabindex="0" class="btn btn-ghost btn-sm gap-2">
-                    <span>👤</span>
-                    <span class="hidden sm:inline text-sm">{{ session.get('username') }}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                    </svg>
-                </button>
-                <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
-                    <li class="menu-title">
-                        <span class="text-xs">{{ session.get('username') }}</span>
-                    </li>
-                    <li><a href="/" class="gap-2"><span>📤</span> Upload Paper</a></li>
-                    <li><a href="/history" class="gap-2"><span>📚</span> History</a></li>
-                    <li><a href="/about" class="gap-2"><span>ℹ️</span> About</a></li>
-                    <li><hr class="my-1"></li>
-                    <li>
-                        <form action="/logout" method="POST" style="padding: 0; margin: 0;">
-                            <button type="submit" class="gap-2 text-error">
-                                <span>🚪</span>
-                                <span>Logout</span>
-                            </button>
-                        </form>
-                    </li>
-                </ul>
-            </div>
-            {% endif %}
-        </div>
-    </div>
+    {% include 'navbar.html' %}
 
     <!-- Main Container -->
     <div class="container mx-auto px-4 py-8 max-w-6xl">
