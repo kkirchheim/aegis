@@ -75,22 +75,22 @@ def update_job_status(job_id, status, error_message=None, progress=None, current
             updates[Job.error_message] = error_message
         
         # Log BEFORE updating database
-        print(f"[{job_id}] *** BEFORE DATABASE UPDATE ***", file=sys.stderr)
-        print(f"[{job_id}]     Incoming: status={status}, progress={progress}, stage={current_stage}", file=sys.stderr)
+        # print(f"[{job_id}] *** BEFORE DATABASE UPDATE ***", file=sys.stderr)
+        # print(f"[{job_id}]     Incoming: status={status}, progress={progress}, stage={current_stage}", file=sys.stderr)
         
         # Get current values BEFORE update
         try:
             job_before = Job.get_by_id(job_id)
-            print(f"[{job_id}]     DB Before: progress={job_before.progress}, status={job_before.status}, stage={job_before.current_stage}", file=sys.stderr)
+            # print(f"[{job_id}]     DB Before: progress={job_before.progress}, status={job_before.status}, stage={job_before.current_stage}", file=sys.stderr)
         except:
             print(f"[{job_id}]     DB Before: (job not found)", file=sys.stderr)
         
         # Execute Peewee update with logging
         query = Job.update(updates).where(Job.id == job_id)
-        print(f"[{job_id}]     SQL: {query.sql()}", file=sys.stderr)
+        # print(f"[{job_id}]     SQL: {query.sql()}", file=sys.stderr)
         
         result = query.execute()
-        print(f"[{job_id}]     ✓ Rows affected: {result}", file=sys.stderr)
+        # print(f"[{job_id}]     ✓ Rows affected: {result}", file=sys.stderr)
         
         # If no rows were affected, the job doesn't exist - return early
         if result == 0:
@@ -100,8 +100,8 @@ def update_job_status(job_id, status, error_message=None, progress=None, current
         # Get values AFTER update
         try:
             job_after = Job.get_by_id(job_id)
-            print(f"[{job_id}]     DB After: progress={job_after.progress}, status={job_after.status}, stage={job_after.current_stage}", file=sys.stderr)
-            print(f"[{job_id}]     ✓ CONFIRMED: progress type={type(job_after.progress).__name__}, value={job_after.progress}", file=sys.stderr)
+            # print(f"[{job_id}]     DB After: progress={job_after.progress}, status={job_after.status}, stage={job_after.current_stage}", file=sys.stderr)
+            # print(f"[{job_id}]     ✓ CONFIRMED: progress type={type(job_after.progress).__name__}, value={job_after.progress}", file=sys.stderr)
         except Job.DoesNotExist:
             # This shouldn't happen since we just updated it, but handle gracefully
             print(f"[{job_id}]     ⚠️  Could not fetch updated job", file=sys.stderr)

@@ -231,9 +231,7 @@ def evaluate_paper(
             # No active aspects - skip evaluation
             if app_logger:
                 app_logger.warning(f"[Job {job_id}] No active aspects for user {job.user.id}, skipping evaluation")
-            job.status = "completed"
-            job.set_evaluation_results({})
-            job.save()
+            # Return empty results - orchestrator will handle job.save()
             return {}
         
         # Get paper content
@@ -245,8 +243,7 @@ def evaluate_paper(
         if not prompt:
             if app_logger:
                 app_logger.error(f"[Job {job_id}] Failed to render evaluation prompt")
-            job.status = "error"
-            job.save()
+            # Return empty results on error - orchestrator will handle job.save()
             return {}
         
         # Single LLM call
@@ -264,17 +261,14 @@ def evaluate_paper(
         # Parse response with detailed logging
         evaluation_results = parse_evaluation_response(response, aspects, logger=app_logger)
         
-        # Store results
-        job.set_evaluation_results(evaluation_results)
-        job.status = "completed"
-        job.save()
-        
         # Log summary with per-aspect details
         passed = sum(1 for r in evaluation_results.values() if r.get('status') == 'PASS')
         failed = sum(1 for r in evaluation_results.values() if r.get('status') == 'FAIL')
         unclear = sum(1 for r in evaluation_results.values() if r.get('status') == 'UNCLEAR')
         if app_logger:
-            app_logger.info(f"[Job {job_id}] Evaluation complete: {passed} PASS, {failed} FAIL, {unclear} UNCLEAR")
+            app_logger.info(f"[Job {job_id}] Parsed evaluation results: {len(evaluation_results)} aspects")
+            app_logger.info(f"[Job {job_id}] Evaluation summary: {passed} PASS, {failed} FAIL, {unclear} UNCLEAR")
+            app_logger.info(f"[Job {job_id}] Returning results dict to orchestrator")
             
             # Log failed aspects with reasoning
             for aspect_id, result in evaluation_results.items():
@@ -283,17 +277,14 @@ def evaluate_paper(
                     aspect_name = aspect_info.get('name', aspect_id) if aspect_info else aspect_id
                     _log(app_logger, "warning", f"[Job {job_id}] FAILED: {aspect_name} - {result.get('reasoning', 'No reasoning')[:150]}")
         
+        # NOTE: Do NOT save the job here - let the orchestrator handle all job saves
+        # to avoid transaction conflicts and ensure consistent state
         return evaluation_results
     
     except Exception as e:
         if app_logger:
             app_logger.error(f"[Job {job_id}] Evaluation error: {e}", exc_info=True)
-        try:
-            job = Job.get_by_id(job_id)
-            job.status = "error"
-            job.save()
-        except:
-            pass
+        # Return empty dict on error - orchestrator will handle error status
         return {}
 
 

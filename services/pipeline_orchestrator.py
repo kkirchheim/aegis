@@ -321,7 +321,18 @@ class PipelineOrchestrator:
             job.current_stage = 'evaluation'
             job.progress = 1.0
             job.completed_at = datetime.now()
+            
+            # Log before saving (for debugging)
+            self.logger(f"[{job_id}] Saving {len(evaluation_results)} evaluation results to database")
+            self.logger(f"[{job_id}] evaluation_results JSON length: {len(job.evaluation_results)} chars")
+            
             job.save()
+            
+            # Verify it was saved
+            self.logger(f"[{job_id}] Job saved successfully. Fetching to verify...")
+            verify_job = Job.get_by_id(job_id)
+            verify_results = verify_job.get_evaluation_results()
+            self.logger(f"[{job_id}] Verified {len(verify_results)} aspects in database")
             
             # Emit completion event
             self.emit_event(job_id, "stage_3_complete",
