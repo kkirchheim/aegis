@@ -42,9 +42,9 @@ ASPECT_EVAL_TEMPLATE = """You are evaluating the reproducibility of a research p
 
 For each aspect below, provide:
 - Status: PASS / FAIL / UNCLEAR
-- Reasoning: 1-2 sentences max (plain text, NO markdown formatting, NO asterisks, NO dashes at end)
+- Reasoning: 1-2 sentences max (plain text, NO markdown formatting)
 
-IMPORTANT: Do not use any markdown formatting in your reasoning text. Write plain text only.
+IMPORTANT: Respond with a JSON array. Do not use any markdown formatting in reasoning text.
 
 ---
 
@@ -64,13 +64,18 @@ ASPECTS TO EVALUATE:
 
 ---
 
-RESULTS (format exactly as shown):"""
+RESPONSE FORMAT (JSON array, ONLY valid JSON, no other text):
 
-ASPECT_TEMPLATE = """
-### {aspect_name}
-{aspect_prompt}
+[
+  {{"aspect": "Aspect Name", "status": "PASS|FAIL|UNCLEAR", "reasoning": "Plain text reasoning here"}},
+  ...
+]
 
----"""
+ASPECTS TO EVALUATE AND RESPOND TO:
+"""
+
+ASPECT_TEMPLATE = """{aspect_name}: {aspect_prompt}
+"""
 
 
 # ============================================================================
@@ -98,7 +103,7 @@ def render_evaluation_prompt(
     if not aspects:
         return None
     
-    # Build aspects section
+    # Build aspects section (simple list format for JSON response)
     aspects_text = ""
     for aspect in aspects:
         prompt_to_use = aspect.get('prompt_to_use', aspect.get('prompt', ''))
@@ -124,19 +129,17 @@ def parse_evaluation_response(
     logger=None,
 ) -> Dict[str, Dict[str, str]]:
     """
-    Parse LLM response into per-aspect results.
+    Parse LLM JSON response into per-aspect results.
     
-    Expected format:
-    ### Aspect Name 1
-    Status: PASS
-    Reasoning: ...
-    
-    ### Aspect Name 2
-    Status: FAIL
-    Reasoning: ...
+    Expected format (JSON array):
+    [
+      {"aspect": "Code Availability", "status": "PASS", "reasoning": "..."},
+      {"aspect": "Dependency Documentation", "status": "FAIL", "reasoning": "..."},
+      ...
+    ]
     
     Args:
-        response_text: str - Response from LLM
+        response_text: str - Response from LLM (JSON)
         aspects: List[{id, name, ...}] - Same aspects that were evaluated
         logger: Optional logger (function or logger object)
     
@@ -145,63 +148,79 @@ def parse_evaluation_response(
     """
     results = {}
     
-    for aspect in aspects:
-        aspect_id = str(aspect['id'])
-        aspect_name = aspect['name']
-        
-        # Find section for this aspect: ### AspectName ... next ### or end
-        pattern = rf"### {re.escape(aspect_name)}.*?(?=### |\Z)"
-        match = re.search(pattern, response_text, re.DOTALL | re.IGNORECASE)
-        
-        if not match:
-            # Aspect not found in response
-            results[aspect_id] = {
-                "status": "UNCLEAR",
-                "reasoning": "Response did not include evaluation for this aspect"
-            }
-            if logger:
-                _log(logger, "warning", f"[PARSE] {aspect_name}: NOT FOUND in response")
-            continue
-        
-        section = match.group(0)
-        
-        # Extract status (PASS / FAIL / UNCLEAR)
-        status_match = re.search(r"\b(PASS|FAIL|UNCLEAR)\b", section, re.IGNORECASE)
-        status = status_match.group(1).upper() if status_match else "UNCLEAR"
-        
-        # Extract reasoning (everything after "Reasoning:" or after status line)
-        reasoning_match = re.search(
-            r"(?:Reasoning|reasoning):\s*(.+?)(?=###|\Z)",
-            section,
-            re.DOTALL
-        )
-        if reasoning_match:
-            reasoning = reasoning_match.group(1).strip()[:500]  # Max 500 chars
-        else:
-            # Fallback: take last 2 lines
-            lines = [l.strip() for l in section.split('\n') if l.strip()]
-            reasoning = ' '.join(lines[-2:])[:500]
-        
-        # Clean up markdown formatting from reasoning
-        # Remove leading ** and trailing -- or ---
-        reasoning = reasoning.lstrip('* ')
-        reasoning = re.sub(r'\s*-+\s*$', '', reasoning)
-        
-        results[aspect_id] = {
-            "status": status,
-            "reasoning": reasoning
-        }
-        
-        # Log each aspect result
-        if logger:
-            if status == "PASS":
-                _log(logger, "info", f"[PARSE] {aspect_name}: PASS")
-            elif status == "FAIL":
-                _log(logger, "warning", f"[PARSE] {aspect_name}: FAIL - {reasoning[:100]}")
-            else:
-                _log(logger, "info", f"[PARSE] {aspect_name}: {status}")
+    # Create lookup map: aspect name -> aspect id
+    aspect_lookup = {aspect['name']: str(aspect['id']) for aspect in aspects}
     
-    return results
+    try:
+        # Extract JSON from response (handle wrapped ```json blocks)
+        json_text = response_text.strip()
+        
+        if '```json' in json_text:
+            json_text = json_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in json_text:
+            json_text = json_text.split('```')[1].split('```')[0].strip()
+        
+        # Parse JSON
+        parsed = json.loads(json_text)
+        
+        # Handle both array and object with "evaluations" key
+        if isinstance(parsed, dict) and "evaluations" in parsed:
+            items = parsed["evaluations"]
+        elif isinstance(parsed, list):
+            items = parsed
+        else:
+            if logger:
+                _log(logger, "error", f"[PARSE] Invalid JSON structure: expected array or object with 'evaluations' key")
+            return results
+        
+        # Process each evaluation item
+        for item in items:
+            aspect_name = item.get('aspect') or item.get('name')
+            status = (item.get('status') or 'UNCLEAR').upper()
+            reasoning = item.get('reasoning', '')
+            
+            # Validate status
+            if status not in ['PASS', 'FAIL', 'UNCLEAR']:
+                status = 'UNCLEAR'
+            
+            # Find aspect ID by name
+            aspect_id = aspect_lookup.get(aspect_name)
+            
+            if not aspect_id:
+                if logger:
+                    _log(logger, "warning", f"[PARSE] Unknown aspect name: {aspect_name}")
+                continue
+            
+            # Clean up markdown formatting from reasoning (if any)
+            reasoning = reasoning.lstrip('* ')
+            reasoning = re.sub(r'\s*-+\s*$', '', reasoning)
+            reasoning = reasoning[:500]  # Max 500 chars
+            
+            results[aspect_id] = {
+                "status": status,
+                "reasoning": reasoning
+            }
+            
+            # Log result
+            if logger:
+                if status == "PASS":
+                    _log(logger, "info", f"[PARSE] {aspect_name}: PASS")
+                elif status == "FAIL":
+                    _log(logger, "warning", f"[PARSE] {aspect_name}: FAIL - {reasoning[:100]}")
+                else:
+                    _log(logger, "info", f"[PARSE] {aspect_name}: {status}")
+        
+        return results
+    
+    except json.JSONDecodeError as e:
+        if logger:
+            _log(logger, "error", f"[PARSE] JSON decode error: {str(e)}")
+            _log(logger, "error", f"[PARSE] Response text: {response_text[:500]}")
+        return results
+    except Exception as e:
+        if logger:
+            _log(logger, "error", f"[PARSE] Parsing error: {str(e)}")
+        return results
 
 
 def evaluate_paper(
