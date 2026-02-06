@@ -519,6 +519,12 @@ def run_scripts():
             
             duration_ms = int((time.time() - start_time) * 1000)
             
+            # Log output
+            if result.stdout:
+                log_message(f"Output: {result.stdout}")
+            if result.stderr:
+                log_message(f"Stderr: {result.stderr}", severity="warning")
+            
             # Report result to backend
             report_script_result(
                 script_hash=script_hash,
