@@ -51,13 +51,3 @@ Result: Detailed reproducibility report with 15-aspect scoring.
 
 See `/docs` for full documentation.
 
-## Performance
-
-- Paper extraction: 5-10s
-- Code execution: 2-5 min
-- Evaluation: 10-15s
-- **Total: ~3-5 min per paper**
-
----
-
-MIT License | https://github.com/kkirchheim/paper-reproducibility
