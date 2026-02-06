@@ -147,13 +147,11 @@
                 <button class="btn btn-sm btn-circle btn-ghost" onclick="closeCreateModal()">✕</button>
             </div>
 
-            <div class="divider my-4"></div>
-
             <form onsubmit="handleCreateScript(event)" class="space-y-4">
                 <!-- Script Name -->
                 <div class="form-control">
                     <label class="label">
-                        <span class="label-text font-semibold">Script Name <span class="text-error">*</span></span>
+                        <span class="label-text font-semibold">Name <span class="text-error">*</span></span>
                     </label>
                     <input 
                         id="scriptName" 
@@ -175,8 +173,8 @@
                     </label>
                     <textarea 
                         id="scriptDescription" 
-                        placeholder="What does this script check? (e.g., Validates that all tests are in /tests directory)"
-                        class="textarea textarea-bordered w-full h-20"
+                        placeholder="What does this script check?"
+                        class="textarea textarea-bordered w-full"
                         rows="3"
                     ></textarea>
                 </div>
@@ -188,28 +186,29 @@
                     </label>
                     <textarea 
                         id="scriptText" 
-                        placeholder="#!/bin/bash&#10;# Your validation script here&#10;test -f README.md && exit 0 || exit 1"
-                        class="textarea textarea-bordered font-mono text-sm w-full h-40"
+                        placeholder="#!/bin/bash&#10;# Your validation script here"
+                        class="textarea textarea-bordered font-mono text-sm w-full"
+                        rows="8"
                         required
                     ></textarea>
                     <label class="label">
-                        <span class="label-text-alt text-base-content/60">
-                            Scripts run in your repo directory. Exit 0=PASS, 1=UNDETERMINED, 2+=FAIL
+                        <span class="label-text-alt">
+                            Exit codes: 0=PASS, 1=UNDETERMINED, 2+=FAIL
                         </span>
                     </label>
                 </div>
 
-                <div class="divider my-6"></div>
-
-                <!-- Buttons -->
-                <div class="flex gap-2 justify-end">
-                    <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
-                    <button id="submitBtn" type="submit" class="btn btn-primary">Create Script</button>
+                <!-- Form actions -->
+                <div class="modal-action justify-between">
+                    <button type="button" class="btn btn-ghost" onclick="closeCreateModal()">Cancel</button>
+                    <button id="submitBtn" type="submit" class="btn btn-primary">Save Script</button>
                 </div>
             </form>
         </div>
+
+        <!-- Modal backdrop -->
         <form method="dialog" class="modal-backdrop">
-            <button>close</button>
+            <button onclick="closeCreateModal()">Close</button>
         </form>
     </div>
 

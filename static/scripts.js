@@ -50,7 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
 function openCreateModal() {
     editingScriptHash = null;
     document.getElementById('modalTitle').textContent = 'Create Execution Script';
-    document.getElementById('submitBtn').textContent = 'Create Script';
     scriptNameInput.value = '';
     scriptDescriptionInput.value = '';
     scriptTextInput.value = '#!/bin/bash\n';
@@ -67,7 +66,6 @@ function openEditModal(scriptHash) {
     
     editingScriptHash = scriptHash;
     document.getElementById('modalTitle').textContent = 'Edit Execution Script';
-    document.getElementById('submitBtn').textContent = 'Update Script';
     scriptNameInput.value = script.name;
     scriptDescriptionInput.value = script.description || '';
     scriptTextInput.value = script.script_text_preview || '';
@@ -139,36 +137,31 @@ function renderScripts() {
 }
 
 function renderScriptCard(script) {
-    const statusBadge = script.is_active 
-        ? '<span class="badge badge-success badge-sm">Active</span>'
-        : '<span class="badge badge-outline badge-sm">Inactive</span>';
-    
+    const createdDate = new Date(script.created_at).toLocaleDateString();
+    const customBadge = !script.is_default ? '<span class="badge badge-sm badge-primary whitespace-nowrap flex-shrink-0">CUSTOM</span>' : '';
     const actionButtons = renderScriptActions(script);
     
-    const createdDate = new Date(script.created_at).toLocaleDateString();
-    
     return `
-        <div class="card bg-base-100 shadow-md hover:shadow-lg transition-all">
+        <div class="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow">
             <div class="card-body p-4">
                 <!-- Header: Name + Badge -->
-                <div class="flex items-start justify-between gap-2 mb-2">
-                    <h3 class="card-title text-sm flex-1">${escapeHtml(script.name)}</h3>
-                    ${statusBadge}
+                <div class="flex justify-between items-start gap-2 mb-2">
+                    <h3 class="card-title text-base leading-snug flex-1">${escapeHtml(script.name)}</h3>
+                    ${customBadge}
                 </div>
                 
                 <!-- Description -->
-                <p class="text-xs text-base-content/70 mb-3">
-                    ${script.description ? escapeHtml(script.description) : '<span class="text-base-content/50 italic">No description</span>'}
+                <p class="text-xs text-base-content/60 mb-3 line-clamp-2">
+                    ${script.description ? escapeHtml(script.description) : '<span class="text-base-content/50">No description</span>'}
                 </p>
                 
-                <!-- Metadata -->
-                <div class="text-xs text-base-content/50 mb-4">
-                    <div>By: <strong>${escapeHtml(script.created_by)}</strong></div>
-                    <div>${createdDate}</div>
-                </div>
-                
-                <!-- Actions -->
-                <div class="card-actions justify-end gap-1">
+                <!-- Controls -->
+                <div class="flex flex-col gap-2 mt-auto">
+                    <label class="label cursor-pointer p-0 gap-2">
+                        <input type="checkbox" class="checkbox checkbox-sm script-toggle" ${script.is_active ? 'checked' : ''} onchange="toggleScript('${script.script_hash}', this.checked)">
+                        <span class="label-text text-xs">Active</span>
+                    </label>
+                    
                     ${actionButtons}
                 </div>
             </div>
@@ -178,22 +171,19 @@ function renderScriptCard(script) {
 
 function renderScriptActions(script) {
     if (script.is_default) {
-        // Default scripts: only enable/disable
-        if (script.is_active) {
-            return `<button class="btn btn-xs btn-outline" onclick="deactivateScript('${script.script_hash}')">Disable</button>`;
-        } else {
-            return `<button class="btn btn-xs btn-primary" onclick="activateScript('${script.script_hash}')">Enable</button>`;
-        }
+        // Default scripts: no edit/delete
+        return '';
     } else {
-        // User scripts: enable/disable + edit + delete
-        const toggleBtn = script.is_active
-            ? `<button class="btn btn-xs btn-outline" onclick="deactivateScript('${script.script_hash}')">Disable</button>`
-            : `<button class="btn btn-xs btn-primary" onclick="activateScript('${script.script_hash}')">Enable</button>`;
-        
+        // User scripts: edit + delete buttons
         return `
-            <button class="btn btn-xs" onclick="openEditModal('${script.script_hash}')">Edit</button>
-            ${toggleBtn}
-            <button class="btn btn-xs btn-error" onclick="deleteScript('${script.script_hash}')">Del</button>
+            <div class="flex gap-1">
+                <button class="btn btn-xs btn-ghost flex-1" onclick="openEditModal('${script.script_hash}')" title="Edit">
+                    ✎ Edit
+                </button>
+                <button class="btn btn-xs btn-ghost text-error" onclick="deleteScript('${script.script_hash}')" title="Delete">
+                    🗑
+                </button>
+            </div>
         `;
     }
 }
@@ -201,6 +191,14 @@ function renderScriptActions(script) {
 // ============================================================================
 // Script Actions
 // ============================================================================
+
+function toggleScript(scriptHash, isChecked) {
+    if (isChecked) {
+        activateScript(scriptHash);
+    } else {
+        deactivateScript(scriptHash);
+    }
+}
 
 async function activateScript(scriptHash) {
     try {
