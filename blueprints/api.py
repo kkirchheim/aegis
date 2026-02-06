@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from flask import Blueprint, request, jsonify, session
 from flask_apispec import doc, marshal_with, use_kwargs
-from marshmallow import ValidationError, fields
+from marshmallow import ValidationError, fields, validate
 from utils.decorators import require_auth, require_admin
 from services.cache_service import get_cache_stats, clear_cache
 from models.database import User, db, Job, ChatSession, ChatMessage
