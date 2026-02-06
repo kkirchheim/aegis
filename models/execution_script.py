@@ -11,6 +11,7 @@ class ExecutionScript(BaseModel):
     script_hash = CharField(primary_key=True, max_length=64)  # SHA256 hex
     script_text = TextField()                                  # Full script with shebang
     name = CharField(max_length=255)                          # User-friendly name
+    description = TextField(null=True)                         # What the script checks/validates
     created_at = DateTimeField(default=datetime.now)
     created_by = ForeignKeyField(User, backref='execution_scripts', null=True)
     

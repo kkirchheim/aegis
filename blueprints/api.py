@@ -1598,11 +1598,14 @@ def get_job_full(job_id):
                 try:
                     script = ExecutionScript.get_by_id(r.script_hash)
                     script_name = script.name
+                    script_description = script.description or ""
                 except:
                     script_name = "Unknown"
+                    script_description = ""
                 
                 script_results_data.append({
                     "script_name": script_name,
+                    "script_description": script_description,
                     "script_hash": r.script_hash,
                     "exit_code": r.exit_code,
                     "stdout": r.stdout or '',

@@ -599,16 +599,22 @@ function updateScriptResults(job) {
             // Duration formatting
             const duration = r.duration_ms ? `${(r.duration_ms / 1000).toFixed(2)}s` : "N/A";
             
+            // Description (if present)
+            const description = r.script_description ? `<div class="text-sm text-base-content/70 mt-1">${escapeHtml(r.script_description)}</div>` : "";
+            
             // Output sections
             const stdout = r.stdout ? `<div class="text-xs"><div class="font-semibold text-base-content/70 mb-1">Output:</div><pre class="bg-black text-green-400 p-2 rounded text-xs overflow-x-auto max-h-32">${escapeHtml(r.stdout)}</pre></div>` : "";
             const stderr = r.stderr ? `<div class="text-xs mt-2"><div class="font-semibold text-base-content/70 mb-1">Errors:</div><pre class="bg-black text-red-400 p-2 rounded text-xs overflow-x-auto max-h-32">${escapeHtml(r.stderr)}</pre></div>` : "";
             
             return `<div class="collapse bg-base-200">
                 <input type="checkbox" />
-                <div class="collapse-title font-semibold flex items-center gap-2">
-                    <span class="badge ${statusColor}">${statusText}</span>
-                    <span>${r.script_name}</span>
-                    <span class="text-xs text-base-content/60 ml-auto">Exit: ${r.exit_code} | ${duration}</span>
+                <div class="collapse-title pt-4">
+                    <div class="flex items-center gap-2">
+                        <span class="badge ${statusColor}">${statusText}</span>
+                        <span class="font-semibold">${r.script_name}</span>
+                        <span class="text-xs text-base-content/60 ml-auto">Exit: ${r.exit_code} | ${duration}</span>
+                    </div>
+                    ${description}
                 </div>
                 <div class="collapse-content">
                     ${stdout}
