@@ -297,7 +297,7 @@ class TestAspectService:
             # Should have 3 active default aspects
             assert len(active) == 3
             assert all(
-                set(a.keys()) == {"id", "name", "prompt_to_use"}
+                set(a.keys()) == {"id", "name", "description", "prompt_to_use"}
                 for a in active
             )
     

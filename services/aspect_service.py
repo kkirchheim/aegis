@@ -250,7 +250,7 @@ class AspectService:
     ) -> List[Dict[str, str]]:
         """Get active aspects ready for evaluation.
         
-        Returns list of dicts with: {id, name, prompt_to_use}
+        Returns list of dicts with: {id, name, description, prompt_to_use}
         where prompt_to_use is custom_prompt if set, else default prompt.
         """
         active_aspects = UserAspectRepository.get_active_aspects(user_id)
@@ -272,6 +272,7 @@ class AspectService:
             results.append({
                 "id": str(aspect.id),
                 "name": aspect.name,
+                "description": aspect.description,
                 "prompt_to_use": prompt_to_use,
             })
         
