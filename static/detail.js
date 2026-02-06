@@ -592,9 +592,19 @@ function updateScriptResults(job) {
     
     scriptResultsContent.innerHTML = results
         .map(r => {
-            // Status badge: green for exit 0, red for exit 1 or 2
-            const statusColor = r.exit_code === 0 ? "badge-success" : "badge-error";
-            const statusText = r.exit_code === 0 ? "✓ PASS" : "✗ FAIL";
+            // Status badge based on exit code
+            // 0 = PASS, 1 = UNDETERMINED, 2+ = FAIL
+            let statusColor, statusText;
+            if (r.exit_code === 0) {
+                statusColor = "badge-success";
+                statusText = "✓ PASS";
+            } else if (r.exit_code === 1) {
+                statusColor = "badge-warning";
+                statusText = "? UNDETERMINED";
+            } else {
+                statusColor = "badge-error";
+                statusText = "✗ FAIL";
+            }
             
             // Duration formatting
             const duration = r.duration_ms ? `${(r.duration_ms / 1000).toFixed(2)}s` : "N/A";

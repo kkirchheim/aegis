@@ -1237,7 +1237,8 @@ def agent_script_result(job_id, script_hash, exit_code, stdout, stderr, duration
         
         # Emit event for live display
         emit_event(job_id, {
-            'event': 'script_executed',
+            'step': 'script_executed',
+            'message': f"✓ {script.name} (exit {exit_code})",
             'script_name': script.name,
             'script_hash': script_hash,
             'exit_code': exit_code,
