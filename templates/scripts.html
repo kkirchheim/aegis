@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Execution Scripts</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>🔧</text></svg>">
+    
+    <!-- Tailwind CSS + DaisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+    
+    <style>
+        /* Override primary color to blue */
+        .text-primary { color: #0068b4; }
+        .bg-primary { background-color: #0068b4; }
+        .btn-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .btn-primary:hover { background-color: #004d8f; }
+        .btn-primary:disabled { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .badge-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
+        
+        /* Delete button red */
+        .btn-error { background-color: #ef4444; border-color: #ef4444; color: white; }
+        .btn-error:hover { background-color: #dc2626; }
+    </style>
+</head>
+<body class="bg-base-100">
+    <!-- Header -->
+    <div class="navbar bg-base-200 shadow-md sticky top-0 z-50">
+        <div class="flex-1 px-4">
+            <a href="/" class="btn btn-ghost gap-2">
+                <span>←</span>
+                <span>Back</span>
+            </a>
+        </div>
+        <div class="flex-auto px-4">
+            <h1 class="text-xl font-bold">Execution Scripts</h1>
+        </div>
+        <div class="flex-none px-4 gap-2">
+            <button class="btn btn-sm btn-ghost" onclick="toggleTheme()">
+                <span id="themeIcon">🌙</span>
+            </button>
+
+            <!-- User Menu Dropdown -->
+            {% if session.get('username') %}
+            <div class="dropdown dropdown-end">
+                <button tabindex="0" class="btn btn-ghost btn-sm gap-2">
+                    <span>👤</span>
+                    <span class="hidden sm:inline text-sm">{{ session.get('username') }}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+                <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                    <li class="menu-title">
+                        <span class="text-xs">{{ session.get('username') }}</span>
+                    </li>
+                    <li><a href="/" class="gap-2"><span>📤</span> Upload Paper</a></li>
+                    <li><a href="/history" class="gap-2"><span>📚</span> History</a></li>
+                    <li><a href="/about" class="gap-2"><span>ℹ️</span> About</a></li>
+                    <li><hr class="my-1"></li>
+                    <li>
+                        <form action="/logout" method="POST" style="padding: 0; margin: 0;">
+                            <button type="submit" class="gap-2 text-error">
+                                <span>🚪</span>
+                                <span>Logout</span>
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        
+        <!-- Description Section -->
+        <div class="card bg-base-100 shadow-lg mb-8">
+            <div class="card-body">
+                <h2 class="card-title">
+                    <span>📋</span>
+                    <span>About Scripts</span>
+                </h2>
+                <p class="text-sm text-base-content/70 mb-3">
+                    Execution scripts are programs that run during the reproducibility analysis to validate aspects of the repository. 
+                    You can enable/disable default scripts and create custom ones.
+                </p>
+                <div class="divider my-2"></div>
+                <button id="createScriptBtn" class="btn btn-primary gap-2 w-full sm:w-auto">
+                    <span>➕</span>
+                    <span>Create Custom Script</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Scripts List Section -->
+        <div class="card bg-base-100 shadow-lg">
+            <div class="card-body">
+                <h2 class="card-title flex items-center gap-2">
+                    <span>🔧</span>
+                    <span>Available Scripts</span>
+                    <span class="badge badge-primary ml-auto" id="scriptCount">0</span>
+                </h2>
+                
+                <!-- Scripts Container -->
+                <div id="scriptsList" class="space-y-3 mt-4">
+                    <!-- Scripts loaded via JS -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Create Script Modal -->
+    <dialog id="createScriptModal" class="modal">
+        <div class="modal-box w-full max-w-2xl">
+            <h3 class="font-bold text-lg mb-4">Create Custom Script</h3>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text font-semibold">Script Name</span>
+                </label>
+                <input id="scriptName" type="text" placeholder="e.g., check_tests, verify_docs" class="input input-bordered" />
+            </div>
+            
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text font-semibold">Description</span>
+                </label>
+                <textarea id="scriptDescription" placeholder="What does this script check?" class="textarea textarea-bordered h-20"></textarea>
+            </div>
+            
+            <div class="form-control mb-6">
+                <label class="label">
+                    <span class="label-text font-semibold">Script Code (with shebang)</span>
+                </label>
+                <textarea id="scriptText" placeholder="#!/bin/bash&#10;# Your script here" class="textarea textarea-bordered font-mono text-xs h-40"></textarea>
+            </div>
+            
+            <div class="modal-action">
+                <form method="dialog">
+                    <button class="btn btn-secondary">Cancel</button>
+                </form>
+                <button id="confirmCreateBtn" class="btn btn-primary">Create Script</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>Close</button>
+        </form>
+    </dialog>
+
+    <!-- Theme Toggle Script -->
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+        
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+    </script>
+
+    <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+</body>
+</html>

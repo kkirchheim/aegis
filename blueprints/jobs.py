@@ -115,3 +115,10 @@ def delete_job_endpoint(job_id):
 def aspects_page():
     """Aspects management page - browse and manage reproducibility aspects."""
     return render_template("aspects.html")
+
+
+@jobs_bp.route("/scripts")
+@require_auth
+def scripts_page():
+    """Scripts management page - browse and create execution scripts."""
+    return render_template("scripts.html")
