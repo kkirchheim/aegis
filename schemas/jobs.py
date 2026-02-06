@@ -151,6 +151,10 @@ class JobDetailSchema(Schema):
         allow_none=True,
         description="Final reproducibility report and recommendations"
     )
+    evaluation_results = fields.Dict(
+        allow_none=True,
+        description="Aspect evaluation results: {aspect_id: {status, reasoning}}"
+    )
     
     class Meta:
         """Metadata configuration for JobDetailSchema."""
