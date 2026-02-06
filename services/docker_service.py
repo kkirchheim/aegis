@@ -217,15 +217,36 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
         
         storage_limit_str = f"{storage_limit}g"
         
-        # Get all execution scripts for this job
-        from models.execution_script import ExecutionScript
-        scripts_list = list(ExecutionScript.select())
-        scripts_data = {}
-        for script in scripts_list:
-            scripts_data[script.script_hash] = {
-                "name": script.name,
-                "script_text": script.script_text
-            }
+        # Get active execution scripts for this user
+        try:
+            job = Job.get_by_id(job_id)
+            user_id = job.user_id
+            
+            from services.script_service import ScriptService
+            active_scripts = ScriptService.get_active_scripts_for_user(user_id)
+            
+            scripts_data = {}
+            for script in active_scripts:
+                scripts_data[script['script_hash']] = {
+                    "name": script['name'],
+                    "script_text": script['script_text']
+                }
+            
+            if app_logger:
+                app_logger.info(f"[{job_id}] Found {len(scripts_data)} active scripts for user")
+        except Exception as e:
+            if app_logger:
+                app_logger.warning(f"[{job_id}] Failed to get active scripts: {e}, using all scripts")
+            
+            # Fallback: use all scripts if lookup fails
+            from models.execution_script import ExecutionScript
+            scripts_list = list(ExecutionScript.select())
+            scripts_data = {}
+            for script in scripts_list:
+                scripts_data[script.script_hash] = {
+                    "name": script.name,
+                    "script_text": script.script_text
+                }
         
         # Prepare network configuration
         # If DOCKER_NETWORK is empty, Docker uses default bridge network

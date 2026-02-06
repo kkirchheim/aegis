@@ -1810,3 +1810,190 @@ def get_script_results(job_id):
     
     except Exception as e:
         return {"error": str(e)}, 500
+
+
+# ============================================================================
+# User Script Management API (similar to Aspects)
+# ============================================================================
+# OpenAPI Tags: "Scripts"
+
+@api_bp.route("/user/scripts", methods=["GET"])
+@require_auth
+@doc(
+    tags=["Scripts"],
+    description="List all available scripts (default + user's own)",
+    security=[{"sessionAuth": []}],
+    responses={
+        200: {"description": "Scripts retrieved successfully", "schema": {"type": "object", "properties": {"scripts": {"type": "array"}}}},
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+        500: {"description": "Internal server error", "schema": ErrorSchema()}
+    }
+)
+def list_user_scripts():
+    """Get all available scripts for the user (default + their own)."""
+    from services.script_service import ScriptService
+    
+    try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
+        
+        scripts = ScriptService.get_all_available_scripts(user_id)
+        
+        return {
+            "scripts": scripts,
+            "total": len(scripts)
+        }
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@api_bp.route("/user/scripts", methods=["POST"])
+@require_auth
+@use_kwargs({
+    "name": fields.Str(required=True, validate=validate.Length(min=1, max=255)),
+    "script_text": fields.Str(required=True, validate=validate.Length(min=1)),
+    "description": fields.Str(required=False, missing="")
+}, location="json")
+@marshal_with({"type": "object"}, code=201)
+@marshal_with(ErrorSchema, code=400)
+@marshal_with(ErrorSchema, code=401)
+@marshal_with(ErrorSchema, code=500)
+@doc(
+    tags=["Scripts"],
+    description="Create a new user script",
+    security=[{"sessionAuth": []}],
+    responses={
+        201: {"description": "Script created successfully"},
+        400: {"description": "Invalid input"},
+        401: {"description": "Unauthorized"},
+        500: {"description": "Internal server error"}
+    }
+)
+def create_user_script(name, script_text, description=""):
+    """Create a new user script."""
+    from services.script_service import ScriptService
+    
+    try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
+        
+        result = ScriptService.create_user_script(user_id, name, script_text, description)
+        
+        if not result:
+            return {"error": "Failed to create script"}, 400
+        
+        return result, 201
+    
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@api_bp.route("/user/scripts/<script_hash>/activate", methods=["POST"])
+@require_auth
+@doc(
+    tags=["Scripts"],
+    description="Activate a script for the user",
+    security=[{"sessionAuth": []}],
+    params={
+        "script_hash": {"description": "Script hash", "in": "path"}
+    },
+    responses={
+        200: {"description": "Script activated"},
+        401: {"description": "Unauthorized"},
+        404: {"description": "Script not found"},
+        500: {"description": "Internal server error"}
+    }
+)
+def activate_user_script(script_hash):
+    """Activate a script for the user."""
+    from services.script_service import ScriptService
+    
+    try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
+        
+        success = ScriptService.activate_script(user_id, script_hash)
+        
+        if not success:
+            return {"error": "Script not found"}, 404
+        
+        return {"ok": True}
+    
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@api_bp.route("/user/scripts/<script_hash>/deactivate", methods=["POST"])
+@require_auth
+@doc(
+    tags=["Scripts"],
+    description="Deactivate a script for the user",
+    security=[{"sessionAuth": []}],
+    params={
+        "script_hash": {"description": "Script hash", "in": "path"}
+    },
+    responses={
+        200: {"description": "Script deactivated"},
+        401: {"description": "Unauthorized"},
+        404: {"description": "Script not found"},
+        500: {"description": "Internal server error"}
+    }
+)
+def deactivate_user_script(script_hash):
+    """Deactivate a script for the user."""
+    from services.script_service import ScriptService
+    
+    try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
+        
+        success = ScriptService.deactivate_script(user_id, script_hash)
+        
+        if not success:
+            return {"error": "Script not found"}, 404
+        
+        return {"ok": True}
+    
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@api_bp.route("/user/scripts/<script_hash>", methods=["DELETE"])
+@require_auth
+@doc(
+    tags=["Scripts"],
+    description="Delete a user script (must be owner)",
+    security=[{"sessionAuth": []}],
+    params={
+        "script_hash": {"description": "Script hash", "in": "path"}
+    },
+    responses={
+        204: {"description": "Script deleted"},
+        401: {"description": "Unauthorized"},
+        403: {"description": "Forbidden - not the script owner"},
+        404: {"description": "Script not found"},
+        500: {"description": "Internal server error"}
+    }
+)
+def delete_user_script(script_hash):
+    """Delete a user script (only if user created it)."""
+    from services.script_service import ScriptService
+    
+    try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
+        
+        success = ScriptService.delete_user_script(user_id, script_hash)
+        
+        if not success:
+            return {"error": "Script not found or access denied"}, 404
+        
+        return "", 204
+    
+    except Exception as e:
+        return {"error": str(e)}, 500
