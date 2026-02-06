@@ -108,3 +108,10 @@ def delete_job_endpoint(job_id):
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@jobs_bp.route("/aspects")
+@require_auth
+def aspects_page():
+    """Aspects management page - browse and manage reproducibility aspects."""
+    return render_template("aspects.html")

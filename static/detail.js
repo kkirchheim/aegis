@@ -211,6 +211,7 @@ async function pollOnce() {
         try { updateCitations(job); } catch (e) { console.error(`[update] citations failed:`, e); }
         try { updateArtifacts(job); } catch (e) { console.error(`[update] artifacts failed:`, e); }
         try { updateAspects(job); } catch (e) { console.error(`[update] aspects failed:`, e); }
+        try { updateAssessment(job); } catch (e) { console.error(`[update] assessment failed:`, e); }
         
         // Stop polling when complete
         if (job.status === "completed" || job.status === "failed") {
@@ -258,6 +259,14 @@ function showRelevantSections(job) {
         const show = job.report && Array.isArray(job.report.aspect_evaluations) && job.report.aspect_evaluations.length > 0;
         aspectsSection.style.display = show ? "block" : "none";
         console.log(`[sections] aspectsSection: ${show ? "shown" : "hidden"} (count=${job.report?.aspect_evaluations?.length || 0})`);
+    }
+    
+    // Show assessment section if we have evaluation results
+    const assessmentSection = document.getElementById('assessmentSection');
+    if (assessmentSection) {
+        const show = job.evaluation_results && Object.keys(job.evaluation_results).length > 0;
+        assessmentSection.style.display = show ? "block" : "none";
+        console.log(`[sections] assessmentSection: ${show ? "shown" : "hidden"} (count=${Object.keys(job.evaluation_results || {}).length})`);
     }
     
     // Show log if we have events
@@ -778,4 +787,117 @@ async function clearChat() {
         console.error('Error clearing chat:', error);
         alert('Failed to clear chat history');
     }
+}
+
+// ============================================================================
+// Assessment/Evaluation Results Rendering
+// ============================================================================
+
+function updateAssessment(job) {
+    const assessmentSection = document.getElementById('assessmentSection');
+    if (!assessmentSection) {
+        console.warn('[update] assessmentSection not found');
+        return;
+    }
+    
+    // Check if we have evaluation_results
+    if (!job.evaluation_results || Object.keys(job.evaluation_results).length === 0) {
+        assessmentSection.style.display = 'none';
+        return;
+    }
+    
+    // Show assessment section
+    assessmentSection.style.display = 'block';
+    
+    // Render assessment grid (cards)
+    renderAssessmentGrid(job.evaluation_results);
+    
+    // Render assessment details (collapsible)
+    renderAssessmentDetails(job.evaluation_results);
+}
+
+function renderAssessmentGrid(evaluationResults) {
+    const grid = document.getElementById('assessment-grid');
+    if (!grid) {
+        console.warn('[assessment] assessment-grid not found');
+        return;
+    }
+    
+    const cards = Object.entries(evaluationResults).map(([aspectId, result]) => {
+        const statusIcon = {
+            'PASS': '✅',
+            'FAIL': '❌',
+            'UNCLEAR': '⚠️'
+        }[result.status] || '❓';
+        
+        const statusClass = {
+            'PASS': 'badge-success',
+            'FAIL': 'badge-error',
+            'UNCLEAR': 'badge-warning'
+        }[result.status] || 'badge-secondary';
+        
+        return `
+            <div class="card bg-base-200 shadow-sm" data-aspect-id="${aspectId}">
+                <div class="card-body p-4">
+                    <div class="flex items-start gap-3">
+                        <div class="text-3xl">${statusIcon}</div>
+                        <div class="flex-1">
+                            <h4 class="font-semibold">${escapeHtml(result.aspect_name || 'Aspect')}</h4>
+                            <p class="text-sm text-base-content/70">${escapeHtml(result.status)}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    grid.innerHTML = cards;
+}
+
+function renderAssessmentDetails(evaluationResults) {
+    const list = document.getElementById('assessment-list');
+    if (!list) {
+        console.warn('[assessment] assessment-list not found');
+        return;
+    }
+    
+    const details = Object.entries(evaluationResults).map(([aspectId, result]) => {
+        const statusClass = {
+            'PASS': 'bg-success/10 text-success-content',
+            'FAIL': 'bg-error/10 text-error-content',
+            'UNCLEAR': 'bg-warning/10 text-warning-content'
+        }[result.status] || 'bg-base-300';
+        
+        const statusBadgeClass = {
+            'PASS': 'badge-success',
+            'FAIL': 'badge-error',
+            'UNCLEAR': 'badge-warning'
+        }[result.status] || 'badge-secondary';
+        
+        return `
+            <div class="card bg-base-200" data-aspect-id="${aspectId}">
+                <div class="card-body">
+                    <div class="flex justify-between items-start gap-4 mb-2">
+                        <h4 class="font-semibold">${escapeHtml(result.aspect_name || 'Aspect')}</h4>
+                        <span class="badge ${statusBadgeClass}">${escapeHtml(result.status)}</span>
+                    </div>
+                    <p class="text-sm text-base-content/70">${escapeHtml(result.reasoning || 'No reasoning provided')}</p>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    list.innerHTML = details;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
 }

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aspects - Paper Reproducibility</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
+    
+    <!-- Tailwind CSS + DaisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+    
+    <!-- Custom styles -->
+    <style>
+        /* Override primary color to blue */
+        .text-primary { color: #0068b4; }
+        .bg-primary { background-color: #0068b4; }
+        .btn-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .btn-primary:hover { background-color: #004d8f; }
+        .btn-primary:disabled { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .badge-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .link-primary { color: #0068b4; }
+        
+        /* Secondary button red */
+        .btn-secondary { background-color: #ef4444; border-color: #ef4444; color: white; }
+        .btn-secondary:hover { background-color: #dc2626; }
+        
+        /* Delete button red */
+        .btn-error { background-color: #ef4444; border-color: #ef4444; color: white; }
+        .btn-error:hover { background-color: #dc2626; }
+    </style>
+    
+    <link rel="stylesheet" href="/static/aspects.css">
+    <script src="/static/aspects.js"></script>
+</head>
+<body class="bg-base-100">
+    <!-- Header -->
+    <div class="navbar bg-base-200 shadow-md sticky top-0 z-50">
+        <div class="flex-1 px-4">
+            <a href="/" class="btn btn-ghost gap-2">
+                <span>←</span>
+                <span>Back</span>
+            </a>
+        </div>
+        <div class="flex-auto px-4">
+            <h1 class="text-2xl font-bold">🎯 Reproducibility Aspects</h1>
+        </div>
+        <div class="flex-none px-4 gap-2">
+            <button class="btn btn-sm btn-ghost" onclick="toggleTheme()">
+                <span id="themeIcon">🌙</span>
+            </button>
+
+            <!-- User Menu Dropdown -->
+            {% if session.get('username') %}
+            <div class="dropdown dropdown-end">
+                <button tabindex="0" class="btn btn-ghost btn-sm gap-2">
+                    <span>👤</span>
+                    <span class="hidden sm:inline text-sm">{{ session.get('username') }}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+                <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                    <li class="menu-title">
+                        <span class="text-xs">{{ session.get('username') }}</span>
+                    </li>
+                    <li><a href="/" class="gap-2"><span>📤</span> Upload Paper</a></li>
+                    <li><a href="/history" class="gap-2"><span>📚</span> History</a></li>
+                    <li><a href="/about" class="gap-2"><span>ℹ️</span> About</a></li>
+                    <li><hr class="my-1"></li>
+                    <li>
+                        <form action="/logout" method="POST" style="padding: 0; margin: 0;">
+                            <button type="submit" class="gap-2 text-error">
+                                <span>🚪</span>
+                                <span>Logout</span>
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        
+        <!-- Error Alert -->
+        <div id="errorAlert" class="alert alert-error shadow-lg mb-4" style="display: none;">
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2m2-2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span id="errorMessage"></span>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="flex justify-center items-center py-12">
+            <div class="loading loading-spinner loading-lg text-primary"></div>
+        </div>
+
+        <!-- Content (hidden during loading) -->
+        <div id="contentState" style="display: none;">
+            
+            <!-- Default Aspects Section -->
+            <section class="mb-8">
+                <div class="card bg-base-100 shadow-lg">
+                    <div class="card-body">
+                        <h2 class="card-title flex items-center gap-2 mb-6">
+                            <span>📋</span>
+                            <span>Default Aspects</span>
+                        </h2>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" id="default-aspects">
+                            <!-- Loaded via JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Custom Aspects Section -->
+            <section class="mb-8">
+                <div class="card bg-base-100 shadow-lg">
+                    <div class="card-body">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="card-title flex items-center gap-2">
+                                <span>🎨</span>
+                                <span>Custom Aspects</span>
+                            </h2>
+                            <button class="btn btn-primary btn-sm gap-2" onclick="openCreateModal()">
+                                <span>+</span>
+                                <span>Add Custom Aspect</span>
+                            </button>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" id="custom-aspects">
+                            <!-- Loaded via JS -->
+                        </div>
+
+                        <!-- Empty state for custom aspects -->
+                        <div id="emptyCustomAspects" class="text-center py-8 text-base-content/60">
+                            <p class="text-lg">No custom aspects yet</p>
+                            <p class="text-sm">Create your first custom aspect to get started</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+    </div>
+
+    <!-- Create/Edit Modal -->
+    <div id="aspect-modal" class="modal" style="display: none;">
+        <div class="modal-box w-11/12 max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="modal-title" class="text-2xl font-bold">Create Reproducibility Aspect</h2>
+                <button class="btn btn-sm btn-circle btn-ghost" onclick="closeAspectModal()">✕</button>
+            </div>
+
+            <form id="aspect-form" onsubmit="submitAspectForm(event)" class="space-y-4">
+                
+                <!-- Name field -->
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Name <span class="text-error">*</span></span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="aspect-name" 
+                        name="name" 
+                        placeholder="e.g., Code Availability"
+                        maxlength="255"
+                        required
+                        class="input input-bordered w-full"
+                    >
+                    <label class="label">
+                        <span class="label-text-alt">1-255 characters</span>
+                    </label>
+                </div>
+
+                <!-- Description field -->
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Description <span class="text-error">*</span></span>
+                    </label>
+                    <textarea 
+                        id="aspect-description" 
+                        name="description" 
+                        placeholder="Brief explanation of this aspect"
+                        rows="3"
+                        required
+                        class="textarea textarea-bordered w-full font-sans"
+                    ></textarea>
+                </div>
+
+                <!-- Prompt field -->
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Evaluation Prompt <span class="text-error">*</span></span>
+                    </label>
+                    <textarea 
+                        id="aspect-prompt" 
+                        name="prompt" 
+                        placeholder="Write the prompt that will be given to the model..."
+                        rows="8"
+                        required
+                        class="textarea textarea-bordered w-full font-mono text-sm"
+                    ></textarea>
+                    <label class="label">
+                        <span class="label-text-alt">The model will use this prompt to evaluate the aspect</span>
+                    </label>
+                </div>
+
+                <!-- Template variables info -->
+                <div class="alert alert-info">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div class="text-sm">
+                        <p class="font-semibold mb-2">Available template variables:</p>
+                        <ul class="space-y-1">
+                            <li><code class="badge badge-ghost">{paper_content}</code> - Full paper text</li>
+                            <li><code class="badge badge-ghost">{code_output}</code> - Code execution output</li>
+                            <li><code class="badge badge-ghost">{execution_log}</code> - Code execution log</li>
+                            <li><code class="badge badge-ghost">{paper_metadata}</code> - Paper title, abstract, citations</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Error message -->
+                <div id="modal-error" class="alert alert-error" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2m2-2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span id="modal-error-message"></span>
+                </div>
+
+                <!-- Form actions -->
+                <div class="modal-action justify-between">
+                    <button type="button" class="btn btn-ghost" onclick="closeAspectModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Aspect</button>
+                </div>
+
+            </form>
+        </div>
+
+        <!-- Modal backdrop -->
+        <form method="dialog" class="modal-backdrop">
+            <button onclick="closeAspectModal()">Close</button>
+        </form>
+    </div>
+
+    <!-- Theme toggle script -->
+    <script>
+        // Initialize theme from localStorage or system preference
+        function initTheme() {
+            const saved = localStorage.getItem('theme');
+            const preferred = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            const theme = saved || preferred;
+            
+            const html = document.documentElement;
+            html.setAttribute('data-theme', theme);
+            updateThemeIcon();
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const newTheme = current === 'light' ? 'dark' : 'light';
+            
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon();
+        }
+
+        function updateThemeIcon() {
+            const html = document.documentElement;
+            const theme = html.getAttribute('data-theme');
+            document.getElementById('themeIcon').textContent = theme === 'light' ? '🌙' : '☀️';
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            loadAspects();
+        });
+    </script>
+
+</body>
+</html>
