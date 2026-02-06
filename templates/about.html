@@ -46,29 +46,34 @@
         </section>
 
         <!-- How It Works -->
-        <section class="mb-10">
+        <section class="mb-12">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title">⚙️ Pipeline</h2>
-                    <div class="grid md:grid-cols-4 gap-2 mt-4 text-sm">
-                        <div class="text-center p-3 bg-base-200 rounded">
-                            <p class="font-semibold">📤 Upload</p>
-                            <p class="text-xs text-base-content/70">PDF paper</p>
+                    <h2 class="card-title">⚙️ How It Works</h2>
+                    <div class="steps steps-vertical lg:steps-horizontal w-full mt-4">
+                        <div class="step step-primary">
+                            <div class="step-content">
+                                <h3 class="font-semibold">Upload</h3>
+                                <p class="text-xs text-base-content/70">Submit a PDF paper</p>
+                            </div>
                         </div>
-                        <div class="hidden md:flex items-center justify-center">→</div>
-                        <div class="text-center p-3 bg-base-200 rounded">
-                            <p class="font-semibold">🔍 Analyze</p>
-                            <p class="text-xs text-base-content/70">Extract code</p>
+                        <div class="step step-primary">
+                            <div class="step-content">
+                                <h3 class="font-semibold">Analyze</h3>
+                                <p class="text-xs text-base-content/70">Claude extracts code & methodology</p>
+                            </div>
                         </div>
-                        <div class="hidden md:flex items-center justify-center">→</div>
-                        <div class="text-center p-3 bg-base-200 rounded">
-                            <p class="font-semibold">⚡ Execute</p>
-                            <p class="text-xs text-base-content/70">Run code</p>
+                        <div class="step step-primary">
+                            <div class="step-content">
+                                <h3 class="font-semibold">Execute</h3>
+                                <p class="text-xs text-base-content/70">Run code in Docker sandbox</p>
+                            </div>
                         </div>
-                        <div class="hidden md:flex items-center justify-center">→</div>
-                        <div class="text-center p-3 bg-base-200 rounded">
-                            <p class="font-semibold">✅ Score</p>
-                            <p class="text-xs text-base-content/70">Evaluate</p>
+                        <div class="step step-primary">
+                            <div class="step-content">
+                                <h3 class="font-semibold">Evaluate</h3>
+                                <p class="text-xs text-base-content/70">Score reproducibility aspects</p>
+                            </div>
                         </div>
                     </div>
                 </div>
