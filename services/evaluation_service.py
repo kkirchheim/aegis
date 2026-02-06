@@ -1,12 +1,256 @@
 """Evaluation service - reproducibility evaluation and aspect checking."""
 
 import json
+import re
 import time
 import hashlib
+from typing import List, Dict, Optional, Any
 from config import Config
 from models.database import PaperAnalysis, ExecutionDetails, Artifact, Job, AspectEvaluation
 from repositories import PaperAnalysisRepository, ExecutionDetailsRepository, AspectEvaluationRepository, JobRepository
 from services.cache_service import get_cached_evaluation, store_evaluation_cache
+
+
+# ============================================================================
+# Phase 4: Unified Evaluation Prompt Templates
+# ============================================================================
+
+ASPECT_EVAL_TEMPLATE = """You are evaluating the reproducibility of a research paper across multiple dimensions.
+
+For each aspect below, provide:
+- Status: PASS / FAIL / UNCLEAR
+- Reasoning: 1-2 sentences max
+
+---
+
+PAPER CONTENT:
+{paper_content}
+
+CODE EXECUTION OUTPUT:
+{code_output}
+
+EXECUTION LOG:
+{execution_log}
+
+---
+
+ASPECTS TO EVALUATE:
+{aspects_list}
+
+---
+
+RESULTS (format exactly as shown):"""
+
+ASPECT_TEMPLATE = """
+### {aspect_name}
+{aspect_prompt}
+
+---"""
+
+
+# ============================================================================
+# Phase 4: Unified Evaluation Pipeline Functions
+# ============================================================================
+
+def render_evaluation_prompt(
+    aspects: List[Dict[str, str]],
+    paper_content: str,
+    code_output: str,
+    execution_log: str,
+) -> Optional[str]:
+    """
+    Merge all active aspects into single evaluation prompt.
+    
+    Args:
+        aspects: List[{id, name, prompt_to_use}] - from AspectService.get_active_aspects_for_evaluation()
+        paper_content: str - Content from paper analysis
+        code_output: str - Output from code execution
+        execution_log: str - Log from code execution
+    
+    Returns:
+        str - Full prompt ready for LLM, or None if no aspects
+    """
+    if not aspects:
+        return None
+    
+    # Build aspects section
+    aspects_text = ""
+    for aspect in aspects:
+        prompt_to_use = aspect.get('prompt_to_use', aspect.get('prompt', ''))
+        aspects_text += ASPECT_TEMPLATE.format(
+            aspect_name=aspect['name'],
+            aspect_prompt=prompt_to_use
+        )
+    
+    # Render full prompt with context (truncate to reasonable sizes)
+    full_prompt = ASPECT_EVAL_TEMPLATE.format(
+        paper_content=paper_content[:20000] if paper_content else "",
+        code_output=code_output[:10000] if code_output else "",
+        execution_log=execution_log[:5000] if execution_log else "",
+        aspects_list=aspects_text
+    )
+    
+    return full_prompt
+
+
+def parse_evaluation_response(
+    response_text: str,
+    aspects: List[Dict[str, str]],
+) -> Dict[str, Dict[str, str]]:
+    """
+    Parse LLM response into per-aspect results.
+    
+    Expected format:
+    ### Aspect Name 1
+    Status: PASS
+    Reasoning: ...
+    
+    ### Aspect Name 2
+    Status: FAIL
+    Reasoning: ...
+    
+    Args:
+        response_text: str - Response from LLM
+        aspects: List[{id, name, ...}] - Same aspects that were evaluated
+    
+    Returns:
+        dict: {aspect_id: {status, reasoning}} or empty dict if parsing fails
+    """
+    results = {}
+    
+    for aspect in aspects:
+        aspect_id = str(aspect['id'])
+        aspect_name = aspect['name']
+        
+        # Find section for this aspect: ### AspectName ... next ### or end
+        pattern = rf"### {re.escape(aspect_name)}.*?(?=### |\Z)"
+        match = re.search(pattern, response_text, re.DOTALL | re.IGNORECASE)
+        
+        if not match:
+            # Aspect not found in response
+            results[aspect_id] = {
+                "status": "UNCLEAR",
+                "reasoning": "Response did not include evaluation for this aspect"
+            }
+            continue
+        
+        section = match.group(0)
+        
+        # Extract status (PASS / FAIL / UNCLEAR)
+        status_match = re.search(r"\b(PASS|FAIL|UNCLEAR)\b", section, re.IGNORECASE)
+        status = status_match.group(1).upper() if status_match else "UNCLEAR"
+        
+        # Extract reasoning (everything after "Reasoning:" or after status line)
+        reasoning_match = re.search(
+            r"(?:Reasoning|reasoning):\s*(.+?)(?=###|\Z)",
+            section,
+            re.DOTALL
+        )
+        if reasoning_match:
+            reasoning = reasoning_match.group(1).strip()[:500]  # Max 500 chars
+        else:
+            # Fallback: take last 2 lines
+            lines = [l.strip() for l in section.split('\n') if l.strip()]
+            reasoning = ' '.join(lines[-2:])[:500]
+        
+        results[aspect_id] = {
+            "status": status,
+            "reasoning": reasoning
+        }
+    
+    return results
+
+
+def evaluate_paper(
+    job_id: str,
+    paper_analysis: PaperAnalysis,
+    code_output: str,
+    execution_log: str,
+    llm_provider,
+    app_logger=None,
+) -> Dict[str, Dict[str, str]]:
+    """
+    Single LLM call to evaluate all active aspects (Phase 4).
+    
+    Args:
+        job_id: str - Job ID
+        paper_analysis: PaperAnalysis - Paper analysis result
+        code_output: str - Code execution output
+        execution_log: str - Code execution log
+        llm_provider: LLM provider instance
+        app_logger: Optional logger
+    
+    Returns:
+        dict: evaluation_results {aspect_id: {status, reasoning}}
+    """
+    from services.aspect_service import AspectService
+    
+    try:
+        job = Job.get_by_id(job_id)
+        
+        # Get active aspects for this user
+        aspects = AspectService.get_active_aspects_for_evaluation(job.user.id)
+        
+        if not aspects:
+            # No active aspects - skip evaluation
+            if app_logger:
+                app_logger.warning(f"[Job {job_id}] No active aspects for user {job.user.id}, skipping evaluation")
+            job.status = "completed"
+            job.set_evaluation_results({})
+            job.save()
+            return {}
+        
+        # Get paper content
+        paper_content = paper_analysis.extracted_text or ""
+        
+        # Render unified prompt
+        prompt = render_evaluation_prompt(aspects, paper_content, code_output, execution_log)
+        
+        if not prompt:
+            if app_logger:
+                app_logger.error(f"[Job {job_id}] Failed to render evaluation prompt")
+            job.status = "error"
+            job.save()
+            return {}
+        
+        # Single LLM call
+        if app_logger:
+            app_logger.info(f"[Job {job_id}] Calling LLM for evaluation ({len(aspects)} aspects)")
+        
+        response = llm_provider.complete(
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }],
+            max_tokens=3000
+        )
+        
+        # Parse response
+        evaluation_results = parse_evaluation_response(response, aspects)
+        
+        # Store results
+        job.set_evaluation_results(evaluation_results)
+        job.status = "completed"
+        job.save()
+        
+        # Log summary
+        passed = sum(1 for r in evaluation_results.values() if r.get('status') == 'PASS')
+        failed = sum(1 for r in evaluation_results.values() if r.get('status') == 'FAIL')
+        if app_logger:
+            app_logger.info(f"[Job {job_id}] Evaluation complete: {passed} passed, {failed} failed")
+        
+        return evaluation_results
+    
+    except Exception as e:
+        if app_logger:
+            app_logger.error(f"[Job {job_id}] Evaluation error: {e}", exc_info=True)
+        try:
+            job = Job.get_by_id(job_id)
+            job.status = "error"
+            job.save()
+        except:
+            pass
+        return {}
 
 
 def evaluate_reproducibility_aspects(job_id, llm_provider, app_logger=None, emit_event=None):

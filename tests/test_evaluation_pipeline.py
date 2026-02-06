@@ -1,0 +1,749 @@
+"""Tests for Phase 4 evaluation pipeline integration."""
+
+import pytest
+import json
+from uuid import uuid4
+from unittest.mock import Mock, MagicMock, patch
+
+from models.database import User, Job, PaperAnalysis, ExecutionDetails
+from models.aspect import Aspect, UserAspect
+from services.evaluation_service import (
+    render_evaluation_prompt,
+    parse_evaluation_response,
+    evaluate_paper,
+)
+from services.aspect_service import AspectService
+from repositories.aspect_repository import AspectRepository, UserAspectRepository
+
+
+# ============================================================================
+# Fixtures
+# ============================================================================
+
+@pytest.fixture
+def user_with_aspects(app):
+    """Create a user with default aspects."""
+    with app.app_context():
+        user = User.create(
+            username="testuser",
+            email="test@example.com",
+            password_hash="hash",
+        )
+        AspectService.get_or_create_default_aspects(user.id)
+        return user
+
+
+@pytest.fixture
+def mock_llm_provider():
+    """Create a mock LLM provider."""
+    provider = Mock()
+    provider.complete = Mock(return_value="")
+    return provider
+
+
+# ============================================================================
+# Prompt Rendering Tests
+# ============================================================================
+
+@pytest.mark.db
+class TestPromptRendering:
+    """Tests for render_evaluation_prompt function."""
+    
+    def test_render_with_single_aspect(self):
+        """Test rendering prompt with single aspect."""
+        aspects = [
+            {
+                "id": "aspect-1",
+                "name": "Code Availability",
+                "prompt_to_use": "Is code available?"
+            }
+        ]
+        paper_content = "This is the paper content."
+        code_output = "This is the code output."
+        execution_log = "This is the execution log."
+        
+        result = render_evaluation_prompt(
+            aspects, paper_content, code_output, execution_log
+        )
+        
+        assert result is not None
+        assert "Code Availability" in result
+        assert "Is code available?" in result
+        assert "This is the paper content." in result
+        assert "This is the code output." in result
+        assert "This is the execution log." in result
+    
+    def test_render_with_multiple_aspects(self):
+        """Test rendering prompt with multiple aspects."""
+        aspects = [
+            {
+                "id": "aspect-1",
+                "name": "Code Availability",
+                "prompt_to_use": "Is code available?"
+            },
+            {
+                "id": "aspect-2",
+                "name": "Dependencies",
+                "prompt_to_use": "Are dependencies documented?"
+            },
+            {
+                "id": "aspect-3",
+                "name": "Reproducibility",
+                "prompt_to_use": "Can results be reproduced?"
+            }
+        ]
+        paper_content = "Paper content"
+        code_output = "Output"
+        execution_log = "Log"
+        
+        result = render_evaluation_prompt(
+            aspects, paper_content, code_output, execution_log
+        )
+        
+        assert result is not None
+        assert "Code Availability" in result
+        assert "Dependencies" in result
+        assert "Reproducibility" in result
+        assert result.count("###") >= 3  # At least 3 aspect headers
+    
+    def test_render_respects_custom_prompt(self):
+        """Test rendering respects custom prompt override."""
+        aspects = [
+            {
+                "id": "aspect-1",
+                "name": "Code Availability",
+                "prompt_to_use": "CUSTOM PROMPT FOR CODE"
+            }
+        ]
+        
+        result = render_evaluation_prompt(
+            aspects, "content", "output", "log"
+        )
+        
+        assert "CUSTOM PROMPT FOR CODE" in result
+        assert "Is code available?" not in result  # Original prompt should not appear
+    
+    def test_render_truncates_large_context(self):
+        """Test rendering truncates large context."""
+        large_paper = "x" * 30000  # Larger than 20000 limit
+        large_output = "y" * 15000  # Larger than 10000 limit
+        large_log = "z" * 10000  # Larger than 5000 limit
+        
+        aspects = [
+            {
+                "id": "aspect-1",
+                "name": "Test",
+                "prompt_to_use": "Test prompt"
+            }
+        ]
+        
+        result = render_evaluation_prompt(
+            aspects, large_paper, large_output, large_log
+        )
+        
+        assert result is not None
+        # Check content is truncated (not exact length matching due to formatting)
+        assert large_paper[:20000] in result
+        assert large_output[:10000] in result
+        assert large_log[:5000] in result
+    
+    def test_render_handles_missing_context_gracefully(self):
+        """Test rendering handles missing context gracefully."""
+        aspects = [
+            {
+                "id": "aspect-1",
+                "name": "Test",
+                "prompt_to_use": "Test prompt"
+            }
+        ]
+        
+        # All None
+        result = render_evaluation_prompt(aspects, None, None, None)
+        assert result is not None
+        
+        # Empty strings
+        result = render_evaluation_prompt(aspects, "", "", "")
+        assert result is not None
+    
+    def test_render_with_empty_aspects_returns_none(self):
+        """Test rendering with empty aspects list returns None."""
+        result = render_evaluation_prompt([], "content", "output", "log")
+        assert result is None
+    
+    def test_render_with_special_characters_in_aspect_name(self):
+        """Test rendering handles special characters in aspect names."""
+        aspects = [
+            {
+                "id": "aspect-1",
+                "name": "Code & Test (v2)",
+                "prompt_to_use": "Evaluate this"
+            }
+        ]
+        
+        result = render_evaluation_prompt(
+            aspects, "content", "output", "log"
+        )
+        
+        assert result is not None
+        assert "Code & Test (v2)" in result
+
+
+# ============================================================================
+# Response Parsing Tests
+# ============================================================================
+
+@pytest.mark.db
+class TestResponseParsing:
+    """Tests for parse_evaluation_response function."""
+    
+    def test_parse_single_pass_result(self):
+        """Test parsing single PASS result."""
+        response = """
+### Code Availability
+Status: PASS
+Reasoning: Code is available on GitHub with clear documentation.
+"""
+        aspects = [
+            {
+                "id": "aspect-1",
+                "name": "Code Availability"
+            }
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        assert result["aspect-1"]["status"] == "PASS"
+        assert "Code is available" in result["aspect-1"]["reasoning"]
+    
+    def test_parse_single_fail_result(self):
+        """Test parsing single FAIL result."""
+        response = """
+### Code Availability
+Status: FAIL
+Reasoning: No code repository was provided or found.
+"""
+        aspects = [
+            {
+                "id": "aspect-1",
+                "name": "Code Availability"
+            }
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        assert result["aspect-1"]["status"] == "FAIL"
+        assert "No code repository" in result["aspect-1"]["reasoning"]
+    
+    def test_parse_unclear_result(self):
+        """Test parsing UNCLEAR result."""
+        response = """
+### Code Availability
+Status: UNCLEAR
+Reasoning: The paper mentions code but it's ambiguous where to find it.
+"""
+        aspects = [
+            {
+                "id": "aspect-1",
+                "name": "Code Availability"
+            }
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        assert result["aspect-1"]["status"] == "UNCLEAR"
+        assert "ambiguous" in result["aspect-1"]["reasoning"]
+    
+    def test_parse_multiple_aspects_mixed_results(self):
+        """Test parsing multiple aspects with mixed results."""
+        response = """
+### Code Availability
+Status: PASS
+Reasoning: Code is available on GitHub.
+
+### Dependencies
+Status: FAIL
+Reasoning: No dependency file was found.
+
+### Reproducibility
+Status: UNCLEAR
+Reasoning: Insufficient information to determine reproducibility.
+"""
+        aspects = [
+            {"id": "aspect-1", "name": "Code Availability"},
+            {"id": "aspect-2", "name": "Dependencies"},
+            {"id": "aspect-3", "name": "Reproducibility"},
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        assert len(result) == 3
+        assert result["aspect-1"]["status"] == "PASS"
+        assert result["aspect-2"]["status"] == "FAIL"
+        assert result["aspect-3"]["status"] == "UNCLEAR"
+    
+    def test_parse_missing_aspect_returns_unclear(self):
+        """Test parsing when aspect missing from response returns UNCLEAR."""
+        response = """
+### Code Availability
+Status: PASS
+Reasoning: Code is available.
+"""
+        aspects = [
+            {"id": "aspect-1", "name": "Code Availability"},
+            {"id": "aspect-2", "name": "Dependencies"},  # Missing from response
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        assert result["aspect-1"]["status"] == "PASS"
+        assert result["aspect-2"]["status"] == "UNCLEAR"
+        assert "did not include evaluation" in result["aspect-2"]["reasoning"]
+    
+    def test_parse_malformed_status_returns_unclear(self):
+        """Test parsing when status is malformed returns UNCLEAR."""
+        response = """
+### Code Availability
+Status: MAYBE
+Reasoning: This status is not recognized.
+"""
+        aspects = [
+            {"id": "aspect-1", "name": "Code Availability"}
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        # Should parse as UNCLEAR since MAYBE is not recognized
+        assert result["aspect-1"]["status"] == "UNCLEAR"
+    
+    def test_parse_reasoning_extraction(self):
+        """Test reasoning extraction from response."""
+        response = """
+### Code Availability
+Status: PASS
+Reasoning: The code is available on GitHub repository. The implementation matches the paper's description.
+"""
+        aspects = [
+            {"id": "aspect-1", "name": "Code Availability"}
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        reasoning = result["aspect-1"]["reasoning"]
+        assert len(reasoning) <= 500
+        assert "GitHub" in reasoning
+        assert "implementation" in reasoning
+    
+    def test_parse_handles_extra_whitespace(self):
+        """Test parsing handles extra whitespace."""
+        response = """
+###   Code Availability   
+Status:    PASS
+Reasoning:    Code is available.    
+"""
+        aspects = [
+            {"id": "aspect-1", "name": "Code Availability"}
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        assert result["aspect-1"]["status"] == "PASS"
+        assert len(result["aspect-1"]["reasoning"].strip()) > 0
+    
+    def test_parse_case_insensitive_status(self):
+        """Test parsing is case insensitive for status."""
+        response = """
+### Code Availability
+Status: pass
+Reasoning: Code is available.
+"""
+        aspects = [
+            {"id": "aspect-1", "name": "Code Availability"}
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        # Status should be normalized to uppercase
+        assert result["aspect-1"]["status"] == "PASS"
+    
+    def test_parse_with_section_separators(self):
+        """Test parsing with various section separators."""
+        response = """
+### Code Availability
+Status: PASS
+Reasoning: Code is available.
+
+### Dependencies
+Status: FAIL
+Reasoning: Dependencies not documented.
+
+### Other Aspect
+Status: UNCLEAR
+Reasoning: Cannot determine.
+"""
+        aspects = [
+            {"id": "aspect-1", "name": "Code Availability"},
+            {"id": "aspect-2", "name": "Dependencies"},
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        assert result["aspect-1"]["status"] == "PASS"
+        assert result["aspect-2"]["status"] == "FAIL"
+
+
+# ============================================================================
+# Integration Tests
+# ============================================================================
+
+@pytest.mark.db
+class TestEvaluationPipeline:
+    """Tests for full evaluation pipeline integration."""
+    
+    def test_full_pipeline_render_parse(self, user_with_aspects):
+        """Test full pipeline: render + parse."""
+        # Get active aspects
+        aspects = AspectService.get_active_aspects_for_evaluation(user_with_aspects.id)
+        
+        # Render prompt
+        prompt = render_evaluation_prompt(
+            aspects,
+            "Paper about reproducibility",
+            "Code executed successfully",
+            "Execution completed"
+        )
+        
+        assert prompt is not None
+        
+        # Simulate LLM response
+        response = f"""
+### Code Availability
+Status: PASS
+Reasoning: Code is available on GitHub.
+
+### Dependency Documentation
+Status: FAIL
+Reasoning: No requirements.txt found.
+
+### Reproducibility
+Status: UNCLEAR
+Reasoning: Need more information to verify.
+"""
+        
+        # Parse response
+        result = parse_evaluation_response(response, aspects)
+        
+        assert len(result) > 0
+        # Should have entries for aspects
+        assert all(isinstance(v, dict) for v in result.values())
+        assert all("status" in v and "reasoning" in v for v in result.values())
+    
+    def test_no_active_aspects_returns_empty(self, app, user_with_aspects):
+        """Test no active aspects returns empty results."""
+        with app.app_context():
+            # Deactivate all aspects
+            for aspect in AspectService.get_all_aspects_for_user(user_with_aspects.id):
+                AspectService.deactivate_aspect(user_with_aspects.id, aspect["id"])
+            
+            active = AspectService.get_active_aspects_for_evaluation(user_with_aspects.id)
+            assert len(active) == 0
+    
+    def test_job_status_updated_on_success(self, app, user_with_aspects, mock_llm_provider):
+        """Test job status updated to completed on success."""
+        with app.app_context():
+            # Create job
+            job = Job.create(
+                id="test-job-1",
+                user=user_with_aspects,
+                pdf_path="/tmp/test.pdf",
+                status="processing"
+            )
+            
+            # Create paper analysis
+            paper = PaperAnalysis.create(
+                job=job,
+                extracted_text="Test paper content"
+            )
+            
+            # Mock LLM response
+            mock_llm_provider.complete.return_value = """
+### Code Availability
+Status: PASS
+Reasoning: Code is available.
+
+### Dependency Documentation
+Status: PASS
+Reasoning: Dependencies are documented.
+
+### Reproducibility
+Status: PASS
+Reasoning: Results can be reproduced.
+"""
+            
+            # Call evaluate_paper
+            result = evaluate_paper(
+                job.id,
+                paper,
+                "code output",
+                "execution log",
+                mock_llm_provider,
+                app_logger=None
+            )
+            
+            # Check result
+            assert len(result) > 0
+            
+            # Check job was updated
+            updated_job = Job.get_by_id(job.id)
+            assert updated_job.status == "completed"
+            assert updated_job.evaluation_results is not None
+    
+    def test_evaluation_results_stored_correctly(self, app, user_with_aspects, mock_llm_provider):
+        """Test evaluation results stored correctly in job."""
+        with app.app_context():
+            job = Job.create(
+                id="test-job-2",
+                user=user_with_aspects,
+                pdf_path="/tmp/test.pdf",
+                status="processing"
+            )
+            
+            paper = PaperAnalysis.create(
+                job=job,
+                extracted_text="Test content"
+            )
+            
+            mock_llm_provider.complete.return_value = """
+### Code Availability
+Status: PASS
+Reasoning: Available on GitHub.
+
+### Dependency Documentation
+Status: FAIL
+Reasoning: Not documented.
+
+### Reproducibility
+Status: UNCLEAR
+Reasoning: Unclear.
+"""
+            
+            result = evaluate_paper(
+                job.id,
+                paper,
+                "output",
+                "log",
+                mock_llm_provider
+            )
+            
+            # Check stored results
+            updated_job = Job.get_by_id(job.id)
+            stored = updated_job.get_evaluation_results()
+            
+            assert len(stored) > 0
+            assert all("status" in v and "reasoning" in v for v in stored.values())
+    
+    def test_error_handling_invalid_response(self, app, user_with_aspects, mock_llm_provider):
+        """Test error handling for invalid LLM response."""
+        with app.app_context():
+            job = Job.create(
+                id="test-job-3",
+                user=user_with_aspects,
+                pdf_path="/tmp/test.pdf",
+                status="processing"
+            )
+            
+            paper = PaperAnalysis.create(
+                job=job,
+                extracted_text="Content"
+            )
+            
+            # Invalid response
+            mock_llm_provider.complete.return_value = "This is not a valid response format"
+            
+            result = evaluate_paper(
+                job.id,
+                paper,
+                "output",
+                "log",
+                mock_llm_provider
+            )
+            
+            # Should return empty dict on parse failure
+            # (but still completes gracefully)
+            updated_job = Job.get_by_id(job.id)
+            # Job should complete even with parse issues
+            assert updated_job.status in ["completed", "error"]
+    
+    def test_error_handling_llm_failure(self, app, user_with_aspects, mock_llm_provider):
+        """Test error handling when LLM call fails."""
+        with app.app_context():
+            job = Job.create(
+                id="test-job-4",
+                user=user_with_aspects,
+                pdf_path="/tmp/test.pdf",
+                status="processing"
+            )
+            
+            paper = PaperAnalysis.create(
+                job=job,
+                extracted_text="Content"
+            )
+            
+            # Mock LLM failure
+            mock_llm_provider.complete.side_effect = Exception("LLM API error")
+            
+            result = evaluate_paper(
+                job.id,
+                paper,
+                "output",
+                "log",
+                mock_llm_provider
+            )
+            
+            # Should return empty dict
+            assert result == {}
+            
+            # Job should be marked as error
+            updated_job = Job.get_by_id(job.id)
+            assert updated_job.status == "error"
+
+
+# ============================================================================
+# Database Field Tests
+# ============================================================================
+
+@pytest.mark.db
+class TestDatabaseFields:
+    """Tests for evaluation_results database field."""
+    
+    def test_job_evaluation_results_nullable(self, app, user_with_aspects):
+        """Test Job.evaluation_results field is nullable."""
+        with app.app_context():
+            job = Job.create(
+                id="test-job-null",
+                user=user_with_aspects,
+                pdf_path="/tmp/test.pdf",
+                status="pending"
+            )
+            
+            assert job.evaluation_results is None
+            assert job.get_evaluation_results() == {}
+    
+    def test_job_stores_json_evaluation_results(self, app, user_with_aspects):
+        """Test Job stores evaluation_results as JSON."""
+        with app.app_context():
+            job = Job.create(
+                id="test-job-json",
+                user=user_with_aspects,
+                pdf_path="/tmp/test.pdf",
+                status="processing"
+            )
+            
+            test_data = {
+                "aspect-1": {
+                    "status": "PASS",
+                    "reasoning": "Test reasoning"
+                }
+            }
+            
+            job.set_evaluation_results(test_data)
+            job.save()
+            
+            # Retrieve and check
+            retrieved = Job.get_by_id(job.id)
+            assert retrieved.get_evaluation_results() == test_data
+    
+    def test_job_evaluation_results_retrievable(self, app, user_with_aspects):
+        """Test Job.evaluation_results is retrievable across sessions."""
+        with app.app_context():
+            job = Job.create(
+                id="test-job-retrieve",
+                user=user_with_aspects,
+                pdf_path="/tmp/test.pdf",
+                status="processing"
+            )
+            
+            test_results = {
+                "aspect-1": {"status": "PASS", "reasoning": "Reason 1"},
+                "aspect-2": {"status": "FAIL", "reasoning": "Reason 2"},
+            }
+            
+            job.set_evaluation_results(test_results)
+            job.save()
+        
+        with app.app_context():
+            # Retrieve in new session
+            retrieved_job = Job.get_by_id(job.id)
+            stored = retrieved_job.get_evaluation_results()
+            
+            assert stored == test_results
+            assert len(stored) == 2
+
+
+# ============================================================================
+# Edge Cases and Robustness Tests
+# ============================================================================
+
+@pytest.mark.db
+class TestEdgeCases:
+    """Tests for edge cases and robustness."""
+    
+    def test_parse_with_missing_status_line(self):
+        """Test parsing when status line is missing."""
+        response = """
+### Code Availability
+Reasoning: Code is available.
+"""
+        aspects = [
+            {"id": "aspect-1", "name": "Code Availability"}
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        # Should default to UNCLEAR
+        assert result["aspect-1"]["status"] == "UNCLEAR"
+    
+    def test_parse_reasoning_max_length(self):
+        """Test reasoning is truncated to max 500 chars."""
+        long_reasoning = "x" * 1000
+        response = f"""
+### Code Availability
+Status: PASS
+Reasoning: {long_reasoning}
+"""
+        aspects = [
+            {"id": "aspect-1", "name": "Code Availability"}
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        assert len(result["aspect-1"]["reasoning"]) <= 500
+    
+    def test_render_with_none_aspect_fields(self):
+        """Test rendering when aspect dict has unexpected fields."""
+        aspects = [
+            {
+                "id": "aspect-1",
+                "name": "Test",
+                # Missing prompt_to_use
+            }
+        ]
+        
+        # Should handle gracefully
+        result = render_evaluation_prompt(aspects, "content", "output", "log")
+        assert result is not None
+    
+    def test_parse_with_unicode_characters(self):
+        """Test parsing handles unicode characters."""
+        response = """
+### Code Availability
+Status: PASS
+Reasoning: Code is available (✓) with full documentation (✓).
+"""
+        aspects = [
+            {"id": "aspect-1", "name": "Code Availability"}
+        ]
+        
+        result = parse_evaluation_response(response, aspects)
+        
+        assert result["aspect-1"]["status"] == "PASS"
+        assert "✓" in result["aspect-1"]["reasoning"]

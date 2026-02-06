@@ -48,6 +48,7 @@ class Job(BaseModel):
     error_message = TextField(null=True)
     thumbnail_path = CharField(null=True)
     num_pages = IntegerField(null=True)
+    evaluation_results = TextField(null=True)  # JSON: {aspect_id: {status, reasoning, ...}}
     created_at = DateTimeField(default=datetime.now)
     completed_at = DateTimeField(null=True)
 
@@ -69,6 +70,19 @@ class Job(BaseModel):
     def set_report(self, data: dict):
         """Set report as JSON."""
         self.report = json.dumps(data)
+
+    def get_evaluation_results(self) -> dict:
+        """Parse evaluation_results JSON."""
+        if not self.evaluation_results:
+            return {}
+        try:
+            return json.loads(self.evaluation_results)
+        except:
+            return {}
+
+    def set_evaluation_results(self, data: dict):
+        """Set evaluation_results as JSON."""
+        self.evaluation_results = json.dumps(data)
 
 
 class Artifact(BaseModel):
