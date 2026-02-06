@@ -282,6 +282,7 @@ def init_db(app_logger=None):
     
     # Import APIKey here to avoid circular imports
     from models.api_key import APIKey
+    from models.aspect import Aspect, UserAspect
     
     models = [
         User, Job, Artifact, Event,
@@ -289,6 +290,7 @@ def init_db(app_logger=None):
         CachePaperAnalysis, CacheCodeExecution, CacheEvaluation,
         ChatSession, ChatMessage,
         APIKey,
+        Aspect, UserAspect,
     ]
     
     db.create_tables(models, safe=True)
