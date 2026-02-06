@@ -42,7 +42,9 @@ ASPECT_EVAL_TEMPLATE = """You are evaluating the reproducibility of a research p
 
 For each aspect below, provide:
 - Status: PASS / FAIL / UNCLEAR
-- Reasoning: 1-2 sentences max
+- Reasoning: 1-2 sentences max (plain text, NO markdown formatting, NO asterisks, NO dashes at end)
+
+IMPORTANT: Do not use any markdown formatting in your reasoning text. Write plain text only.
 
 ---
 
@@ -179,6 +181,11 @@ def parse_evaluation_response(
             # Fallback: take last 2 lines
             lines = [l.strip() for l in section.split('\n') if l.strip()]
             reasoning = ' '.join(lines[-2:])[:500]
+        
+        # Clean up markdown formatting from reasoning
+        # Remove leading ** and trailing -- or ---
+        reasoning = reasoning.lstrip('* ')
+        reasoning = re.sub(r'\s*-+\s*$', '', reasoning)
         
         results[aspect_id] = {
             "status": status,

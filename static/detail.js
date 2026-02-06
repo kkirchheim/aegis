@@ -814,85 +814,47 @@ function updateAssessment(job) {
     // Show assessment section
     assessmentSection.style.display = 'block';
     
-    // Render assessment grid (cards)
-    renderAssessmentGrid(job.evaluation_results);
-    
-    // Render assessment details (collapsible)
-    renderAssessmentDetails(job.evaluation_results);
+    // Render expandable aspect list
+    renderAspectsList(job.evaluation_results);
 }
 
-function renderAssessmentGrid(evaluationResults) {
-    const grid = document.getElementById('assessment-grid');
-    if (!grid) {
-        console.warn('[assessment] assessment-grid not found');
-        return;
-    }
-    
-    const cards = Object.entries(evaluationResults).map(([aspectId, result]) => {
-        const statusIcon = {
-            'PASS': '✅',
-            'FAIL': '❌',
-            'UNCLEAR': '⚠️'
-        }[result.status] || '❓';
-        
-        const statusClass = {
-            'PASS': 'badge-success',
-            'FAIL': 'badge-error',
-            'UNCLEAR': 'badge-warning'
-        }[result.status] || 'badge-secondary';
-        
-        return `
-            <div class="card bg-base-200 shadow-sm" data-aspect-id="${aspectId}">
-                <div class="card-body p-4">
-                    <div class="flex items-start gap-3">
-                        <div class="text-3xl">${statusIcon}</div>
-                        <div class="flex-1">
-                            <h4 class="font-semibold">${escapeHtml(result.aspect_name || 'Aspect')}</h4>
-                            <p class="text-sm text-base-content/70">${escapeHtml(result.status)}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    grid.innerHTML = cards;
-}
-
-function renderAssessmentDetails(evaluationResults) {
+function renderAspectsList(evaluationResults) {
     const list = document.getElementById('assessment-list');
     if (!list) {
         console.warn('[assessment] assessment-list not found');
         return;
     }
     
-    const details = Object.entries(evaluationResults).map(([aspectId, result]) => {
-        const statusClass = {
-            'PASS': 'bg-success/10 text-success-content',
-            'FAIL': 'bg-error/10 text-error-content',
-            'UNCLEAR': 'bg-warning/10 text-warning-content'
-        }[result.status] || 'bg-base-300';
+    const aspects = Object.entries(evaluationResults).map(([aspectId, result]) => {
+        const status = result.status || 'UNKNOWN';
+        const statusIcon = {
+            'PASS': '✅',
+            'FAIL': '❌',
+            'UNCLEAR': '⚠️'
+        }[status] || '❓';
         
         const statusBadgeClass = {
             'PASS': 'badge-success',
             'FAIL': 'badge-error',
             'UNCLEAR': 'badge-warning'
-        }[result.status] || 'badge-secondary';
+        }[status] || 'badge-secondary';
         
         return `
-            <div class="card bg-base-200" data-aspect-id="${aspectId}">
-                <div class="card-body">
-                    <div class="flex justify-between items-start gap-4 mb-2">
-                        <h4 class="font-semibold">${escapeHtml(result.aspect_name || 'Aspect')}</h4>
-                        <span class="badge ${statusBadgeClass}">${escapeHtml(result.status)}</span>
-                    </div>
-                    <p class="text-sm text-base-content/70">${escapeHtml(result.reasoning || 'No reasoning provided')}</p>
+            <div class="collapse collapse-arrow border border-base-300 bg-base-100 mb-2">
+                <input type="checkbox" />
+                <div class="collapse-title flex items-center gap-3 font-semibold cursor-pointer">
+                    <span class="text-xl">${statusIcon}</span>
+                    <span class="flex-1">${escapeHtml(result.aspect_name || 'Aspect')}</span>
+                    <span class="badge ${statusBadgeClass} text-xs">${escapeHtml(status)}</span>
+                </div>
+                <div class="collapse-content bg-base-50">
+                    <p class="whitespace-pre-wrap text-sm leading-relaxed">${escapeHtml(result.reasoning || 'No reasoning provided')}</p>
                 </div>
             </div>
         `;
     }).join('');
     
-    list.innerHTML = details;
+    list.innerHTML = aspects;
 }
 
 function escapeHtml(text) {
