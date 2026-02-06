@@ -311,8 +311,36 @@ def init_db(app_logger=None):
     
     db.create_tables(models, safe=True)
     
+    # Apply any missing schema updates (migrations)
+    _apply_schema_updates(db)
+    
     if app_logger:
         app_logger.info("✓ Database initialized successfully")
+
+
+def _apply_schema_updates(db):
+    """Apply schema migrations for new fields."""
+    import sqlite3
+    from config import Config
+    
+    try:
+        db_path = Config.DATABASE
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Check if description column exists in execution_script
+        cursor.execute("PRAGMA table_info(execution_script)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'description' not in columns:
+            cursor.execute("ALTER TABLE execution_script ADD COLUMN description TEXT")
+            conn.commit()
+        
+        conn.close()
+    except Exception as e:
+        # Silently fail if migrations already applied or database not yet created
+        import sys
+        print(f"[DB Migration] Warning: {e}", file=sys.stderr)
 
 
 def get_db_connection():
