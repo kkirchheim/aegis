@@ -535,6 +535,85 @@ class TestEventEmission:
         assert dispatcher is not None
 
 
+class TestLoggerCompatibility:
+    """Tests for logger compatibility with both function and logger objects."""
+    
+    def test_stage3_eval_with_function_logger(self, test_job, test_user, test_paper_analysis, test_execution_details):
+        """stage_3_evaluation should handle function-style logger."""
+        AspectService.get_or_create_default_aspects(test_user.id)
+        
+        # Create a function logger
+        log_messages = []
+        def func_logger(msg):
+            log_messages.append(msg)
+        
+        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+            mock_eval.return_value = {}
+            
+            with patch('services.pipeline_orchestrator.EventDispatcher'):
+                result = stage_3_evaluation(test_job.id, func_logger)
+        
+        assert result == True
+        assert len(log_messages) > 0  # Should have logged something
+    
+    def test_stage3_eval_with_logger_object(self, test_job, test_user, test_paper_analysis, test_execution_details):
+        """stage_3_evaluation should handle logger objects with info/error methods."""
+        AspectService.get_or_create_default_aspects(test_user.id)
+        
+        # Create a logger object
+        import logging
+        logger_obj = logging.getLogger('test_logger')
+        
+        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+            mock_eval.return_value = {}
+            
+            with patch('services.pipeline_orchestrator.EventDispatcher'):
+                result = stage_3_evaluation(test_job.id, logger_obj)
+        
+        assert result == True
+    
+    def test_stage3_eval_with_none_logger(self, test_job, test_user, test_paper_analysis, test_execution_details):
+        """stage_3_evaluation should handle None logger gracefully."""
+        AspectService.get_or_create_default_aspects(test_user.id)
+        
+        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+            mock_eval.return_value = {}
+            
+            with patch('services.pipeline_orchestrator.EventDispatcher'):
+                result = stage_3_evaluation(test_job.id, None)
+        
+        assert result == True
+    
+    def test_stage3_eval_logger_handles_errors(self, test_job, test_user, test_paper_analysis, test_execution_details):
+        """stage_3_evaluation should properly call logger.error on exceptions."""
+        AspectService.get_or_create_default_aspects(test_user.id)
+        
+        # Create a logger object that tracks error calls
+        import logging
+        error_logged = []
+        
+        class TestLogger:
+            def info(self, msg):
+                pass
+            def warning(self, msg):
+                pass
+            def error(self, msg, exc_info=False):
+                error_logged.append((msg, exc_info))
+            def debug(self, msg):
+                pass
+        
+        test_logger = TestLogger()
+        
+        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+            mock_eval.side_effect = Exception("Test error")
+            
+            with patch('services.pipeline_orchestrator.EventDispatcher'):
+                result = stage_3_evaluation(test_job.id, test_logger)
+        
+        assert result == False
+        assert len(error_logged) > 0  # Should have logged the error
+
+
 class TestStage3EvaluationStandaloneFunction:
     """Tests for standalone stage_3_evaluation() function."""
     
