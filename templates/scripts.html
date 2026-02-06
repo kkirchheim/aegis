@@ -51,8 +51,6 @@
             margin: 0;
         }
     </style>
-
-    <script src="/static/scripts.js"></script>
 </head>
 <body class="bg-base-100">
     {% include 'navbar.html' %}
@@ -229,5 +227,7 @@
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
     </script>
+
+    <script src="/static/scripts.js"></script>
 </body>
 </html>

@@ -4,24 +4,41 @@
  */
 
 let allScripts = [];
-const loadingState = document.getElementById('loadingState');
-const contentState = document.getElementById('contentState');
-const errorAlert = document.getElementById('errorAlert');
-const errorMessage = document.getElementById('errorMessage');
-const customScriptsContainer = document.getElementById('custom-scripts');
-const defaultScriptsContainer = document.getElementById('default-scripts');
-const scriptModal = document.getElementById('script-modal');
-const scriptNameInput = document.getElementById('scriptName');
-const scriptDescriptionInput = document.getElementById('scriptDescription');
-const scriptTextInput = document.getElementById('scriptText');
-const emptyCustomScripts = document.getElementById('emptyCustomScripts');
+
+// DOM elements will be initialized after DOMContentLoaded
+let loadingState;
+let contentState;
+let errorAlert;
+let errorMessage;
+let customScriptsContainer;
+let defaultScriptsContainer;
+let scriptModal;
+let scriptNameInput;
+let scriptDescriptionInput;
+let scriptTextInput;
+let emptyCustomScripts;
 
 // ============================================================================
 // Initialization
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('[scripts] Page loaded');
+    console.log('[scripts] Page loaded, initializing DOM elements...');
+    
+    // Initialize DOM element references
+    loadingState = document.getElementById('loadingState');
+    contentState = document.getElementById('contentState');
+    errorAlert = document.getElementById('errorAlert');
+    errorMessage = document.getElementById('errorMessage');
+    customScriptsContainer = document.getElementById('custom-scripts');
+    defaultScriptsContainer = document.getElementById('default-scripts');
+    scriptModal = document.getElementById('script-modal');
+    scriptNameInput = document.getElementById('scriptName');
+    scriptDescriptionInput = document.getElementById('scriptDescription');
+    scriptTextInput = document.getElementById('scriptText');
+    emptyCustomScripts = document.getElementById('emptyCustomScripts');
+    
+    console.log('[scripts] DOM elements initialized, loading scripts...');
     loadScripts();
 });
 
