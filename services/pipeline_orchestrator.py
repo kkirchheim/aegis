@@ -335,7 +335,7 @@ def stage_3_evaluation(job_id, app_logger=None):
     
     Args:
         job_id: Job ID
-        app_logger: Optional logger function
+        app_logger: Optional logger (function or logger object)
     
     Returns:
         bool: True if successful, False otherwise
@@ -344,21 +344,55 @@ def stage_3_evaluation(job_id, app_logger=None):
     from services.evaluation_service import evaluate_paper
     from models.database import Job, PaperAnalysis, ExecutionDetails
     from services.event_dispatcher import EventDispatcher
+    import logging
     
-    if not app_logger:
-        app_logger = lambda msg: None
+    # Create a wrapper logger that handles both function and logger objects
+    class LoggerWrapper:
+        def __init__(self, original_logger):
+            self.original = original_logger
+        
+        def info(self, msg):
+            if callable(self.original):
+                self.original(f"[INFO] {msg}")
+            elif hasattr(self.original, 'info'):
+                self.original.info(msg)
+        
+        def warning(self, msg):
+            if callable(self.original):
+                self.original(f"[WARNING] {msg}")
+            elif hasattr(self.original, 'warning'):
+                self.original.warning(msg)
+        
+        def error(self, msg, exc_info=False):
+            if callable(self.original):
+                self.original(f"[ERROR] {msg}")
+            elif hasattr(self.original, 'error'):
+                self.original.error(msg, exc_info=exc_info)
+        
+        def debug(self, msg):
+            if callable(self.original):
+                self.original(f"[DEBUG] {msg}")
+            elif hasattr(self.original, 'debug'):
+                self.original.debug(msg)
+    
+    # Create logger wrapper
+    if app_logger is None:
+        # Create silent logger
+        logger = LoggerWrapper(None)
+    else:
+        logger = LoggerWrapper(app_logger)
     
     job = None
     try:
         job = Job.get_by_id(job_id)
     except:
-        app_logger(f"[Job {job_id}] ERROR: Job not found")
+        logger(f"[Job {job_id}] ERROR: Job not found")
         return False
     
     try:
         # Get active aspects for this user
         active_aspects = AspectService.get_active_aspects_for_evaluation(job.user_id)
-        app_logger(f"[Job {job_id}] Stage 3: {len(active_aspects)} active aspects for evaluation")
+        logger(f"[Job {job_id}] Stage 3: {len(active_aspects)} active aspects for evaluation")
         
         # Emit progress event: evaluation starting
         EventDispatcher().emit_event(
@@ -375,7 +409,7 @@ def stage_3_evaluation(job_id, app_logger=None):
         
         # If no active aspects, skip evaluation (complete with empty results)
         if not active_aspects:
-            app_logger(f"[Job {job_id}] No active aspects, skipping evaluation")
+            logger(f"[Job {job_id}] No active aspects, skipping evaluation")
             job.evaluation_results = '{}'
             job.status = 'completed'
             job.current_stage = 'evaluation'
@@ -429,7 +463,7 @@ def stage_3_evaluation(job_id, app_logger=None):
         failed = sum(1 for r in evaluation_results.values() if r.get('status') == 'FAIL')
         unclear = sum(1 for r in evaluation_results.values() if r.get('status') == 'UNCLEAR')
         
-        app_logger(
+        logger(
             f"[Job {job_id}] Evaluation complete: {passed} PASS, {failed} FAIL, {unclear} UNCLEAR"
         )
         
@@ -460,7 +494,7 @@ def stage_3_evaluation(job_id, app_logger=None):
         return True
     
     except Exception as e:
-        app_logger(f"[Job {job_id}] Stage 3 evaluation failed: {e}")
+        logger(f"[Job {job_id}] Stage 3 evaluation failed: {e}")
         
         if job:
             job.status = 'error'
