@@ -1855,7 +1855,6 @@ def list_user_scripts():
     "script_text": fields.Str(required=True, validate=validate.Length(min=1)),
     "description": fields.Str(required=False, missing="")
 }, location="json")
-@marshal_with({"type": "object"}, code=201)
 @marshal_with(ErrorSchema, code=400)
 @marshal_with(ErrorSchema, code=401)
 @marshal_with(ErrorSchema, code=500)
