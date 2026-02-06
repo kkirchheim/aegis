@@ -12,6 +12,29 @@ from services.cache_service import get_cached_evaluation, store_evaluation_cache
 
 
 # ============================================================================
+# Logger Utility - Handle both functions and logger objects
+# ============================================================================
+
+def _log(logger, level: str, message: str):
+    """
+    Log a message to either a logger object or function.
+    Handles both logger objects (with .info/.warning/.error methods)
+    and logger functions (passed from orchestrator).
+    """
+    if not logger:
+        return
+    
+    if callable(logger) and not hasattr(logger, level):
+        # It's a function, not a logger object
+        logger(f"[{level.upper()}] {message}")
+    else:
+        # It's a logger object
+        method = getattr(logger, level, None)
+        if method:
+            method(message)
+
+
+# ============================================================================
 # Phase 4: Unified Evaluation Prompt Templates
 # ============================================================================
 
@@ -96,6 +119,7 @@ def render_evaluation_prompt(
 def parse_evaluation_response(
     response_text: str,
     aspects: List[Dict[str, str]],
+    logger=None,
 ) -> Dict[str, Dict[str, str]]:
     """
     Parse LLM response into per-aspect results.
@@ -112,6 +136,7 @@ def parse_evaluation_response(
     Args:
         response_text: str - Response from LLM
         aspects: List[{id, name, ...}] - Same aspects that were evaluated
+        logger: Optional logger (function or logger object)
     
     Returns:
         dict: {aspect_id: {status, reasoning}} or empty dict if parsing fails
@@ -132,6 +157,8 @@ def parse_evaluation_response(
                 "status": "UNCLEAR",
                 "reasoning": "Response did not include evaluation for this aspect"
             }
+            if logger:
+                _log(logger, "warning", f"[PARSE] {aspect_name}: NOT FOUND in response")
             continue
         
         section = match.group(0)
@@ -157,6 +184,15 @@ def parse_evaluation_response(
             "status": status,
             "reasoning": reasoning
         }
+        
+        # Log each aspect result
+        if logger:
+            if status == "PASS":
+                _log(logger, "info", f"[PARSE] {aspect_name}: PASS")
+            elif status == "FAIL":
+                _log(logger, "warning", f"[PARSE] {aspect_name}: FAIL - {reasoning[:100]}")
+            else:
+                _log(logger, "info", f"[PARSE] {aspect_name}: {status}")
     
     return results
 
@@ -225,19 +261,27 @@ def evaluate_paper(
             max_tokens=3000
         )
         
-        # Parse response
-        evaluation_results = parse_evaluation_response(response, aspects)
+        # Parse response with detailed logging
+        evaluation_results = parse_evaluation_response(response, aspects, logger=app_logger)
         
         # Store results
         job.set_evaluation_results(evaluation_results)
         job.status = "completed"
         job.save()
         
-        # Log summary
+        # Log summary with per-aspect details
         passed = sum(1 for r in evaluation_results.values() if r.get('status') == 'PASS')
         failed = sum(1 for r in evaluation_results.values() if r.get('status') == 'FAIL')
+        unclear = sum(1 for r in evaluation_results.values() if r.get('status') == 'UNCLEAR')
         if app_logger:
-            app_logger.info(f"[Job {job_id}] Evaluation complete: {passed} passed, {failed} failed")
+            app_logger.info(f"[Job {job_id}] Evaluation complete: {passed} PASS, {failed} FAIL, {unclear} UNCLEAR")
+            
+            # Log failed aspects with reasoning
+            for aspect_id, result in evaluation_results.items():
+                if result.get('status') == 'FAIL':
+                    aspect_info = next((a for a in aspects if str(a['id']) == aspect_id), None)
+                    aspect_name = aspect_info.get('name', aspect_id) if aspect_info else aspect_id
+                    _log(app_logger, "warning", f"[Job {job_id}] FAILED: {aspect_name} - {result.get('reasoning', 'No reasoning')[:150]}")
         
         return evaluation_results
     

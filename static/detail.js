@@ -690,16 +690,21 @@ async function loadChatHistory() {
             return;
         }
         
-        const messages = await response.json();
+        const data = await response.json();
+        const messages = data.messages || [];  // Handle both array and {messages: [...]} response
         console.log('[chat-polling] Loaded', messages.length, 'historical messages');
         
         // Clear existing messages
         chatHistory.innerHTML = '';
         
         // Add each historical message
-        messages.forEach(msg => {
-            addChatMessage(msg.role, msg.content);
-        });
+        if (Array.isArray(messages)) {
+            messages.forEach(msg => {
+                addChatMessage(msg.role, msg.content);
+            });
+        } else {
+            console.error('[chat-polling] Messages is not an array:', messages);
+        }
         
         // Track how many messages we've rendered so polling knows what's new
         lastChatMessageCount = messages.length;
