@@ -131,8 +131,7 @@ function openCreateModal() {
     document.getElementById('aspect-form').dataset.mode = 'create';
     delete document.getElementById('aspect-form').dataset.aspectId;
     
-    const modal = document.getElementById('aspect-modal');
-    modal.style.display = 'flex';
+    openAspectModal();
     
     // Focus on name field
     setTimeout(() => {
@@ -163,8 +162,7 @@ async function editAspect(aspectId) {
         form.dataset.aspectId = aspectId;
         
         clearModalError();
-        const modal = document.getElementById('aspect-modal');
-        modal.style.display = 'flex';
+        openAspectModal();
         
     } catch (error) {
         console.error('Error loading aspect:', error);
@@ -260,11 +258,15 @@ async function deleteAspect(aspectId) {
 
 // Modal helpers
 function openAspectModal() {
-    document.getElementById('aspect-modal').style.display = 'flex';
+    const modal = document.getElementById('aspect-modal');
+    modal.classList.add('modal-open');
+    modal.style.display = 'flex';
 }
 
 function closeAspectModal() {
-    document.getElementById('aspect-modal').style.display = 'none';
+    const modal = document.getElementById('aspect-modal');
+    modal.classList.remove('modal-open');
+    modal.style.display = 'none';
     clearModalError();
 }
 
@@ -310,7 +312,8 @@ function escapeHtml(text) {
 // Close modal on backdrop click
 document.addEventListener('click', function(event) {
     const modal = document.getElementById('aspect-modal');
-    if (event.target === modal) {
+    // Close on backdrop click or on the form button backdrop
+    if (event.target === modal || (event.target.tagName === 'FORM' && event.target.className.includes('modal-backdrop'))) {
         closeAspectModal();
     }
 });

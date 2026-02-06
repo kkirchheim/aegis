@@ -71,6 +71,9 @@ class AspectService:
         
         Returns list of dicts with: {id, name, description, is_default, is_active, custom_prompt}
         """
+        # Ensure default aspects are seeded for this user
+        AspectService.get_or_create_default_aspects(user_id)
+        
         user_aspects = UserAspectRepository.get_user_aspects(user_id)
         results = []
         
