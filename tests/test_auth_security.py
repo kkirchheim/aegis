@@ -21,7 +21,7 @@ import tempfile
 import os
 import pytest
 from app import app
-from models.database import init_db, get_db
+from models.database import init_db
 from services.auth_service import hash_password
 from config import Config
 DATABASE = Config.DATABASE

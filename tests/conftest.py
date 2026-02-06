@@ -40,7 +40,7 @@ def pytest_configure(config):
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from config import Config
-from models.database import init_db, get_db
+from models.database import init_db
 from services.auth_service import hash_password, create_user, get_user_by_username
 from app import create_app
 
@@ -109,29 +109,7 @@ def app_context(app):
     """Provide Flask app context for database operations."""
     with app.app_context():
         yield
-        # Clear all tables after test
-        try:
-            conn = get_db()
-            c = conn.cursor()
-            
-            # Get all table names
-            c.execute("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name NOT LIKE 'sqlite_%'
-            """)
-            tables = [row[0] for row in c.fetchall()]
-            
-            # Drop all tables
-            for table in tables:
-                try:
-                    c.execute(f"DROP TABLE IF EXISTS {table}")
-                except:
-                    pass
-            
-            conn.commit()
-            conn.close()
-        except:
-            pass
+        # Cleanup happens automatically with peewee_test_db fixture
 
 
 @pytest.fixture
