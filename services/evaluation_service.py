@@ -191,12 +191,19 @@ def parse_evaluation_response(
                     _log(logger, "warning", f"[PARSE] Unknown aspect name: {aspect_name}")
                 continue
             
+            # Find full aspect info (name, description, etc.)
+            aspect_info = next((a for a in aspects if str(a['id']) == aspect_id), None)
+            aspect_display_name = aspect_info.get('name', aspect_name) if aspect_info else aspect_name
+            aspect_description = aspect_info.get('prompt_to_use') or aspect_info.get('prompt', '') if aspect_info else ''
+            
             # Clean up markdown formatting from reasoning (if any)
             reasoning = reasoning.lstrip('* ')
             reasoning = re.sub(r'\s*-+\s*$', '', reasoning)
             reasoning = reasoning[:500]  # Max 500 chars
             
             results[aspect_id] = {
+                "aspect_name": aspect_display_name,
+                "aspect_description": aspect_description,
                 "status": status,
                 "reasoning": reasoning
             }

@@ -839,6 +839,8 @@ function renderAspectsList(evaluationResults) {
             'UNCLEAR': 'badge-warning'
         }[status] || 'badge-secondary';
         
+        const description = result.aspect_description ? `<p class="text-xs text-base-content/60 mb-2">${escapeHtml(result.aspect_description)}</p>` : '';
+        
         return `
             <div class="collapse collapse-arrow border border-base-300 bg-base-100">
                 <input type="checkbox" />
@@ -848,6 +850,7 @@ function renderAspectsList(evaluationResults) {
                     <span class="badge ${statusBadgeClass} text-xs">${escapeHtml(status)}</span>
                 </div>
                 <div class="collapse-content">
+                    ${description}
                     <p class="text-sm leading-relaxed">${escapeHtml(result.reasoning || 'No reasoning provided')}</p>
                 </div>
             </div>
