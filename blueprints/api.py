@@ -1493,6 +1493,24 @@ def get_job_full(job_id):
         # Get current_stage, default to pending if not set
         current_stage = job.current_stage or "pending"
         
+        # Enrich evaluation_results with aspect metadata
+        evaluation_results = job.get_evaluation_results()
+        if evaluation_results:
+            from services.aspect_service import AspectService
+            # Get all aspects for this user (to look up names/descriptions)
+            all_aspects = AspectService.get_all_aspects_for_user(job.user_id)
+            aspect_lookup = {str(a['id']): a for a in all_aspects}
+            
+            # Merge aspect metadata into results
+            for aspect_id, result in evaluation_results.items():
+                aspect_info = aspect_lookup.get(aspect_id)
+                if aspect_info:
+                    # Add name and description if not already present
+                    if 'aspect_name' not in result:
+                        result['aspect_name'] = aspect_info.get('name', 'Aspect')
+                    if 'aspect_description' not in result:
+                        result['aspect_description'] = aspect_info.get('prompt_to_use', '') or aspect_info.get('prompt', '')
+        
         response = {
             "id": job.id,
             "status": job.status,
@@ -1506,7 +1524,7 @@ def get_job_full(job_id):
             "events": events_list,
             "artifacts": artifacts,
             "paper_analysis": paper_analysis,
-            "evaluation_results": job.get_evaluation_results()  # NEW: Include evaluation results
+            "evaluation_results": evaluation_results  # Enriched with aspect metadata
         }
         
         return response
