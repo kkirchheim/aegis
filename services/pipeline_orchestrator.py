@@ -223,14 +223,41 @@ class PipelineOrchestrator:
         import json
         import time
         
+        # Wrap logger to handle both function and object types (like stage_3_evaluation does)
+        class LoggerWrapper:
+            def __init__(self, original_logger):
+                self.original = original_logger
+            
+            def __call__(self, msg):
+                if self.original and callable(self.original):
+                    self.original(msg)
+            
+            def info(self, msg):
+                if self.original and callable(self.original):
+                    self.original(f"[INFO] {msg}")
+            
+            def warning(self, msg):
+                if self.original and callable(self.original):
+                    self.original(f"[WARNING] {msg}")
+            
+            def error(self, msg, exc_info=False):
+                if self.original and callable(self.original):
+                    self.original(f"[ERROR] {msg}")
+            
+            def debug(self, msg):
+                if self.original and callable(self.original):
+                    self.original(f"[DEBUG] {msg}")
+        
+        wrapped_logger = LoggerWrapper(self.logger)
+        
         try:
-            self.logger(f"[{job_id}] >>> STAGE 3 STARTING")
+            wrapped_logger(f"[{job_id}] >>> STAGE 3 STARTING")
             
             job = Job.get_by_id(job_id)
             
             # Get active aspects for this user
             active_aspects = AspectService.get_active_aspects_for_evaluation(job.user_id)
-            self.logger(f"[{job_id}] Stage 3: {len(active_aspects)} active aspects for evaluation")
+            wrapped_logger(f"[{job_id}] Stage 3: {len(active_aspects)} active aspects for evaluation")
             
             # Emit progress event: evaluation starting
             self.emit_event(job_id, "stage_3_starting",
@@ -239,7 +266,7 @@ class PipelineOrchestrator:
             
             # If no active aspects, skip evaluation (complete with empty results)
             if not active_aspects:
-                self.logger(f"[{job_id}] No active aspects, skipping evaluation")
+                wrapped_logger(f"[{job_id}] No active aspects, skipping evaluation")
                 job.evaluation_results = '{}'
                 job.status = 'completed'
                 job.current_stage = 'evaluation'
@@ -273,7 +300,7 @@ class PipelineOrchestrator:
                 code_output=execution.stdout_combined or "",
                 execution_log=execution.errors_summary or "",
                 llm_provider=llm_provider,
-                app_logger=self.logger
+                app_logger=wrapped_logger  # Pass wrapped logger, not raw function
             )
             
             elapsed_ms = int((time.time() - start_time) * 1000)
