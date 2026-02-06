@@ -17,6 +17,7 @@ from blueprints.auth import auth_bp
 from blueprints.admin import admin_bp
 from blueprints.jobs import jobs_bp, emit_event
 from blueprints.api import api_bp
+from blueprints.aspects import aspects_bp
 
 # Export for backward compatibility with tests and other imports
 DATABASE = Config.DATABASE
@@ -54,6 +55,7 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(jobs_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(aspects_bp)
     
     # Initialize API documentation (FlaskApiSpec)
     app.config.update({
