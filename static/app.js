@@ -1,5 +1,5 @@
 /**
- * Paper Reproducibility Checker - Frontend
+ * Artifact Review - Frontend
  * 
  * Handles:
  * - PDF upload
@@ -79,7 +79,7 @@ async function handleAnalyzeClick() {
     formData.append("pdf", file);
     
     // Add configuration options
-    formData.append("container", document.getElementById("containerSelect").value);
+    formData.append("docker_image", document.getElementById("dockerImageSelect").value);
     formData.append("model", document.getElementById("modelSelect").value);
     formData.append("cpu_limit", document.getElementById("cpuLimit").value);
     formData.append("memory_limit", document.getElementById("memoryLimit").value);

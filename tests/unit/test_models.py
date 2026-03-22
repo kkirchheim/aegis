@@ -3,7 +3,7 @@
 import pytest
 from models.database import (
     User, Job, PaperAnalysis, ExecutionDetails, 
-    AspectEvaluation, Event, ChatSession, ChatMessage
+    PluginEvaluation, Event, ChatSession, ChatMessage
 )
 
 pytestmark = [pytest.mark.unit, pytest.mark.db]

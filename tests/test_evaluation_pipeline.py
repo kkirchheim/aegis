@@ -6,14 +6,14 @@ from uuid import uuid4
 from unittest.mock import Mock, MagicMock, patch
 
 from models.database import User, Job, PaperAnalysis, ExecutionDetails
-from models.aspect import Aspect, UserAspect
+from models.plugin import Aspect, UserPlugin
 from services.evaluation_service import (
     render_evaluation_prompt,
     parse_evaluation_response,
     evaluate_paper,
 )
-from services.aspect_service import AspectService
-from repositories.aspect_repository import AspectRepository, UserAspectRepository
+from services.plugin_service import PluginService
+from repositories.plugin_repository import AspectRepository, UserPluginRepository
 
 
 # ============================================================================
@@ -29,7 +29,7 @@ def user_with_aspects(app):
             email="test@example.com",
             password_hash="hash",
         )
-        AspectService.get_or_create_default_aspects(user.id)
+        PluginService.get_or_create_default_aspects(user.id)
         return user
 
 
@@ -402,7 +402,7 @@ class TestEvaluationPipeline:
     def test_full_pipeline_render_parse(self, user_with_aspects):
         """Test full pipeline: render + parse."""
         # Get active aspects
-        aspects = AspectService.get_active_aspects_for_evaluation(user_with_aspects.id)
+        aspects = PluginService.get_active_plugins_for_evaluation(user_with_aspects.id)
         
         # Render prompt
         prompt = render_evaluation_prompt(
@@ -437,14 +437,14 @@ Reasoning: Need more information to verify.
         assert all(isinstance(v, dict) for v in result.values())
         assert all("status" in v and "reasoning" in v for v in result.values())
     
-    def test_no_active_aspects_returns_empty(self, app, user_with_aspects):
+    def test_no_active_plugins_returns_empty(self, app, user_with_aspects):
         """Test no active aspects returns empty results."""
         with app.app_context():
             # Deactivate all aspects
-            for aspect in AspectService.get_all_aspects_for_user(user_with_aspects.id):
-                AspectService.deactivate_aspect(user_with_aspects.id, aspect["id"])
+            for aspect in PluginService.get_all_aspects_for_user(user_with_aspects.id):
+                PluginService.deactivate_aspect(user_with_aspects.id, aspect["id"])
             
-            active = AspectService.get_active_aspects_for_evaluation(user_with_aspects.id)
+            active = PluginService.get_active_plugins_for_evaluation(user_with_aspects.id)
             assert len(active) == 0
     
     def test_job_status_updated_on_success(self, app, user_with_aspects, mock_llm_provider):
@@ -495,9 +495,9 @@ Reasoning: Results can be reproduced.
             # Check job was updated
             updated_job = Job.get_by_id(job.id)
             assert updated_job.status == "completed"
-            assert updated_job.evaluation_results is not None
+            assert updated_job.evidence is not None
     
-    def test_evaluation_results_stored_correctly(self, app, user_with_aspects, mock_llm_provider):
+    def test_evidence_stored_correctly(self, app, user_with_aspects, mock_llm_provider):
         """Test evaluation results stored correctly in job."""
         with app.app_context():
             job = Job.create(
@@ -536,7 +536,7 @@ Reasoning: Unclear.
             
             # Check stored results
             updated_job = Job.get_by_id(job.id)
-            stored = updated_job.get_evaluation_results()
+            stored = updated_job.get_evidence()
             
             assert len(stored) > 0
             assert all("status" in v and "reasoning" in v for v in stored.values())
@@ -613,10 +613,10 @@ Reasoning: Unclear.
 
 @pytest.mark.db
 class TestDatabaseFields:
-    """Tests for evaluation_results database field."""
+    """Tests for evidence database field."""
     
-    def test_job_evaluation_results_nullable(self, app, user_with_aspects):
-        """Test Job.evaluation_results field is nullable."""
+    def test_job_evidence_nullable(self, app, user_with_aspects):
+        """Test Job.evidence field is nullable."""
         with app.app_context():
             job = Job.create(
                 id="test-job-null",
@@ -625,11 +625,11 @@ class TestDatabaseFields:
                 status="pending"
             )
             
-            assert job.evaluation_results is None
-            assert job.get_evaluation_results() == {}
+            assert job.evidence is None
+            assert job.get_evidence() == {}
     
-    def test_job_stores_json_evaluation_results(self, app, user_with_aspects):
-        """Test Job stores evaluation_results as JSON."""
+    def test_job_stores_json_evidence(self, app, user_with_aspects):
+        """Test Job stores evidence as JSON."""
         with app.app_context():
             job = Job.create(
                 id="test-job-json",
@@ -645,15 +645,15 @@ class TestDatabaseFields:
                 }
             }
             
-            job.set_evaluation_results(test_data)
+            job.set_evidence(test_data)
             job.save()
             
             # Retrieve and check
             retrieved = Job.get_by_id(job.id)
-            assert retrieved.get_evaluation_results() == test_data
+            assert retrieved.get_evidence() == test_data
     
-    def test_job_evaluation_results_retrievable(self, app, user_with_aspects):
-        """Test Job.evaluation_results is retrievable across sessions."""
+    def test_job_evidence_retrievable(self, app, user_with_aspects):
+        """Test Job.evidence is retrievable across sessions."""
         with app.app_context():
             job = Job.create(
                 id="test-job-retrieve",
@@ -667,13 +667,13 @@ class TestDatabaseFields:
                 "aspect-2": {"status": "FAIL", "reasoning": "Reason 2"},
             }
             
-            job.set_evaluation_results(test_results)
+            job.set_evidence(test_results)
             job.save()
         
         with app.app_context():
             # Retrieve in new session
             retrieved_job = Job.get_by_id(job.id)
-            stored = retrieved_job.get_evaluation_results()
+            stored = retrieved_job.get_evidence()
             
             assert stored == test_results
             assert len(stored) == 2
@@ -760,13 +760,13 @@ class TestAspectMetadataInResults:
     def test_parse_includes_aspect_descriptions(self, app, user_with_aspects):
         """Test that parse_evaluation_response includes aspect descriptions."""
         with app.app_context():
-            # Get active aspects (should have descriptions from DEFAULT_ASPECTS)
-            active_aspects = AspectService.get_active_aspects_for_evaluation(user_with_aspects.id)
+            # Get active aspects (should have descriptions from DEFAULT_PLUGINS)
+            active_plugins = PluginService.get_active_plugins_for_evaluation(user_with_aspects.id)
             
             # Verify aspects have description field
-            assert all("description" in a for a in active_aspects), \
+            assert all("description" in a for a in active_plugins), \
                 "Active aspects missing description field"
-            assert all(a["description"] for a in active_aspects), \
+            assert all(a["description"] for a in active_plugins), \
                 "Active aspects have empty descriptions"
             
             # Simulate LLM response with JSON array
@@ -776,15 +776,15 @@ class TestAspectMetadataInResults:
                     "status": "PASS",
                     "reasoning": f"Evaluated {aspect['name']}"
                 }
-                for aspect in active_aspects
+                for aspect in active_plugins
             ])
             
             # Parse response
-            result = parse_evaluation_response(response, active_aspects)
+            result = parse_evaluation_response(response, active_plugins)
             
             # Verify each result includes aspect_description
-            assert len(result) == len(active_aspects), \
-                f"Expected {len(active_aspects)} results, got {len(result)}"
+            assert len(result) == len(active_plugins), \
+                f"Expected {len(active_plugins)} results, got {len(result)}"
             
             for aspect_id, aspect_result in result.items():
                 # Check all required fields present
@@ -799,7 +799,7 @@ class TestAspectMetadataInResults:
                 
                 # Verify it matches one of the original aspects
                 matching_aspect = next(
-                    (a for a in active_aspects if str(a["id"]) == aspect_id),
+                    (a for a in active_plugins if str(a["id"]) == aspect_id),
                     None
                 )
                 assert matching_aspect, f"No original aspect for {aspect_id}"
@@ -842,7 +842,7 @@ class TestAspectMetadataInResults:
             )
             
             # Get active aspects
-            active_aspects = AspectService.get_active_aspects_for_evaluation(user_with_aspects.id)
+            active_plugins = PluginService.get_active_plugins_for_evaluation(user_with_aspects.id)
             
             # Mock LLM response with valid JSON
             llm_response = json.dumps([
@@ -851,7 +851,7 @@ class TestAspectMetadataInResults:
                     "status": "PASS",
                     "reasoning": f"Test evaluation for {aspect['name']}"
                 }
-                for aspect in active_aspects
+                for aspect in active_plugins
             ])
             mock_llm_provider.complete.return_value = llm_response
             
@@ -866,8 +866,8 @@ class TestAspectMetadataInResults:
             )
             
             # Verify descriptions are in results
-            assert len(result) == len(active_aspects), \
-                f"Expected {len(active_aspects)} results, got {len(result)}"
+            assert len(result) == len(active_plugins), \
+                f"Expected {len(active_plugins)} results, got {len(result)}"
             
             for aspect_id, res in result.items():
                 # Critical: description must not be empty
@@ -878,7 +878,7 @@ class TestAspectMetadataInResults:
                 
                 # Verify it's the actual description, not empty string
                 matching = next(
-                    (a for a in active_aspects if str(a["id"]) == aspect_id),
+                    (a for a in active_plugins if str(a["id"]) == aspect_id),
                     None
                 )
                 assert matching, f"Could not find aspect {aspect_id} in active list"
@@ -889,7 +889,7 @@ class TestAspectMetadataInResults:
         """Integration test: custom aspects must have descriptions in evaluation results."""
         with app.app_context():
             # Create a custom aspect WITH description
-            custom = AspectService.create_custom_aspect(
+            custom = PluginService.create_custom_aspect(
                 user_id=user_with_aspects.id,
                 name="Custom Reproducibility Check",
                 description="Verify that custom aspects preserve descriptions through evaluation",
@@ -897,7 +897,7 @@ class TestAspectMetadataInResults:
             )
             
             # Verify it was created with description
-            all_aspects = AspectService.get_all_aspects_for_user(user_with_aspects.id)
+            all_aspects = PluginService.get_all_aspects_for_user(user_with_aspects.id)
             custom_from_db = next(
                 (a for a in all_aspects if a["id"] == custom["id"]),
                 None
@@ -906,13 +906,13 @@ class TestAspectMetadataInResults:
             assert custom_from_db["description"], "Custom aspect has empty description in get_all_aspects"
             
             # Get active aspects for evaluation
-            active = AspectService.get_active_aspects_for_evaluation(user_with_aspects.id)
+            active = PluginService.get_active_plugins_for_evaluation(user_with_aspects.id)
             custom_active = next(
                 (a for a in active if a["id"] == custom["id"]),
                 None
             )
             assert custom_active is not None, "Custom aspect not in active aspects"
             assert custom_active["description"], \
-                f"Custom aspect lost description in get_active_aspects_for_evaluation: {custom_active}"
+                f"Custom aspect lost description in get_active_plugins_for_evaluation: {custom_active}"
             assert custom_active["description"] == custom["description"], \
                 f"Description mismatch: {custom_active['description']} vs {custom['description']}"

@@ -48,7 +48,7 @@ class Job(BaseModel):
     error_message = TextField(null=True)
     thumbnail_path = CharField(null=True)
     num_pages = IntegerField(null=True)
-    evaluation_results = TextField(null=True)  # JSON: {aspect_id: {status, reasoning, ...}}
+    evidence = TextField(null=True)  # JSON: {plugin_id: {status, reasoning, ...}}
     created_at = DateTimeField(default=datetime.now)
     completed_at = DateTimeField(null=True)
 
@@ -71,18 +71,18 @@ class Job(BaseModel):
         """Set report as JSON."""
         self.report = json.dumps(data)
 
-    def get_evaluation_results(self) -> dict:
-        """Parse evaluation_results JSON."""
-        if not self.evaluation_results:
+    def get_evidence(self) -> dict:
+        """Parse evidence JSON."""
+        if not self.evidence:
             return {}
         try:
-            return json.loads(self.evaluation_results)
+            return json.loads(self.evidence)
         except:
             return {}
 
-    def set_evaluation_results(self, data: dict):
-        """Set evaluation_results as JSON."""
-        self.evaluation_results = json.dumps(data)
+    def set_evidence(self, data: dict):
+        """Set evidence as JSON."""
+        self.evidence = json.dumps(data)
 
 
 class Artifact(BaseModel):
@@ -182,10 +182,10 @@ class ExecutionDetails(BaseModel):
             return []
 
 
-class AspectEvaluation(BaseModel):
-    """Stage 3: Reproducibility aspect evaluation."""
-    job = ForeignKeyField(Job, backref='aspect_evaluations')
-    aspect_id = CharField()
+class PluginEvaluation(BaseModel):
+    """Stage 3: Reproducibility plugin evaluation."""
+    job = ForeignKeyField(Job, backref='plugin_evaluations')
+    plugin_id = CharField()
     name = CharField()
     status = CharField()  # yes, partial, no, unknown
     evidence = TextField(null=True)
@@ -195,9 +195,9 @@ class AspectEvaluation(BaseModel):
     created_at = DateTimeField(default=datetime.now)
 
     class Meta:
-        table_name = 'aspect_evaluations'
+        table_name = 'plugin_evaluations'
         indexes = (
-            (('job', 'aspect_id'), True),  # Unique per job/aspect
+            (('job', 'plugin_id'), True),  # Unique per job/plugin
         )
 
 
@@ -296,17 +296,17 @@ def init_db(app_logger=None):
     
     # Import APIKey here to avoid circular imports
     from models.api_key import APIKey
-    from models.aspect import Aspect, UserAspect
-    from models.execution_script import ExecutionScript, ExecutionScriptResult, UserScript
-    
+    from models.plugin import Plugin, UserPlugin
+    from models.check import Check, CheckResult, UserCheck
+
     models = [
         User, Job, Artifact, Event,
-        PaperAnalysis, ExecutionDetails, AspectEvaluation,
+        PaperAnalysis, ExecutionDetails, PluginEvaluation,
         CachePaperAnalysis, CacheCodeExecution, CacheEvaluation,
         ChatSession, ChatMessage,
         APIKey,
-        Aspect, UserAspect,
-        ExecutionScript, ExecutionScriptResult, UserScript,
+        Plugin, UserPlugin,
+        Check, CheckResult, UserCheck,
     ]
     
     db.create_tables(models, safe=True)
@@ -328,12 +328,12 @@ def _apply_schema_updates(db):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        # Check if description column exists in execution_script
-        cursor.execute("PRAGMA table_info(execution_script)")
+        # Check if description column exists in checks
+        cursor.execute("PRAGMA table_info(checks)")
         columns = [col[1] for col in cursor.fetchall()]
-        
-        if 'description' not in columns:
-            cursor.execute("ALTER TABLE execution_script ADD COLUMN description TEXT")
+
+        if columns and 'description' not in columns:
+            cursor.execute("ALTER TABLE checks ADD COLUMN description TEXT")
             conn.commit()
         
         conn.close()

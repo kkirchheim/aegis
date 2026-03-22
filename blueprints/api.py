@@ -32,6 +32,12 @@ from schemas import (
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 
+def _get_limiter():
+    """Get the rate limiter from the current app."""
+    from flask import current_app
+    return getattr(current_app, 'limiter', None)
+
+
 # ============================================================================
 # Authentication API Endpoints (Separated from page routes)
 # ============================================================================
@@ -90,7 +96,9 @@ def api_login(username, password):
         return {"message": "Login successful", "redirect": "/"}
     
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Login error")
+        return {"error": "An internal error occurred"}, 500
 
 
 @api_bp.route("/auth/register", methods=["POST"])
@@ -150,9 +158,11 @@ def api_register(username, email, password, confirm_password):
             },
             201  # Explicitly set 201 status
         )
-    
+
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Registration error")
+        return {"error": "Failed to create account"}, 500
 
 
 @api_bp.route("/auth/change-password", methods=["POST"])
@@ -214,7 +224,9 @@ def api_change_password(old_password, new_password, confirm_password):
         
         return "", 204
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 # ============================================================================
@@ -267,7 +279,9 @@ def list_api_keys():
             "total": len(keys)
         }
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 @api_bp.route("/keys", methods=["POST"])
@@ -332,7 +346,9 @@ def create_api_key(name):
             201
         )
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 @api_bp.route("/keys/<key_id>", methods=["DELETE"])
@@ -383,7 +399,9 @@ def revoke_api_key(key_id):
         
         return "", 204
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 # ============================================================================
@@ -513,7 +531,9 @@ def cache_clear():
         else:
             return ({"error": "Failed to clear cache"}), 500
     except Exception as e:
-        return ({"error": str(e)}), 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 # ============================================================================
@@ -593,7 +613,7 @@ def chat_with_paper(job_id, message):
     """
     from services.llm_service import init_llm_provider
     from blueprints.jobs import emit_event
-    from repositories import PaperAnalysisRepository, ExecutionDetailsRepository, AspectEvaluationRepository
+    from repositories import PaperAnalysisRepository, ExecutionDetailsRepository, PluginEvaluationRepository
     
     user_id = session.get('user_id')
     user_message = message.strip()
@@ -614,7 +634,7 @@ def chat_with_paper(job_id, message):
         # FETCH PAPER AND ANALYSIS DATA
         paper_analysis = PaperAnalysisRepository.get(job_id)
         execution_details = ExecutionDetailsRepository.get(job_id)
-        aspect_evaluations = AspectEvaluationRepository.list_by_job(job_id)
+        plugin_evaluations = PluginEvaluationRepository.list_by_job(job_id)
         
         # Get or create session
         session_obj = get_or_create_chat_session(job_id)
@@ -637,21 +657,25 @@ def chat_with_paper(job_id, message):
                     emit_event,
                     paper_analysis,
                     execution_details,
-                    aspect_evaluations
+                    plugin_evaluations
                 ),
                 daemon=True
             )
             thread.start()
         except Exception as e:
-            return {"error": str(e)}, 500
+            from flask import current_app
+            current_app.logger.exception("Internal error")
+            return {"error": "An internal error occurred"}, 500
         
         return {"ok": True}
     
     except Exception as e:
-        return ({"error": str(e)}), 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
-def _build_chat_system_prompt(paper_analysis, execution_details, aspect_evaluations):
+def _build_chat_system_prompt(paper_analysis, execution_details, plugin_evaluations):
     """Build system prompt with paper analysis and reproducibility context."""
     import json
     
@@ -710,9 +734,9 @@ Errors Encountered: {execution_details.errors_summary or "No errors"}
     
     # Extract reproducibility evaluations
     evaluations_info = ""
-    if aspect_evaluations:
+    if plugin_evaluations:
         eval_summary = []
-        for eval_item in aspect_evaluations:
+        for eval_item in plugin_evaluations:
             status_emoji = "✓" if eval_item.status == "pass" else "✗" if eval_item.status == "fail" else "~"
             eval_summary.append(
                 f"{status_emoji} {eval_item.name}: {eval_item.status}\n"
@@ -758,14 +782,14 @@ INSTRUCTIONS:
     return system_prompt
 
 
-def _generate_chat_response(job_id, session_id, messages, llm_provider, emit_event, paper_analysis=None, execution_details=None, aspect_evaluations=None):
+def _generate_chat_response(job_id, session_id, messages, llm_provider, emit_event, paper_analysis=None, execution_details=None, plugin_evaluations=None):
     """Generate chat response in background with paper context."""
     try:
         # BUILD SYSTEM PROMPT WITH PAPER CONTEXT
         system_prompt = _build_chat_system_prompt(
             paper_analysis,
             execution_details,
-            aspect_evaluations
+            plugin_evaluations
         )
         
         full_response = ""
@@ -798,9 +822,11 @@ def _generate_chat_response(job_id, session_id, messages, llm_provider, emit_eve
         })
     
     except Exception as e:
+        from flask import current_app
+        current_app.logger.exception(f"[{job_id}] Chat error")
         emit_event(job_id, {
             "step": "chat_error",
-            "message": f"Error: {str(e)}"
+            "message": "An error occurred processing your message"
         })
 
 
@@ -850,7 +876,9 @@ def get_chat_history_endpoint(job_id):
             }
     
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 @api_bp.route("/job/<job_id>/chat/history", methods=["DELETE"])
@@ -894,7 +922,9 @@ def delete_chat_history_endpoint(job_id):
         return "", 204
     
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 # ============================================================================
@@ -949,7 +979,13 @@ def agent_think(job_id, repo_state=None):
         # Build prompt for Claude
         files_list = (repo_state.get("discovered_files") or [])[:15]
         combined_output = repo_state.get("combined_output", "") or ""
-        output_summary = combined_output[:Config.AGENT_CONTEXT_LIMIT] if combined_output else "(none)"
+        if not combined_output:
+            output_summary = "(none)"
+        elif len(combined_output) <= Config.AGENT_CONTEXT_LIMIT:
+            output_summary = combined_output
+        else:
+            # Keep the tail (most recent output is most relevant for decisions)
+            output_summary = "... (earlier output truncated) ...\n" + combined_output[-Config.AGENT_CONTEXT_LIMIT:]
         executed_commands = repo_state.get("executed_commands", [])
         errors = repo_state.get("errors") or []
         
@@ -969,14 +1005,30 @@ def agent_think(job_id, repo_state=None):
                 error_lines.append(f"  - {cmd}: {stderr}")
             error_section = "Recent errors:\n" + "\n".join(error_lines)
         
-        prompt = f"""You are an agent inside a Docker container attempting to reproduce code.
+        iteration = repo_state.get('iteration', 0)
+        max_iter = repo_state.get('max_iterations', 15)
 
-GOAL: Clone repository, understand how to run it, and execute it successfully.
+        # Budget hints
+        remaining = max_iter - iteration
+        if remaining <= 2:
+            urgency = "CRITICAL: You have ≤2 iterations left. You MUST call 'check_success' or 'done' NOW."
+        elif remaining <= 5:
+            urgency = f"WARNING: Only {remaining} iterations left. Wrap up and report results soon."
+        else:
+            urgency = ""
+
+        prompt = f"""You are an agent inside a Docker container attempting to reproduce code from a scientific paper.
+
+GOAL: Install dependencies, execute the repository's scripts, and collect evidence about reproducibility.
+
+ENVIRONMENT:
+- The repository is ALREADY cloned at /workspace/repo. All commands run there by default.
+- Do NOT clone the repository again.
 
 CURRENT STATE:
 - Repository: {repo_state.get('repo_url', 'unknown')}
-- Files: {files_list}
-- Iteration: {repo_state.get('iteration', 0)}/15
+- Files in repo root: {files_list}
+- Iteration: {iteration}/{max_iter} ({remaining} remaining)
 
 {commands_summary}
 
@@ -986,18 +1038,41 @@ OUTPUT (truncated):
 ERRORS:
 {error_section}
 
-INSTRUCTIONS:
-1. List and read README.md or documentation
-2. Look for setup.py, requirements.txt, environment.yml, Dockerfile
-3. Install dependencies
-4. Find and run the main script/application
-5. Report success with check_success action
+{urgency}
 
-RESPONSE FORMAT (JSON only):
+AVAILABLE ACTIONS:
+- "read_file": Read a file from /workspace/repo. Target is a relative path, optionally with
+  :LINE to start from that line. Examples: "README.md", "src/model.py:80".
+  Each read returns up to 200 lines. Use :LINE to read later sections of long files.
+- "run_command": Run a shell command in /workspace/repo. Full bash syntax supported.
+- "check_success": Report that reproduction succeeded. Use after you have run scripts and
+  collected enough evidence. Include a summary of what worked and what didn't in "reasoning".
+- "done": Report that analysis is complete (even if reproduction failed or only partially succeeded).
+
+RULES (STRICT — violating these wastes iterations):
+1. NEVER DEBUG FAILURES. When a script fails, note the error and move to the next script.
+   Do NOT: read source code to understand why it failed, check library versions, write test
+   scripts, inspect internal APIs, or try to fix the code. Just move on.
+2. NEVER read source code files (.py, .R, .m, etc.) except README/docs and config files.
+   Reading source code to understand errors is DEBUGGING — see rule 1.
+3. Do NOT re-run a command that already succeeded or already failed.
+4. Do NOT repeat the same action with the same target.
+5. After a failure, your ONLY options are: try the next script, or report results.
+6. PREFER RUNNING over reading. Only read files for setup instructions or to find entry points.
+
+WORKFLOW:
+1. Read README.md to understand how to run the code (1 iteration)
+2. Install dependencies (1-2 iterations)
+3. Run scripts — try each script/entry point ONCE. If it fails, move on to the next one.
+4. Once you have tried all reasonable scripts, IMMEDIATELY report results:
+   - "check_success" if at least one script produced meaningful output
+   - "done" if nothing worked
+
+RESPONSE FORMAT (JSON only, no markdown):
 {{
   "action": "read_file" | "run_command" | "check_success" | "done",
   "target": "path or command",
-  "reasoning": "why"
+  "reasoning": "brief explanation"
 }}
 """
         
@@ -1025,7 +1100,7 @@ RESPONSE FORMAT (JSON only):
     except Exception as e:
         from flask import current_app
         current_app.logger.exception(f"[{job_id}] Agent decision failed: {str(e)}")
-        return {"error": str(e), "action": "done"}, 500
+        return {"error": "Agent decision failed", "action": "done"}, 500
 
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
@@ -1125,7 +1200,9 @@ def agent_execution(job_id, commands_run=None, stdout_combined=None, actual_resu
         return {"ok": True}
     
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
@@ -1182,11 +1259,13 @@ def agent_complete(job_id, success=None, message=None):
         return {"ok": True}
     
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
-@api_bp.route("/agent/script_result", methods=["POST"])
+@api_bp.route("/agent/check_result", methods=["POST"])
 @use_kwargs({
     "job_id": fields.Str(required=True),
     "script_hash": fields.Str(required=True),
@@ -1199,33 +1278,33 @@ def agent_complete(job_id, success=None, message=None):
 @marshal_with(ErrorSchema, code=400)
 @marshal_with(ErrorSchema, code=404)
 @marshal_with(ErrorSchema, code=500)
-def agent_script_result(job_id, script_hash, exit_code, stdout, stderr, duration_ms):
+def agent_check_result(job_id, script_hash, exit_code, stdout, stderr, duration_ms):
     """
-    Agent reports script execution result.
-    
+    Agent reports check execution result.
+
     Input: job_id, script_hash, exit_code, stdout, stderr, duration_ms
     Returns: {"ok": True}
     """
     from models.database import Job
-    from models.execution_script import ExecutionScript, ExecutionScriptResult
+    from models.check import Check, CheckResult
     from blueprints.jobs import emit_event
     import uuid
-    
+
     # Validate job exists
     try:
         job = Job.get_by_id(job_id)
     except:
         return {"error": "Invalid job_id"}, 404
-    
-    # Validate script exists
+
+    # Validate check exists
     try:
-        script = ExecutionScript.get_by_id(script_hash)
+        check = Check.get_by_id(script_hash)
     except:
         return {"error": "Invalid script_hash"}, 404
-    
+
     try:
         # Store result
-        result = ExecutionScriptResult.create(
+        result = CheckResult.create(
             id=uuid.uuid4(),
             job=job,
             script_hash=script_hash,
@@ -1234,23 +1313,25 @@ def agent_script_result(job_id, script_hash, exit_code, stdout, stderr, duration
             stderr=stderr[:5000] if stderr else "",
             duration_ms=duration_ms
         )
-        
+
         # Emit event for live display
         emit_event(job_id, {
-            'step': 'script_executed',
-            'message': f"✓ {script.name} (exit {exit_code})",
-            'script_name': script.name,
+            'step': 'check_executed',
+            'message': f"✓ {check.name} (exit {exit_code})",
+            'check_name': check.name,
             'script_hash': script_hash,
             'exit_code': exit_code,
             'stdout': stdout[:500] if stdout else '',
             'stderr': stderr[:200] if stderr else '',
             'duration_ms': duration_ms
         })
-        
+
         return {"ok": True}
-    
+
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 # ============================================================================
@@ -1349,11 +1430,12 @@ def upload_pdf():
     # Get configuration
     config = {
         "container": request.form.get("container", "python"),
+        "docker_image": request.form.get("docker_image", "standard"),
         "model": request.form.get("model", "haiku"),
         "cpu_limit": int(request.form.get("cpu_limit", 4)),
-        "memory_limit": int(request.form.get("memory_limit", 2048)),
+        "memory_limit": int(request.form.get("memory_limit", 4096)),
         "runtime_limit": int(request.form.get("runtime_limit", 30)),
-        "max_iterations": int(request.form.get("max_iterations", 3)),
+        "max_iterations": int(request.form.get("max_iterations", 15)),
         "storage_limit": int(request.form.get("storage_limit", 10))
     }
     
@@ -1407,7 +1489,9 @@ def list_jobs_api():
             "total": len(jobs) if jobs else 0
         }
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 @api_bp.route("/job/<job_id>", methods=["GET"])
@@ -1460,7 +1544,9 @@ def get_job_detail(job_id):
         
         return response
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 @api_bp.route("/job/<job_id>", methods=["DELETE"])
@@ -1499,7 +1585,9 @@ def delete_job_route(job_id):
             return {"error": "Failed to delete job"}, 500
     
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 @api_bp.route("/job/<job_id>/full", methods=["GET"])
@@ -1565,48 +1653,48 @@ def get_job_full(job_id):
         # Get current_stage, default to pending if not set
         current_stage = job.current_stage or "pending"
         
-        # Enrich evaluation_results with aspect metadata
-        evaluation_results = job.get_evaluation_results()
-        if evaluation_results:
-            from services.aspect_service import AspectService
-            # Get all aspects for this user (to look up names/descriptions)
-            all_aspects = AspectService.get_all_aspects_for_user(job.user_id)
-            aspect_lookup = {str(a['id']): a for a in all_aspects}
-            
-            # Merge aspect metadata into results
-            for aspect_id, result in evaluation_results.items():
-                aspect_info = aspect_lookup.get(aspect_id)
-                if aspect_info:
+        # Enrich evidence with plugin metadata
+        evidence = job.get_evidence()
+        if evidence:
+            from services.plugin_service import PluginService
+            # Get all plugins for this user (to look up names/descriptions)
+            all_plugins = PluginService.get_all_plugins_for_user(job.user_id)
+            plugin_lookup = {str(a['id']): a for a in all_plugins}
+
+            # Merge plugin metadata into results
+            for plugin_id, result in evidence.items():
+                plugin_info = plugin_lookup.get(plugin_id)
+                if plugin_info:
                     # Add name and description if not already present
-                    if 'aspect_name' not in result:
-                        result['aspect_name'] = aspect_info.get('name', 'Aspect')
-                    if 'aspect_description' not in result:
-                        result['aspect_description'] = aspect_info.get('prompt_to_use', '') or aspect_info.get('prompt', '')
-        
-        # Fetch and enrich execution script results
-        script_results_data = []
+                    if 'plugin_name' not in result:
+                        result['plugin_name'] = plugin_info.get('name', 'Plugin')
+                    if 'plugin_description' not in result:
+                        result['plugin_description'] = plugin_info.get('prompt_to_use', '') or plugin_info.get('prompt', '')
+
+        # Fetch and enrich check results
+        check_results_data = []
         try:
-            from models.execution_script import ExecutionScript, ExecutionScriptResult
-            
-            script_results = (
-                ExecutionScriptResult
+            from models.check import Check, CheckResult
+
+            check_results = (
+                CheckResult
                 .select()
-                .where(ExecutionScriptResult.job == job_id)
-                .order_by(ExecutionScriptResult.created_at.asc())
+                .where(CheckResult.job == job_id)
+                .order_by(CheckResult.created_at.asc())
             )
-            
-            for r in script_results:
+
+            for r in check_results:
                 try:
-                    script = ExecutionScript.get_by_id(r.script_hash)
-                    script_name = script.name
-                    script_description = script.description or ""
+                    check = Check.get_by_id(r.script_hash)
+                    check_name = check.name
+                    check_description = check.description or ""
                 except:
-                    script_name = "Unknown"
-                    script_description = ""
-                
-                script_results_data.append({
-                    "script_name": script_name,
-                    "script_description": script_description,
+                    check_name = "Unknown"
+                    check_description = ""
+
+                check_results_data.append({
+                    "check_name": check_name,
+                    "check_description": check_description,
                     "script_hash": r.script_hash,
                     "exit_code": r.exit_code,
                     "stdout": r.stdout or '',
@@ -1615,8 +1703,8 @@ def get_job_full(job_id):
                     "created_at": r.created_at.isoformat() if hasattr(r.created_at, 'isoformat') else str(r.created_at)
                 })
         except Exception as e:
-            current_app.logger.error(f"Failed to fetch script results: {e}")
-        
+            current_app.logger.error(f"Failed to fetch check results: {e}")
+
         response = {
             "id": job.id,
             "status": job.status,
@@ -1631,13 +1719,15 @@ def get_job_full(job_id):
             "events": events_list,
             "artifacts": artifacts,
             "paper_analysis": paper_analysis,
-            "evaluation_results": evaluation_results,  # Enriched with aspect metadata
-            "script_results": script_results_data  # Execution script results with names
+            "evidence": evidence,  # Enriched with plugin metadata
+            "check_results": check_results_data  # Check results with names
         }
         
         return response
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 @api_bp.route("/job/<job_id>/events", methods=["GET"])
@@ -1744,58 +1834,60 @@ def get_job_events_polling(job_id):
         
         return response
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
-@api_bp.route("/job/<job_id>/script_results", methods=["GET"])
+@api_bp.route("/job/<job_id>/check_results", methods=["GET"])
 @require_auth
 @doc(
     tags=["Jobs"],
-    description="Get script execution results for a job",
+    description="Get check execution results for a job",
     security=[{"sessionAuth": []}],
     params={"job_id": {"description": "Job ID", "in": "path"}},
     responses={
-        200: {"description": "Script results retrieved successfully", "schema": {"type": "object"}},
+        200: {"description": "Check results retrieved successfully", "schema": {"type": "object"}},
         401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-def get_script_results(job_id):
-    """Get all script execution results for a job."""
+def get_check_results(job_id):
+    """Get all check execution results for a job."""
     from models.database import Job
-    from models.execution_script import ExecutionScript, ExecutionScriptResult
-    
+    from models.check import Check, CheckResult
+
     try:
         user_id = session.get('user_id')
-        
+
         # Validate job access
         job = get_job(job_id)
         if not job:
             return {"error": "Job not found"}, 404
-        
+
         if job.user_id != user_id:
             return {"error": "Access denied"}, 403
-        
-        # Get all script results for this job
+
+        # Get all check results for this job
         results = (
-            ExecutionScriptResult
+            CheckResult
             .select()
-            .where(ExecutionScriptResult.job == job_id)
-            .order_by(ExecutionScriptResult.created_at.asc())
+            .where(CheckResult.job == job_id)
+            .order_by(CheckResult.created_at.asc())
         )
-        
+
         results_data = []
         for r in results:
             try:
-                script = ExecutionScript.get_by_id(r.script_hash)
-                script_name = script.name
+                check = Check.get_by_id(r.script_hash)
+                check_name = check.name
             except:
-                script_name = "Unknown"
-            
+                check_name = "Unknown"
+
             results_data.append({
-                "script_name": script_name,
+                "check_name": check_name,
                 "script_hash": r.script_hash,
                 "exit_code": r.exit_code,
                 "stdout": r.stdout or '',
@@ -1803,53 +1895,57 @@ def get_script_results(job_id):
                 "duration_ms": r.duration_ms,
                 "created_at": r.created_at.isoformat() if hasattr(r.created_at, 'isoformat') else str(r.created_at)
             })
-        
+
         return {
             "results": results_data,
             "total": len(results_data)
         }
-    
+
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
 # ============================================================================
-# User Script Management API (similar to Aspects)
+# User Check Management API (similar to Plugins)
 # ============================================================================
-# OpenAPI Tags: "Scripts"
+# OpenAPI Tags: "Checks"
 
-@api_bp.route("/user/scripts", methods=["GET"])
+@api_bp.route("/user/checks", methods=["GET"])
 @require_auth
 @doc(
-    tags=["Scripts"],
-    description="List all available scripts (default + user's own)",
+    tags=["Checks"],
+    description="List all available checks (default + user's own)",
     security=[{"sessionAuth": []}],
     responses={
-        200: {"description": "Scripts retrieved successfully", "schema": {"type": "object", "properties": {"scripts": {"type": "array"}}}},
+        200: {"description": "Checks retrieved successfully", "schema": {"type": "object", "properties": {"checks": {"type": "array"}}}},
         401: {"description": "Unauthorized", "schema": ErrorSchema()},
         500: {"description": "Internal server error", "schema": ErrorSchema()}
     }
 )
-def list_user_scripts():
-    """Get all available scripts for the user (default + their own)."""
-    from services.script_service import ScriptService
-    
+def list_user_checks():
+    """Get all available checks for the user (default + their own)."""
+    from services.check_service import CheckService
+
     try:
         user_id = session.get('user_id')
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
-        scripts = ScriptService.get_all_available_scripts(user_id)
-        
+
+        checks = CheckService.get_all_available_checks(user_id)
+
         return {
-            "scripts": scripts,
-            "total": len(scripts)
+            "checks": checks,
+            "total": len(checks)
         }
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
-@api_bp.route("/user/scripts", methods=["POST"])
+@api_bp.route("/user/checks", methods=["POST"])
 @require_auth
 @use_kwargs({
     "name": fields.Str(required=True, validate=validate.Length(min=1, max=255)),
@@ -1860,109 +1956,115 @@ def list_user_scripts():
 @marshal_with(ErrorSchema, code=401)
 @marshal_with(ErrorSchema, code=500)
 @doc(
-    tags=["Scripts"],
-    description="Create a new user script",
+    tags=["Checks"],
+    description="Create a new user check",
     security=[{"sessionAuth": []}],
     responses={
-        201: {"description": "Script created successfully"},
+        201: {"description": "Check created successfully"},
         400: {"description": "Invalid input"},
         401: {"description": "Unauthorized"},
         500: {"description": "Internal server error"}
     }
 )
-def create_user_script(name, script_text, description=""):
-    """Create a new user script."""
-    from services.script_service import ScriptService
-    
+def create_user_check(name, script_text, description=""):
+    """Create a new user check."""
+    from services.check_service import CheckService
+
     try:
         user_id = session.get('user_id')
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
-        result = ScriptService.create_user_script(user_id, name, script_text, description)
-        
+
+        result = CheckService.create_user_check(user_id, name, script_text, description)
+
         if not result:
-            return {"error": "Failed to create script"}, 400
-        
+            return {"error": "Failed to create check"}, 400
+
         return result, 201
-    
+
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
-@api_bp.route("/user/scripts/<script_hash>/activate", methods=["POST"])
+@api_bp.route("/user/checks/<script_hash>/activate", methods=["POST"])
 @require_auth
 @doc(
-    tags=["Scripts"],
-    description="Activate a script for the user",
+    tags=["Checks"],
+    description="Activate a check for the user",
     security=[{"sessionAuth": []}],
     params={
         "script_hash": {"description": "Script hash", "in": "path"}
     },
     responses={
-        200: {"description": "Script activated"},
+        200: {"description": "Check activated"},
         401: {"description": "Unauthorized"},
-        404: {"description": "Script not found"},
+        404: {"description": "Check not found"},
         500: {"description": "Internal server error"}
     }
 )
-def activate_user_script(script_hash):
-    """Activate a script for the user."""
-    from services.script_service import ScriptService
-    
+def activate_user_check(script_hash):
+    """Activate a check for the user."""
+    from services.check_service import CheckService
+
     try:
         user_id = session.get('user_id')
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
-        success = ScriptService.activate_script(user_id, script_hash)
-        
+
+        success = CheckService.activate_check(user_id, script_hash)
+
         if not success:
-            return {"error": "Script not found"}, 404
-        
+            return {"error": "Check not found"}, 404
+
         return {"ok": True}
-    
+
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
-@api_bp.route("/user/scripts/<script_hash>/deactivate", methods=["POST"])
+@api_bp.route("/user/checks/<script_hash>/deactivate", methods=["POST"])
 @require_auth
 @doc(
-    tags=["Scripts"],
-    description="Deactivate a script for the user",
+    tags=["Checks"],
+    description="Deactivate a check for the user",
     security=[{"sessionAuth": []}],
     params={
         "script_hash": {"description": "Script hash", "in": "path"}
     },
     responses={
-        200: {"description": "Script deactivated"},
+        200: {"description": "Check deactivated"},
         401: {"description": "Unauthorized"},
-        404: {"description": "Script not found"},
+        404: {"description": "Check not found"},
         500: {"description": "Internal server error"}
     }
 )
-def deactivate_user_script(script_hash):
-    """Deactivate a script for the user."""
-    from services.script_service import ScriptService
-    
+def deactivate_user_check(script_hash):
+    """Deactivate a check for the user."""
+    from services.check_service import CheckService
+
     try:
         user_id = session.get('user_id')
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
-        success = ScriptService.deactivate_script(user_id, script_hash)
-        
+
+        success = CheckService.deactivate_check(user_id, script_hash)
+
         if not success:
-            return {"error": "Script not found"}, 404
-        
+            return {"error": "Check not found"}, 404
+
         return {"ok": True}
-    
+
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
-@api_bp.route("/user/scripts/<script_hash>", methods=["PATCH"])
+@api_bp.route("/user/checks/<script_hash>", methods=["PATCH"])
 @require_auth
 @use_kwargs({
     "name": fields.Str(required=False),
@@ -1970,94 +2072,97 @@ def deactivate_user_script(script_hash):
     "script_text": fields.Str(required=False)
 }, location="json")
 @doc(
-    tags=["Scripts"],
-    description="Update a user script (must be owner)",
+    tags=["Checks"],
+    description="Update a user check (must be owner)",
     security=[{"sessionAuth": []}],
     params={
         "script_hash": {"description": "Script hash", "in": "path"}
     },
     responses={
-        200: {"description": "Script updated"},
+        200: {"description": "Check updated"},
         400: {"description": "Invalid input"},
         401: {"description": "Unauthorized"},
-        403: {"description": "Forbidden - not the script owner"},
-        404: {"description": "Script not found"},
+        403: {"description": "Forbidden - not the check owner"},
+        404: {"description": "Check not found"},
         500: {"description": "Internal server error"}
     }
 )
-def update_user_script(script_hash, name=None, description=None, script_text=None):
-    """Update a user script (only if user created it)."""
-    from services.script_service import ScriptService
-    from models.execution_script import ExecutionScript
+def update_user_check(script_hash, name=None, description=None, script_text=None):
+    """Update a user check (only if user created it)."""
+    from services.check_service import CheckService
+    from models.check import Check
     import uuid
-    
+
     try:
         user_id = session.get('user_id')
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
-        # Verify user owns this script
+
+        # Verify user owns this check
         try:
-            script = ExecutionScript.get_by_id(script_hash)
-            if script.created_by_id != user_id:
+            check = Check.get_by_id(script_hash)
+            if check.created_by_id != user_id:
                 return {"error": "Access denied"}, 403
         except:
-            return {"error": "Script not found"}, 404
-        
+            return {"error": "Check not found"}, 404
+
         # Update fields if provided
         if name:
-            script.name = name
+            check.name = name
         if description is not None:
-            script.description = description
+            check.description = description
         if script_text:
-            script.script_text = script_text
-            # If script text changed, we might need to update hash, but we'll keep it for now
-        
-        script.save()
-        
+            check.script_text = script_text
+
+        check.save()
+
         return {
-            "script_hash": script.script_hash,
-            "name": script.name,
-            "description": script.description,
+            "script_hash": check.script_hash,
+            "name": check.name,
+            "description": check.description,
             "updated": True
         }
-    
+
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500
 
 
-@api_bp.route("/user/scripts/<script_hash>", methods=["DELETE"])
+@api_bp.route("/user/checks/<script_hash>", methods=["DELETE"])
 @require_auth
 @doc(
-    tags=["Scripts"],
-    description="Delete a user script (must be owner)",
+    tags=["Checks"],
+    description="Delete a user check (must be owner)",
     security=[{"sessionAuth": []}],
     params={
         "script_hash": {"description": "Script hash", "in": "path"}
     },
     responses={
-        204: {"description": "Script deleted"},
+        204: {"description": "Check deleted"},
         401: {"description": "Unauthorized"},
-        403: {"description": "Forbidden - not the script owner"},
-        404: {"description": "Script not found"},
+        403: {"description": "Forbidden - not the check owner"},
+        404: {"description": "Check not found"},
         500: {"description": "Internal server error"}
     }
 )
-def delete_user_script(script_hash):
-    """Delete a user script (only if user created it)."""
-    from services.script_service import ScriptService
-    
+def delete_user_check(script_hash):
+    """Delete a user check (only if user created it)."""
+    from services.check_service import CheckService
+
     try:
         user_id = session.get('user_id')
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
-        success = ScriptService.delete_user_script(user_id, script_hash)
-        
+
+        success = CheckService.delete_user_check(user_id, script_hash)
+
         if not success:
-            return {"error": "Script not found or access denied"}, 404
-        
+            return {"error": "Check not found or access denied"}, 404
+
         return "", 204
-    
+
     except Exception as e:
-        return {"error": str(e)}, 500
+        from flask import current_app
+        current_app.logger.exception("Internal error")
+        return {"error": "An internal error occurred"}, 500

@@ -127,7 +127,7 @@ def delete_user(user_id):
     """Delete a user - admin only."""
     try:
         from pathlib import Path
-        from models.database import Event, Artifact, AspectEvaluation, ExecutionDetails, PaperAnalysis
+        from models.database import Event, Artifact, PluginEvaluation, ExecutionDetails, PaperAnalysis
         from flask import current_app
         
         # Verify user exists
@@ -152,7 +152,7 @@ def delete_user(user_id):
             # Delete job data (cascade deletes should handle this, but be explicit)
             Event.delete().where(Event.job == job.id).execute()
             Artifact.delete().where(Artifact.job == job.id).execute()
-            AspectEvaluation.delete().where(AspectEvaluation.job == job.id).execute()
+            PluginEvaluation.delete().where(PluginEvaluation.job == job.id).execute()
             ExecutionDetails.delete().where(ExecutionDetails.job == job.id).execute()
             PaperAnalysis.delete().where(PaperAnalysis.job == job.id).execute()
         

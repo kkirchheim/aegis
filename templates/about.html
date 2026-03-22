@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About - Paper Reproducibility Checker</title>
+    <title>About - Artifact Review</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
-    
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
-    
+
     <style>
         .text-primary { color: #0068b4 !important; }
         .bg-primary { background-color: #0068b4 !important; }
@@ -20,60 +20,86 @@
     {% include 'navbar.html' %}
 
     <div class="container mx-auto px-4 py-8 max-w-4xl">
-        
+
         <!-- Hero -->
         <section class="mb-10 text-center">
-            <h1 class="text-4xl font-bold mb-3">Paper Reproducibility Checker</h1>
+            <h1 class="text-4xl font-bold mb-3">Artifact Review</h1>
             <p class="text-lg text-base-content/70">
-                Automatically evaluate scientific paper reproducibility using AI-powered analysis, code execution, and validation scripts.
+                LLM-assisted software artifact review for scientific publications. Collect and interpret evidence about the availability, executability, and usability of research artifacts.
             </p>
         </section>
 
-        <!-- What We Do -->
+        <!-- Approach -->
         <section class="mb-10">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title">🎯 What We Do</h2>
-                    <ul class="list-disc list-inside space-y-2 text-base-content/70 mt-4">
-                        <li><strong>Extract</strong> — Code, methodology, and dependencies from papers</li>
-                        <li><strong>Execute</strong> — Run code in isolated Docker sandboxes</li>
-                        <li><strong>Validate</strong> — Run custom scripts to check reproducibility criteria</li>
-                        <li><strong>Evaluate</strong> — Score 15 reproducibility aspects using AI</li>
-                        <li><strong>Interact</strong> — Chat with AI about papers using full context</li>
+                    <h2 class="card-title">🎯 Approach</h2>
+                    <p class="text-base-content/70 mt-3 mb-4">
+                        Artifact review is modeled as a process of <strong>evidence generation and interpretation</strong>.
+                        Starting from a scientific publication, the system extracts referenced artifacts, collects heterogeneous evidence using complementary analysis components, and aggregates the results into a structured, multi-dimensional assessment.
+                    </p>
+                    <ul class="list-disc list-inside space-y-2 text-base-content/70">
+                        <li><strong>Extract</strong> — Identify software artifacts, datasets, and resources referenced in the paper</li>
+                        <li><strong>Generate Evidence</strong> — Collect signals through deterministic checks, semantic evaluation, and interactive exploration</li>
+                        <li><strong>Assess</strong> — Aggregate evidence into a structured review context for human inspection</li>
                     </ul>
                 </div>
             </div>
         </section>
 
-        <!-- How It Works -->
+        <!-- Pipeline -->
         <section class="mb-12">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title">⚙️ How It Works</h2>
+                    <h2 class="card-title">⚙️ Pipeline</h2>
                     <div class="steps steps-vertical lg:steps-horizontal w-full mt-4">
                         <div class="step step-primary">
                             <div class="step-content">
                                 <h3 class="font-semibold">Upload</h3>
-                                <p class="text-xs text-base-content/70">Submit a PDF paper</p>
+                                <p class="text-xs text-base-content/70">Submit a PDF publication</p>
                             </div>
                         </div>
                         <div class="step step-primary">
                             <div class="step-content">
-                                <h3 class="font-semibold">Analyze</h3>
-                                <p class="text-xs text-base-content/70">Claude extracts code & methodology</p>
+                                <h3 class="font-semibold">Extract</h3>
+                                <p class="text-xs text-base-content/70">Identify artifacts and metadata</p>
                             </div>
                         </div>
                         <div class="step step-primary">
                             <div class="step-content">
-                                <h3 class="font-semibold">Execute</h3>
-                                <p class="text-xs text-base-content/70">Run code in Docker sandbox</p>
+                                <h3 class="font-semibold">Generate Evidence</h3>
+                                <p class="text-xs text-base-content/70">Run checks, agent, and semantic analysis</p>
                             </div>
                         </div>
                         <div class="step step-primary">
                             <div class="step-content">
-                                <h3 class="font-semibold">Evaluate</h3>
-                                <p class="text-xs text-base-content/70">Score reproducibility aspects</p>
+                                <h3 class="font-semibold">Assess</h3>
+                                <p class="text-xs text-base-content/70">Aggregate into review context</p>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Evidence Generators -->
+        <section class="mb-10">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title">🔬 Evidence Generators</h2>
+                    <p class="text-sm text-base-content/70 mt-3 mb-4">Three complementary mechanisms for collecting review evidence:</p>
+                    <div class="grid md:grid-cols-3 gap-3">
+                        <div class="p-4 bg-info/10 rounded border border-info/30">
+                            <p class="font-semibold mb-2">Deterministic</p>
+                            <p class="text-xs text-base-content/70">Repository structure, dependency manifests, configuration files, presence of documentation and scripts. Implemented as execution checks.</p>
+                        </div>
+                        <div class="p-4 bg-warning/10 rounded border border-warning/30">
+                            <p class="font-semibold mb-2">Semantic</p>
+                            <p class="text-xs text-base-content/70">LLM-based evaluation of documentation quality, resource requirements, and paper-artifact correspondence. Implemented as evaluation plugins.</p>
+                        </div>
+                        <div class="p-4 bg-success/10 rounded border border-success/30">
+                            <p class="font-semibold mb-2">Interactive</p>
+                            <p class="text-xs text-base-content/70">Agentic exploration that follows setup instructions, installs dependencies, and executes scripts in a sandboxed Docker environment.</p>
                         </div>
                     </div>
                 </div>
@@ -87,59 +113,35 @@
                     <h2 class="card-title">✨ Features</h2>
                     <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
                         <div class="flex gap-3">
+                            <span class="text-xl">🎯</span>
+                            <div>
+                                <p class="font-semibold">Extensible Review Criteria</p>
+                                <p class="text-base-content/70">Plugin-based evaluation and execution checks</p>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-3">
+                            <span class="text-xl">🐳</span>
+                            <div>
+                                <p class="font-semibold">Sandboxed Execution</p>
+                                <p class="text-base-content/70">Agent runs code in isolated Docker containers</p>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-3">
                             <span class="text-xl">💬</span>
                             <div>
                                 <p class="font-semibold">Interactive Chat</p>
-                                <p class="text-base-content/70">Q&A with full context</p>
+                                <p class="text-base-content/70">Query the review context with follow-up questions</p>
                             </div>
                         </div>
-                        
-                        <div class="flex gap-3">
-                            <span class="text-xl">🔧</span>
-                            <div>
-                                <p class="font-semibold">Custom Scripts</p>
-                                <p class="text-base-content/70">User-defined validation</p>
-                            </div>
-                        </div>
-                        
-                        <div class="flex gap-3">
-                            <span class="text-xl">⚡</span>
-                            <div>
-                                <p class="font-semibold">Fast & Cached</p>
-                                <p class="text-base-content/70">3-layer caching</p>
-                            </div>
-                        </div>
-                        
+
                         <div class="flex gap-3">
                             <span class="text-xl">🔐</span>
                             <div>
                                 <p class="font-semibold">API & CLI</p>
-                                <p class="text-base-content/70">Automation via API keys</p>
+                                <p class="text-base-content/70">Automation via API keys for batch processing</p>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Evaluation Criteria -->
-        <section class="mb-10">
-            <div class="card bg-base-100 shadow-lg">
-                <div class="card-body">
-                    <h2 class="card-title">📋 Evaluation Aspects</h2>
-                    <p class="text-sm text-base-content/70 mt-3">15 reproducibility criteria across three tiers:</p>
-                    <div class="grid md:grid-cols-3 gap-3 mt-4 text-xs">
-                        <div class="p-3 bg-error/10 rounded border border-error/30">
-                            <p class="font-semibold mb-2">Critical (5)</p>
-                            <p class="text-base-content/70">Results reproducibility, dependencies, environment, hyperparameters, dataset availability</p>
-                        </div>
-                        <div class="p-3 bg-warning/10 rounded border border-warning/30">
-                            <p class="font-semibold mb-2">High Value (4)</p>
-                            <p class="text-base-content/70">Configuration, tests, documentation, randomness control</p>
-                        </div>
-                        <div class="p-3 bg-info/10 rounded border border-info/30">
-                            <p class="font-semibold mb-2">Nice-to-Have (6)</p>
-                            <p class="text-base-content/70">CI/CD, license, data versioning, version compatibility</p>
                         </div>
                     </div>
                 </div>
@@ -166,7 +168,7 @@
                         </div>
                         <div>
                             <p class="font-semibold mb-2">DevOps</p>
-                            <p class="text-base-content/70">Docker Compose, Environment config, Production-ready</p>
+                            <p class="text-base-content/70">Docker Compose, Environment config, OpenAPI</p>
                         </div>
                     </div>
                 </div>
@@ -180,7 +182,7 @@
                     <h2 class="card-title mb-4">🚀 Get Started</h2>
                     <a href="/" class="btn btn-primary gap-2 w-full justify-start mb-3">
                         <span>📤</span>
-                        <span>Analyze a Paper</span>
+                        <span>Review a Paper's Artifacts</span>
                     </a>
                     <a href="/history" class="btn btn-outline gap-2 w-full justify-start">
                         <span>📚</span>
@@ -191,7 +193,7 @@
         </section>
 
         <footer class="text-center py-8 text-sm text-base-content/50">
-            <p>Paper Reproducibility Checker • Open Source • MIT License</p>
+            <p>Artifact Review • Open Source • MIT License</p>
         </footer>
 
     </div>
@@ -203,7 +205,7 @@
             html.setAttribute('data-theme', isDark ? 'light' : 'dark');
             localStorage.setItem('theme', isDark ? 'light' : 'dark');
         }
-        
+
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
     </script>

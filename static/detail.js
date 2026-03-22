@@ -21,9 +21,9 @@ const statusSection = document.getElementById("statusSection");
 const progressSection = document.getElementById("progressSection");
 const metadataSection = document.getElementById("metadataSection");
 const citationsSection = document.getElementById("citationsSection");
-const scriptResultsSection = document.getElementById("scriptResultsSection");
+const checkResultsSection = document.getElementById("checkResultsSection");
 const artifactsSection = document.getElementById("artifactsSection");
-const aspectsSection = document.getElementById("aspectsSection");
+const pluginsSection = document.getElementById("pluginsSection");
 const logSection = document.getElementById("logSection");
 const chatSection = document.getElementById("chatSection");
 
@@ -35,10 +35,10 @@ const eventLog = document.getElementById("eventLog");
 const metadataContent = document.getElementById("metadataContent");
 const citationsContent = document.getElementById("citationsContent");
 const citationCount = document.getElementById("citationCount");
-const scriptResultsContent = document.getElementById("scriptResultsContent");
-const scriptResultCount = document.getElementById("scriptResultCount");
+const checkResultsContent = document.getElementById("checkResultsContent");
+const checkResultCount = document.getElementById("checkResultCount");
 const artifactsContent = document.getElementById("artifactsContent");
-const aspectsContent = document.getElementById("aspectsContent");
+const pluginsContent = document.getElementById("pluginsContent");
 
 // DOM Elements - Controls
 const deleteBtn = document.getElementById("deleteBtn");
@@ -213,8 +213,8 @@ async function pollOnce() {
         try { updateMetadata(job); } catch (e) { console.error(`[update] metadata failed:`, e); }
         try { updateCitations(job); } catch (e) { console.error(`[update] citations failed:`, e); }
         try { updateArtifacts(job); } catch (e) { console.error(`[update] artifacts failed:`, e); }
-        try { updateScriptResults(job); } catch (e) { console.error(`[update] scriptResults failed:`, e); }
-        try { updateAspects(job); } catch (e) { console.error(`[update] aspects failed:`, e); }
+        try { updateScriptResults(job); } catch (e) { console.error(`[update] checkResults failed:`, e); }
+        try { updatePlugins(job); } catch (e) { console.error(`[update] plugins failed:`, e); }
         try { updateAssessment(job); } catch (e) { console.error(`[update] assessment failed:`, e); }
         
         // Stop polling when complete
@@ -259,24 +259,24 @@ function showRelevantSections(job) {
         console.log(`[sections] artifactsSection: ${show ? "shown" : "hidden"} (count=${job.artifacts?.length || 0})`);
     }
     
-    if (scriptResultsSection) {
-        const show = Array.isArray(job.script_results) && job.script_results.length > 0;
-        scriptResultsSection.style.display = show ? "block" : "none";
-        console.log(`[sections] scriptResultsSection: ${show ? "shown" : "hidden"} (count=${job.script_results?.length || 0})`);
+    if (checkResultsSection) {
+        const show = Array.isArray(job.check_results) && job.check_results.length > 0;
+        checkResultsSection.style.display = show ? "block" : "none";
+        console.log(`[sections] checkResultsSection: ${show ? "shown" : "hidden"} (count=${job.check_results?.length || 0})`);
     }
     
-    if (aspectsSection) {
-        const show = job.report && Array.isArray(job.report.aspect_evaluations) && job.report.aspect_evaluations.length > 0;
-        aspectsSection.style.display = show ? "block" : "none";
-        console.log(`[sections] aspectsSection: ${show ? "shown" : "hidden"} (count=${job.report?.aspect_evaluations?.length || 0})`);
+    if (pluginsSection) {
+        const show = job.report && Array.isArray(job.report.plugin_evaluations) && job.report.plugin_evaluations.length > 0;
+        pluginsSection.style.display = show ? "block" : "none";
+        console.log(`[sections] pluginsSection: ${show ? "shown" : "hidden"} (count=${job.report?.plugin_evaluations?.length || 0})`);
     }
     
     // Show assessment section if we have evaluation results
     const assessmentSection = document.getElementById('assessmentSection');
     if (assessmentSection) {
-        const show = job.evaluation_results && Object.keys(job.evaluation_results).length > 0;
+        const show = job.evidence && Object.keys(job.evidence).length > 0;
         assessmentSection.style.display = show ? "block" : "none";
-        console.log(`[sections] assessmentSection: ${show ? "shown" : "hidden"} (count=${Object.keys(job.evaluation_results || {}).length})`);
+        console.log(`[sections] assessmentSection: ${show ? "shown" : "hidden"} (count=${Object.keys(job.evidence || {}).length})`);
     }
     
     // Show log if we have events
@@ -513,7 +513,7 @@ function updateMetadata(job) {
         <div class="space-y-4">
             <div>
                 <p class="text-sm text-base-content/60 font-semibold mb-2">Abstract</p>
-                <p class="text-sm leading-relaxed">${abstract}</p>
+                <p class="text-sm leading-relaxed">${escapeHtml(abstract)}</p>
             </div>
         </div>
     `;
@@ -548,10 +548,10 @@ function updateCitations(job) {
     
     citationsContent.innerHTML = citations
         .map(c => {
-            const authors = c.authors ? `<strong>${c.authors}</strong>` : "(Unknown authors)";
-            const year = c.year ? ` (${c.year})` : "";
-            const title = c.title ? `${c.title}` : "";
-            const url = c.url ? ` <a href="${c.url}" target="_blank" class="link link-primary text-xs">🔗</a>` : "";
+            const authors = c.authors ? `<strong>${escapeHtml(c.authors)}</strong>` : "(Unknown authors)";
+            const year = c.year ? ` (${escapeHtml(String(c.year))})` : "";
+            const title = c.title ? escapeHtml(c.title) : "";
+            const url = c.url ? ` <a href="${encodeURI(c.url)}" target="_blank" rel="noopener noreferrer" class="link link-primary text-xs">🔗</a>` : "";
             return `<div class="text-sm mb-2">${authors}${year}: ${title}${url}</div>`;
         })
         .join("");
@@ -569,28 +569,29 @@ function updateArtifacts(job) {
     
     artifactsContent.innerHTML = artifacts
         .map(a => {
-            const type = a.artifact_type ? `<span class="badge badge-sm badge-outline mr-2">${a.artifact_type}</span>` : "";
-            const description = a.description ? `<p class="text-xs text-base-content/70 mt-1">${a.description}</p>` : "";
-            const link = a.url ? `<a href="${a.url}" target="_blank" class="link link-primary text-sm">View Artifact →</a>` : "";
-            return `<div class="mb-4 p-3 bg-base-200 rounded-lg">${type}<div class="text-sm font-semibold">${a.description || a.url || "Artifact"}</div>${description}${link}</div>`;
+            const type = a.artifact_type ? `<span class="badge badge-sm badge-outline mr-2">${escapeHtml(a.artifact_type)}</span>` : "";
+            const description = a.description ? `<p class="text-xs text-base-content/70 mt-1">${escapeHtml(a.description)}</p>` : "";
+            const link = a.url ? `<a href="${encodeURI(a.url)}" target="_blank" rel="noopener noreferrer" class="link link-primary text-sm">View Artifact →</a>` : "";
+            const label = escapeHtml(a.description || a.url || "Artifact");
+            return `<div class="mb-4 p-3 bg-base-200 rounded-lg">${type}<div class="text-sm font-semibold">${label}</div>${description}${link}</div>`;
         })
         .join("");
 }
 
 function updateScriptResults(job) {
-    if (!scriptResultsContent || !scriptResultCount) return;
+    if (!checkResultsContent || !checkResultCount) return;
     
-    const results = job.script_results || [];
+    const results = job.check_results || [];
     
     // Update badge count
-    scriptResultCount.textContent = results.length;
+    checkResultCount.textContent = results.length;
     
     if (results.length === 0) {
-        scriptResultsContent.innerHTML = "<p class='text-base-content/50'>No script results available</p>";
+        checkResultsContent.innerHTML = "<p class='text-base-content/50'>No script results available</p>";
         return;
     }
     
-    scriptResultsContent.innerHTML = results
+    checkResultsContent.innerHTML = results
         .map(r => {
             // Status badge based on exit code
             // 0 = PASS, 1 = UNDETERMINED, 2+ = FAIL
@@ -610,7 +611,7 @@ function updateScriptResults(job) {
             const duration = r.duration_ms ? `${(r.duration_ms / 1000).toFixed(2)}s` : "N/A";
             
             // Description (if present)
-            const description = r.script_description ? `<div class="text-sm text-base-content/70 mt-1">${escapeHtml(r.script_description)}</div>` : "";
+            const description = r.check_description ? `<div class="text-sm text-base-content/70 mt-1">${escapeHtml(r.check_description)}</div>` : "";
             
             // Output sections
             const stdout = r.stdout ? `<div class="text-xs"><div class="font-semibold text-base-content/70 mb-1">Output:</div><pre class="bg-black text-green-400 p-2 rounded text-xs overflow-x-auto max-h-32">${escapeHtml(r.stdout)}</pre></div>` : "";
@@ -621,7 +622,7 @@ function updateScriptResults(job) {
                 <div class="collapse-title pt-4">
                     <div class="flex items-center gap-2">
                         <span class="badge ${statusColor}">${statusText}</span>
-                        <span class="font-semibold">${r.script_name}</span>
+                        <span class="font-semibold">${escapeHtml(r.check_name)}</span>
                         <span class="text-xs text-base-content/60 ml-auto">Exit: ${r.exit_code} | ${duration}</span>
                     </div>
                     ${description}
@@ -647,38 +648,38 @@ function escapeHtml(text) {
     return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-function updateAspects(job) {
-    if (!aspectsContent) return;
+function updatePlugins(job) {
+    if (!pluginsContent) return;
     
     const report = job.report || {};
     
-    // Handle both old field name (aspects) and new (aspect_evaluations)
-    let aspects = report.aspect_evaluations || report.aspects || [];
-    
-    if (aspects.length === 0) {
-        aspectsContent.innerHTML = "<p class='text-base-content/50'>No evaluation aspects</p>";
+    // Handle both old field name (aspects) and new (plugin_evaluations)
+    let plugins = report.plugin_evaluations || [];
+
+    if (plugins.length === 0) {
+        pluginsContent.innerHTML = "<p class='text-base-content/50'>No evaluation plugins</p>";
         return;
     }
-    
-    aspectsContent.innerHTML = aspects
+
+    pluginsContent.innerHTML = plugins
         .map((a, index) => {
             const statusIcon = a.status === "pass" ? "✓" : a.status === "fail" ? "✗" : "?";
             const statusColor = a.status === "pass" ? "text-success" : a.status === "fail" ? "text-error" : "text-warning";
             const statusLabel = a.status === "pass" ? "Pass" : a.status === "fail" ? "Fail" : "Unknown";
-            
-            const conclusion = a.conclusion ? `<p class="mt-2"><strong>Conclusion:</strong> ${a.conclusion}</p>` : "";
-            const evidence = a.evidence ? `<p class="mt-2"><strong>Evidence:</strong> ${a.evidence}</p>` : "";
+
+            const conclusion = a.conclusion ? `<p class="mt-2"><strong>Conclusion:</strong> ${escapeHtml(a.conclusion)}</p>` : "";
+            const evidence = a.evidence ? `<p class="mt-2"><strong>Evidence:</strong> ${escapeHtml(a.evidence)}</p>` : "";
             const codeSupports = a.code_supports !== undefined ? `<p class="mt-2"><strong>Code Supports:</strong> ${a.code_supports ? "Yes ✓" : "No ✗"}</p>` : "";
             const paperSupports = a.paper_supports !== undefined ? `<p class="mt-2"><strong>Paper Supports:</strong> ${a.paper_supports ? "Yes ✓" : "No ✗"}</p>` : "";
-            
+
             const hasDetails = conclusion || evidence || codeSupports || paperSupports;
-            
+
             return `
                 <div class="collapse collapse-arrow bg-base-200 mb-2">
                     <input type="checkbox" />
                     <div class="collapse-title font-semibold flex items-center gap-2">
                         <span class="${statusColor} text-lg">${statusIcon}</span>
-                        <span>${a.name}</span>
+                        <span>${escapeHtml(a.name)}</span>
                         <span class="text-xs badge badge-${a.status === "pass" ? "success" : a.status === "fail" ? "error" : "warning"}">${statusLabel}</span>
                     </div>
                     <div class="collapse-content text-sm">
@@ -732,7 +733,7 @@ function addChatMessage(role, content) {
     }
     
     // Clear initial placeholder if this is first message
-    if (chatHistory.innerHTML.trim().includes("Ask questions about the paper's reproducibility")) {
+    if (chatHistory.innerHTML.trim().includes("Ask questions about the artifact review")) {
         chatHistory.innerHTML = '';
     }
     
@@ -862,7 +863,7 @@ async function clearChat() {
         
         if (response.ok) {
             if (chatHistory) {
-                chatHistory.innerHTML = '<div class="text-center text-base-content/60 text-sm">Ask questions about the paper\'s reproducibility...</div>';
+                chatHistory.innerHTML = '<div class="text-center text-base-content/60 text-sm">Ask questions about the artifact review...</div>';
             }
             console.log('Chat history cleared');
         } else {
@@ -885,8 +886,8 @@ function updateAssessment(job) {
         return;
     }
     
-    // Check if we have evaluation_results
-    if (!job.evaluation_results || Object.keys(job.evaluation_results).length === 0) {
+    // Check if we have evidence
+    if (!job.evidence || Object.keys(job.evidence).length === 0) {
         assessmentSection.style.display = 'none';
         return;
     }
@@ -894,18 +895,18 @@ function updateAssessment(job) {
     // Show assessment section
     assessmentSection.style.display = 'block';
     
-    // Render expandable aspect list
-    renderAspectsList(job.evaluation_results);
+    // Render expandable plugin list
+    renderPluginsList(job.evidence);
 }
 
-function renderAspectsList(evaluationResults) {
+function renderPluginsList(evaluationResults) {
     const list = document.getElementById('assessment-list');
     if (!list) {
         console.warn('[assessment] assessment-list not found');
         return;
     }
     
-    const aspects = Object.entries(evaluationResults).map(([aspectId, result]) => {
+    const plugins = Object.entries(evaluationResults).map(([pluginId, result]) => {
         const status = result.status || 'UNKNOWN';
         const statusIcon = {
             'PASS': '✅',
@@ -919,14 +920,14 @@ function renderAspectsList(evaluationResults) {
             'UNCLEAR': 'badge-warning'
         }[status] || 'badge-secondary';
         
-        const description = result.aspect_description ? `<p class="text-xs text-base-content/60 mb-2">${escapeHtml(result.aspect_description)}</p>` : '';
+        const description = result.plugin_description ? `<p class="text-xs text-base-content/60 mb-2">${escapeHtml(result.plugin_description)}</p>` : '';
         
         return `
             <div class="collapse collapse-arrow border border-base-300 bg-base-100">
                 <input type="checkbox" />
                 <div class="collapse-title flex items-center gap-3 font-semibold cursor-pointer py-3">
                     <span class="text-lg">${statusIcon}</span>
-                    <span class="flex-1">${escapeHtml(result.aspect_name || 'Aspect')}</span>
+                    <span class="flex-1">${escapeHtml(result.plugin_name || 'Plugin')}</span>
                     <span class="badge ${statusBadgeClass} text-xs">${escapeHtml(status)}</span>
                 </div>
                 <div class="collapse-content">
@@ -937,7 +938,7 @@ function renderAspectsList(evaluationResults) {
         `;
     }).join('');
     
-    list.innerHTML = aspects;
+    list.innerHTML = plugins;
 }
 
 function escapeHtml(text) {

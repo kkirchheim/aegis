@@ -110,15 +110,24 @@ def delete_job_endpoint(job_id):
         return jsonify({"error": str(e)}), 500
 
 
-@jobs_bp.route("/aspects")
+@jobs_bp.route("/criteria")
 @require_auth
-def aspects_page():
-    """Aspects management page - browse and manage reproducibility aspects."""
-    return render_template("aspects.html")
+def criteria_page():
+    """Unified review criteria page - evaluation plugins and execution checks."""
+    return render_template("criteria.html")
 
 
-@jobs_bp.route("/scripts")
+@jobs_bp.route("/plugins")
 @require_auth
-def scripts_page():
-    """Scripts management page - browse and create execution scripts."""
-    return render_template("scripts.html")
+def plugins_page():
+    """Redirect to unified criteria page."""
+    from flask import redirect
+    return redirect("/criteria")
+
+
+@jobs_bp.route("/checks")
+@require_auth
+def checks_page():
+    """Redirect to unified criteria page."""
+    from flask import redirect
+    return redirect("/criteria")

@@ -85,9 +85,9 @@ class TestAnalysisService:
 class TestEvaluationService:
     """Tests for reproducibility evaluation service functions."""
     
-    def test_evaluate_reproducibility_aspects(self):
+    def test_evaluate_reproducibility_plugins(self):
         """Test evaluating reproducibility aspects."""
-        with patch('services.evaluation_service.evaluate_reproducibility_aspects') as mock_eval:
+        with patch('services.evaluation_service.evaluate_reproducibility_plugins') as mock_eval:
             
             # Mock evaluation result
             evaluation_result = {
@@ -99,8 +99,8 @@ class TestEvaluationService:
             }
             mock_eval.return_value = evaluation_result
             
-            from services.evaluation_service import evaluate_reproducibility_aspects
-            result = evaluate_reproducibility_aspects(
+            from services.evaluation_service import evaluate_reproducibility_plugins
+            result = evaluate_reproducibility_plugins(
                 job_id="job123",
                 llm_provider=MagicMock(),
             )
@@ -110,7 +110,7 @@ class TestEvaluationService:
     
     def test_aspect_evaluation_with_evidence(self):
         """Test that aspect evaluations include evidence."""
-        with patch('services.evaluation_service.AspectEvaluation') as mock_aspect_class:
+        with patch('services.evaluation_service.PluginEvaluation') as mock_aspect_class:
             
             # Mock evaluation with evidence
             mock_aspect = MagicMock(
@@ -143,15 +143,15 @@ class TestEvaluationService:
     
     def test_evaluation_missing_data(self):
         """Test error handling when required data is missing."""
-        with patch('services.evaluation_service.evaluate_reproducibility_aspects') as mock_eval:
+        with patch('services.evaluation_service.evaluate_reproducibility_plugins') as mock_eval:
             
             # Simulate missing data error
             mock_eval.side_effect = ValueError("Missing paper analysis data")
             
-            from services.evaluation_service import evaluate_reproducibility_aspects
+            from services.evaluation_service import evaluate_reproducibility_plugins
             
             with pytest.raises(ValueError):
-                evaluate_reproducibility_aspects(
+                evaluate_reproducibility_plugins(
                     job_id="job_without_analysis",
                     llm_provider=MagicMock(),
                 )
@@ -426,14 +426,14 @@ class TestErrorHandlingAcrossServices:
     
     def test_evaluation_handles_missing_analysis(self):
         """Test evaluation handles missing paper analysis."""
-        with patch('services.evaluation_service.evaluate_reproducibility_aspects') as mock_eval:
+        with patch('services.evaluation_service.evaluate_reproducibility_plugins') as mock_eval:
             
             mock_eval.side_effect = ValueError("Paper analysis not found")
             
-            from services.evaluation_service import evaluate_reproducibility_aspects
+            from services.evaluation_service import evaluate_reproducibility_plugins
             
             with pytest.raises(ValueError):
-                evaluate_reproducibility_aspects(
+                evaluate_reproducibility_plugins(
                     job_id="job_no_analysis",
                     llm_provider=MagicMock(),
                 )

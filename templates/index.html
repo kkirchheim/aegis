@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paper Reproducibility Checker</title>
+    <title>Artifact Review</title>
     
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
@@ -71,9 +71,9 @@
         
         <!-- Hero Section -->
         <section class="mb-12 text-center">
-            <h1 class="text-4xl font-bold mb-4">Analyze Your Paper's Reproducibility</h1>
+            <h1 class="text-4xl font-bold mb-4">Review Software Artifacts</h1>
             <p class="text-xl text-base-content/70 mb-8">
-                Upload a scientific paper and get an instant reproducibility assessment across 15 metrics.
+                Upload a scientific paper and get a structured artifact assessment based on collected evidence.
             </p>
         </section>
 
@@ -103,11 +103,12 @@
                             <label class="label">
                                 <span class="label-text">Container</span>
                             </label>
-                            <select id="containerSelect" class="select select-bordered w-full">
-                                <option value="python">Python (Default)</option>
+                            <select id="dockerImageSelect" class="select select-bordered w-full">
+                                <option value="standard">Python (Default)</option>
+                                <option value="ml">Python ML (PyTorch, scikit-learn, scipy)</option>
                             </select>
                         </div>
-                        
+
                         <!-- Model Selection -->
                         <div>
                             <label class="label">
@@ -132,7 +133,7 @@
                             <label class="label">
                                 <span class="label-text">Memory Limit (MB)</span>
                             </label>
-                            <input type="number" id="memoryLimit" class="input input-bordered w-full" value="2048" min="512" max="8192" step="512" />
+                            <input type="number" id="memoryLimit" class="input input-bordered w-full" value="4096" min="512" max="32768" step="512" />
                         </div>
                         
                         <!-- Runtime Limit -->
@@ -148,7 +149,7 @@
                             <label class="label">
                                 <span class="label-text">Max Iterations</span>
                             </label>
-                            <input type="number" id="maxIterations" class="input input-bordered w-full" value="3" min="1" max="10" step="1" />
+                            <input type="number" id="maxIterations" class="input input-bordered w-full" value="15" min="1" max="50" step="1" />
                         </div>
                         
                         <!-- Storage Limit -->

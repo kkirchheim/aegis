@@ -15,11 +15,13 @@ def hash_password(password):
 
 def verify_password(password, password_hash):
     """Verify password against stored hash."""
+    import hmac
     try:
         salt, pwdhash = password_hash.split('$')
         new_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
-        return new_hash.hex() == pwdhash
-    except:
+        # Constant-time comparison to prevent timing attacks
+        return hmac.compare_digest(new_hash.hex(), pwdhash)
+    except (ValueError, AttributeError):
         return False
 
 

@@ -73,7 +73,7 @@ Key environment variables for development and deployment:
 |----------|---------|---------|---------|
 | `ANTHROPIC_API_KEY` | Claude API key | `sk-ant-...` | *required* |
 | `CLAUDE_MODEL` | Claude model to use | `claude-haiku-4-5` | `claude-opus-4-1` |
-| `AGENT_CONTEXT_LIMIT` | Agent output context window (chars) | `10000` | `10000` |
+| `AGENT_CONTEXT_LIMIT` | Agent output context window (chars) | `100000` | `100000` |
 | `BACKEND_URL` | Backend API URL (for agents) | `http://paper-reproducibility:5000` | `http://localhost:5000` |
 | `REPO_URL` | Repository to analyze (agent only) | `https://github.com/user/repo` | - |
 | `JOB_ID` | Job identifier (agent only) | `abc-123-def` | - |

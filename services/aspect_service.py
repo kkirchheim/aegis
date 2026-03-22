@@ -249,10 +249,12 @@ class AspectService:
         user_id: Union[int, UUID],
     ) -> List[Dict[str, str]]:
         """Get active aspects ready for evaluation.
-        
+
         Returns list of dicts with: {id, name, description, prompt_to_use}
         where prompt_to_use is custom_prompt if set, else default prompt.
         """
+        # Ensure defaults are seeded before querying
+        AspectService.get_or_create_default_aspects(user_id)
         active_aspects = UserAspectRepository.get_active_aspects(user_id)
         results = []
         

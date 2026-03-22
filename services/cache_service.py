@@ -2,7 +2,7 @@
 
 import json
 from config import Config
-from models.database import CachePaperAnalysis, CacheCodeExecution, CacheEvaluation, ExecutionDetails, PaperAnalysis, AspectEvaluation, Job
+from models.database import CachePaperAnalysis, CacheCodeExecution, CacheEvaluation, ExecutionDetails, PaperAnalysis, PluginEvaluation, Job
 from repositories import CachePaperAnalysisRepository, CacheCodeExecutionRepository, CacheEvaluationRepository
 
 
@@ -123,7 +123,7 @@ def get_cache_stats():
         paper_count = PaperAnalysis.select().where(PaperAnalysis.extracted_text.is_null(False)).count()
         
         # Count distinct jobs with cached aspect evaluations
-        eval_count = AspectEvaluation.select(AspectEvaluation.job).distinct().count()
+        eval_count = PluginEvaluation.select(PluginEvaluation.job).distinct().count()
         
         return {
             "paper_analysis": paper_count,
@@ -159,7 +159,7 @@ def clear_cache():
                     deleted_count += 1
         
         # Clear all job-related data (cascade should handle this, but be explicit)
-        AspectEvaluation.delete().execute()
+        PluginEvaluation.delete().execute()
         ExecutionDetails.delete().execute()
         PaperAnalysis.delete().execute()
         

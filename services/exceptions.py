@@ -1,21 +1,21 @@
 """Custom exceptions for services."""
 
 
-class AspectNotFoundError(Exception):
-    """Raised when an aspect is not found."""
+class PluginNotFoundError(Exception):
+    """Raised when a plugin is not found."""
     pass
 
 
-class AspectDeletionError(Exception):
-    """Raised when trying to delete a default aspect."""
+class PluginDeletionError(Exception):
+    """Raised when trying to delete a default plugin."""
     pass
 
 
-class UserAspectNotFoundError(Exception):
-    """Raised when a user aspect is not found."""
+class UserPluginNotFoundError(Exception):
+    """Raised when a user plugin is not found."""
     pass
 
 
-class DuplicateAspectError(Exception):
-    """Raised when user already has a specific aspect."""
+class DuplicatePluginError(Exception):
+    """Raised when user already has a specific plugin."""
     pass

@@ -8,7 +8,7 @@ Schemas exported:
 - Authentication: LoginSchema, RegisterSchema, ChangePasswordSchema, SessionSchema
 - Jobs: JobSchema, JobListSchema, JobDetailSchema, JobUploadSchema
 - Chat: ChatMessageSchema, ChatMessageResponseSchema, ChatHistorySchema
-- Results: ArtifactSchema, AspectEvaluationSchema, ExecutionResultSchema, PaperAnalysisSchema
+- Results: ArtifactSchema, PluginEvaluationSchema, ExecutionResultSchema, PaperAnalysisSchema
 - Admin: UserSchema, UserListSchema, UserActionSchema, UpdateUserStatusSchema
 - Agent: AgentThinkRequestSchema, AgentLogRequestSchema, AgentExecutionRequestSchema, AgentCompleteRequestSchema, AgentActionSchema, AgentResponseSchema
 - Common: ErrorSchema, PaginationSchema, SuccessMessageSchema
@@ -21,7 +21,7 @@ from .common import (
 from .auth import LoginSchema, RegisterSchema, ChangePasswordSchema, SessionSchema
 from .jobs import JobSchema, JobListSchema, JobDetailSchema, JobUploadSchema
 from .chat import ChatMessageSchema, ChatMessageResponseSchema, ChatHistorySchema, ChatMessageRequestSchema
-from .results import ArtifactSchema, AspectEvaluationSchema, ExecutionResultSchema, PaperAnalysisSchema
+from .results import ArtifactSchema, PluginEvaluationSchema, ExecutionResultSchema, PaperAnalysisSchema
 from .admin import UserSchema, UserListSchema, UserActionSchema, UpdateUserStatusSchema
 from .agent import (
     AgentThinkRequestSchema, AgentLogRequestSchema, AgentExecutionRequestSchema,
@@ -55,7 +55,7 @@ __all__ = [
     'ChatMessageRequestSchema',
     # Results
     'ArtifactSchema',
-    'AspectEvaluationSchema',
+    'PluginEvaluationSchema',
     'ExecutionResultSchema',
     'PaperAnalysisSchema',
     # Admin (Response & Input)

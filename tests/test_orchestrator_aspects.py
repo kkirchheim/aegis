@@ -1,4 +1,4 @@
-"""Tests for orchestrator integration with aspect plugin system."""
+"""Tests for orchestrator integration with plugin plugin system."""
 
 import pytest
 import json
@@ -7,17 +7,17 @@ from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock
 
 from models.database import db, Job, User, PaperAnalysis, ExecutionDetails
-from services.aspect_service import AspectService
+from services.plugin_service import PluginService
 from services.pipeline_orchestrator import PipelineOrchestrator, stage_3_evaluation
-from repositories import AspectRepository, UserAspectRepository
+from repositories import PluginRepository, UserPluginRepository
 
 
 @pytest.fixture
 def test_user():
     """Create test user."""
     user = User.create(
-        username="test_user_aspects",
-        email="test_aspects@example.com",
+        username="test_user_plugins",
+        email="test_plugins@example.com",
         password_hash="hash",
         is_active=True
     )
@@ -75,16 +75,16 @@ def test_execution_details(test_job):
     details.delete_instance()
 
 
-class TestOrchestratorStage3WithAspects:
-    """Tests for orchestrator _run_stage_3 with aspects."""
+class TestOrchestratorStage3WithPlugins:
+    """Tests for orchestrator _run_stage_3 with plugins."""
     
-    def test_stage3_evaluation_with_active_aspects(self, test_job, test_user, test_paper_analysis, test_execution_details):
-        """Stage 3 should evaluate all active aspects."""
+    def test_stage3_evaluation_with_active_plugins(self, test_job, test_user, test_paper_analysis, test_execution_details):
+        """Stage 3 should evaluate all active plugins."""
         # Seed defaults for user
-        AspectService.get_or_create_default_aspects(test_user.id)
-        active_aspects = AspectService.get_active_aspects_for_evaluation(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
+        active_plugins = PluginService.get_active_plugins_for_evaluation(test_user.id)
         
-        assert len(active_aspects) > 0, "Should have active default aspects"
+        assert len(active_plugins) > 0, "Should have active default plugins"
         
         # Create orchestrator with mocked LLM
         orchestrator = PipelineOrchestrator()
@@ -92,7 +92,7 @@ class TestOrchestratorStage3WithAspects:
         # Mock evaluate_paper to return sample results
         with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
             mock_eval.return_value = {
-                str(active_aspects[0]['id']): {
+                str(active_plugins[0]['id']): {
                     "status": "PASS",
                     "reasoning": "Code is available"
                 }
@@ -105,14 +105,14 @@ class TestOrchestratorStage3WithAspects:
         # Verify job updated
         updated_job = Job.get_by_id(test_job.id)
         assert updated_job.status == 'completed'
-        assert updated_job.evaluation_results is not None
+        assert updated_job.evidence is not None
         
-        results = updated_job.get_evaluation_results()
+        results = updated_job.get_evidence()
         assert len(results) > 0
     
-    def test_stage3_evaluation_with_no_active_aspects(self, test_job, test_user, test_paper_analysis, test_execution_details):
-        """Stage 3 should skip evaluation if no active aspects."""
-        # Don't seed any aspects for user - they have none
+    def test_stage3_evaluation_with_no_active_plugins(self, test_job, test_user, test_paper_analysis, test_execution_details):
+        """Stage 3 should skip evaluation if no active plugins."""
+        # Don't seed any plugins for user - they have none
         orchestrator = PipelineOrchestrator()
         
         result = orchestrator._run_stage_3(test_job.id, Mock())
@@ -122,28 +122,28 @@ class TestOrchestratorStage3WithAspects:
         # Verify job completed with empty results
         updated_job = Job.get_by_id(test_job.id)
         assert updated_job.status == 'completed'
-        results = updated_job.get_evaluation_results()
+        results = updated_job.get_evidence()
         assert len(results) == 0
     
-    def test_stage3_evaluation_with_custom_aspects(self, test_job, test_user, test_paper_analysis, test_execution_details):
-        """Stage 3 should evaluate custom aspects."""
-        # Create custom aspect
-        custom_aspect = AspectService.create_custom_aspect(
+    def test_stage3_evaluation_with_custom_plugins(self, test_job, test_user, test_paper_analysis, test_execution_details):
+        """Stage 3 should evaluate custom plugins."""
+        # Create custom plugin
+        custom_plugin = PluginService.create_custom_plugin(
             user_id=test_user.id,
             name="Custom Check",
             description="A custom check",
             prompt="Does this meet our criteria?"
         )
         
-        active_aspects = AspectService.get_active_aspects_for_evaluation(test_user.id)
-        assert len(active_aspects) > 0
+        active_plugins = PluginService.get_active_plugins_for_evaluation(test_user.id)
+        assert len(active_plugins) > 0
         
         orchestrator = PipelineOrchestrator()
         
         # Mock evaluation
         with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
             mock_eval.return_value = {
-                custom_aspect['id']: {
+                custom_plugin['id']: {
                     "status": "FAIL",
                     "reasoning": "Criteria not met"
                 }
@@ -154,12 +154,12 @@ class TestOrchestratorStage3WithAspects:
         assert result == True
         
         updated_job = Job.get_by_id(test_job.id)
-        results = updated_job.get_evaluation_results()
-        assert custom_aspect['id'] in results
+        results = updated_job.get_evidence()
+        assert custom_plugin['id'] in results
     
     def test_stage3_evaluation_handles_error(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """Stage 3 should handle evaluation errors."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         orchestrator = PipelineOrchestrator()
         
@@ -175,18 +175,18 @@ class TestOrchestratorStage3WithAspects:
         assert updated_job.status == 'error'
         assert 'failed' in updated_job.error_message.lower() or 'evaluation' in updated_job.error_message.lower()
     
-    def test_stage3_evaluation_deactivated_aspects_skipped(self, test_job, test_user, test_paper_analysis, test_execution_details):
-        """Stage 3 should skip deactivated aspects."""
+    def test_stage3_evaluation_deactivated_plugins_skipped(self, test_job, test_user, test_paper_analysis, test_execution_details):
+        """Stage 3 should skip deactivated plugins."""
         # Seed defaults
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
-        # Deactivate all aspects
-        all_user_aspects = UserAspectRepository.get_user_aspects(test_user.id)
-        for ua in all_user_aspects:
-            AspectService.deactivate_aspect(test_user.id, ua.aspect_id)
+        # Deactivate all plugins
+        all_user_plugins = UserPluginRepository.get_user_plugins(test_user.id)
+        for ua in all_user_plugins:
+            PluginService.deactivate_plugin(test_user.id, ua.plugin_id)
         
-        # Should have no active aspects
-        active = AspectService.get_active_aspects_for_evaluation(test_user.id)
+        # Should have no active plugins
+        active = PluginService.get_active_plugins_for_evaluation(test_user.id)
         assert len(active) == 0
         
         orchestrator = PipelineOrchestrator()
@@ -196,19 +196,19 @@ class TestOrchestratorStage3WithAspects:
         assert result == True
         
         updated_job = Job.get_by_id(test_job.id)
-        results = updated_job.get_evaluation_results()
+        results = updated_job.get_evidence()
         assert len(results) == 0
     
-    def test_stage3_evaluation_mixed_aspects_status(self, test_job, test_user, test_paper_analysis, test_execution_details):
+    def test_stage3_evaluation_mixed_plugins_status(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """Stage 3 should handle mixed PASS/FAIL/UNCLEAR statuses."""
-        AspectService.get_or_create_default_aspects(test_user.id)
-        active_aspects = AspectService.get_active_aspects_for_evaluation(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
+        active_plugins = PluginService.get_active_plugins_for_evaluation(test_user.id)
         
         # Mock evaluation with mixed results
         results_dict = {}
-        for i, aspect in enumerate(active_aspects):
+        for i, plugin in enumerate(active_plugins):
             status = ['PASS', 'FAIL', 'UNCLEAR'][i % 3]
-            results_dict[aspect['id']] = {
+            results_dict[plugin['id']] = {
                 "status": status,
                 "reasoning": f"Test {status}"
             }
@@ -223,7 +223,7 @@ class TestOrchestratorStage3WithAspects:
         assert result == True
         
         updated_job = Job.get_by_id(test_job.id)
-        results = updated_job.get_evaluation_results()
+        results = updated_job.get_evidence()
         
         # Verify counts
         passed = sum(1 for r in results.values() if r['status'] == 'PASS')
@@ -233,14 +233,14 @@ class TestOrchestratorStage3WithAspects:
         assert passed >= 0 and failed >= 0 and unclear >= 0
     
     def test_stage3_stores_results_as_json(self, test_job, test_user, test_paper_analysis, test_execution_details):
-        """Stage 3 should store results as proper JSON in job.evaluation_results."""
-        AspectService.get_or_create_default_aspects(test_user.id)
-        active_aspects = AspectService.get_active_aspects_for_evaluation(test_user.id)
+        """Stage 3 should store results as proper JSON in job.evidence."""
+        PluginService.get_or_create_default_plugins(test_user.id)
+        active_plugins = PluginService.get_active_plugins_for_evaluation(test_user.id)
         
         orchestrator = PipelineOrchestrator()
         
         test_results = {
-            str(active_aspects[0]['id']): {
+            str(active_plugins[0]['id']): {
                 "status": "PASS",
                 "reasoning": "Very reproducible"
             }
@@ -256,14 +256,14 @@ class TestOrchestratorStage3WithAspects:
         updated_job = Job.get_by_id(test_job.id)
         
         # Verify it's valid JSON
-        assert updated_job.evaluation_results is not None
-        parsed = json.loads(updated_job.evaluation_results)
+        assert updated_job.evidence is not None
+        parsed = json.loads(updated_job.evidence)
         assert isinstance(parsed, dict)
         assert len(parsed) > 0
     
     def test_stage3_updates_job_progress(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """Stage 3 should set job progress to 1.0 on completion."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         orchestrator = PipelineOrchestrator()
         
@@ -280,7 +280,7 @@ class TestOrchestratorStage3WithAspects:
     
     def test_stage3_emits_events(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """Stage 3 should emit proper progress events."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         # Mock dispatcher to capture events
         mock_dispatcher = Mock()
@@ -298,97 +298,97 @@ class TestOrchestratorStage3WithAspects:
         assert mock_dispatcher is not None
 
 
-class TestAspectServiceIntegration:
-    """Integration tests for aspect service with orchestrator."""
+class TestPluginServiceIntegration:
+    """Integration tests for plugin service with orchestrator."""
     
-    def test_get_active_aspects_returns_prompts(self, test_user):
-        """get_active_aspects_for_evaluation should return correct prompts."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+    def test_get_active_plugins_returns_prompts(self, test_user):
+        """get_active_plugins_for_evaluation should return correct prompts."""
+        PluginService.get_or_create_default_plugins(test_user.id)
         
-        active = AspectService.get_active_aspects_for_evaluation(test_user.id)
+        active = PluginService.get_active_plugins_for_evaluation(test_user.id)
         
         assert len(active) > 0
-        for aspect in active:
-            assert 'id' in aspect
-            assert 'name' in aspect
-            assert 'prompt_to_use' in aspect
-            assert len(aspect['prompt_to_use']) > 0
+        for plugin in active:
+            assert 'id' in plugin
+            assert 'name' in plugin
+            assert 'prompt_to_use' in plugin
+            assert len(plugin['prompt_to_use']) > 0
     
     def test_custom_prompt_override_in_evaluation(self, test_user):
         """Custom prompts should be used in evaluation context."""
-        # Create custom aspect
-        custom = AspectService.create_custom_aspect(
+        # Create custom plugin
+        custom = PluginService.create_custom_plugin(
             user_id=test_user.id,
             name="Custom",
-            description="Custom aspect",
+            description="Custom plugin",
             prompt="Original prompt"
         )
         
         # Override prompt
         custom_prompt = "Overridden prompt for evaluation"
-        AspectService.override_prompt(test_user.id, custom['id'], custom_prompt)
+        PluginService.override_prompt(test_user.id, custom['id'], custom_prompt)
         
         # Get for evaluation
-        active = AspectService.get_active_aspects_for_evaluation(test_user.id)
+        active = PluginService.get_active_plugins_for_evaluation(test_user.id)
         
-        # Find our custom aspect
+        # Find our custom plugin
         found = next((a for a in active if a['id'] == custom['id']), None)
         assert found is not None
         assert found['prompt_to_use'] == custom_prompt
     
-    def test_deactivated_aspects_excluded_from_evaluation(self, test_user):
-        """Deactivated aspects should not appear in evaluation context."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+    def test_deactivated_plugins_excluded_from_evaluation(self, test_user):
+        """Deactivated plugins should not appear in evaluation context."""
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         # Get all active
-        active_before = AspectService.get_active_aspects_for_evaluation(test_user.id)
+        active_before = PluginService.get_active_plugins_for_evaluation(test_user.id)
         assert len(active_before) > 0
         
         # Deactivate one
-        first_aspect_id = active_before[0]['id']
-        AspectService.deactivate_aspect(test_user.id, first_aspect_id)
+        first_plugin_id = active_before[0]['id']
+        PluginService.deactivate_plugin(test_user.id, first_plugin_id)
         
         # Get active again
-        active_after = AspectService.get_active_aspects_for_evaluation(test_user.id)
+        active_after = PluginService.get_active_plugins_for_evaluation(test_user.id)
         
         # Should be one less
         assert len(active_after) == len(active_before) - 1
         
         # Our deactivated one should not be present
         ids = [a['id'] for a in active_after]
-        assert first_aspect_id not in ids
+        assert first_plugin_id not in ids
     
-    def test_multiple_users_aspects_isolated(self, test_user):
-        """Different users should have isolated aspects."""
+    def test_multiple_users_plugins_isolated(self, test_user):
+        """Different users should have isolated plugins."""
         # Create another user
         user2 = User.create(
-            username="test_user2_aspects",
-            email="test_aspects2@example.com",
+            username="test_user2_plugins",
+            email="test_plugins2@example.com",
             password_hash="hash",
             is_active=True
         )
         
         try:
             # Seed defaults for both
-            AspectService.get_or_create_default_aspects(test_user.id)
-            AspectService.get_or_create_default_aspects(user2.id)
+            PluginService.get_or_create_default_plugins(test_user.id)
+            PluginService.get_or_create_default_plugins(user2.id)
             
-            # Create custom aspect for user1
-            custom1 = AspectService.create_custom_aspect(
+            # Create custom plugin for user1
+            custom1 = PluginService.create_custom_plugin(
                 user_id=test_user.id,
                 name="User1 Custom",
-                description="User1 aspect",
+                description="User1 plugin",
                 prompt="User1 prompt"
             )
             
-            # Get active aspects for both
-            active1 = AspectService.get_active_aspects_for_evaluation(test_user.id)
-            active2 = AspectService.get_active_aspects_for_evaluation(user2.id)
+            # Get active plugins for both
+            active1 = PluginService.get_active_plugins_for_evaluation(test_user.id)
+            active2 = PluginService.get_active_plugins_for_evaluation(user2.id)
             
             # User1 should have more (custom added)
             assert len(active1) > len(active2) or len(active1) == len(active2)
             
-            # Check that custom1 only appears in user1's aspects
+            # Check that custom1 only appears in user1's plugins
             user1_ids = [a['id'] for a in active1]
             user2_ids = [a['id'] for a in active2]
             assert custom1['id'] in user1_ids
@@ -397,36 +397,36 @@ class TestAspectServiceIntegration:
         finally:
             user2.delete_instance()
     
-    def test_aspect_activation_deactivation_cycle(self, test_user):
-        """Aspects should properly toggle activation."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+    def test_plugin_activation_deactivation_cycle(self, test_user):
+        """Plugins should properly toggle activation."""
+        PluginService.get_or_create_default_plugins(test_user.id)
         
-        all_aspects = AspectService.get_all_aspects_for_user(test_user.id)
-        first = all_aspects[0]
-        aspect_id = first['id']
+        all_plugins = PluginService.get_all_plugins_for_user(test_user.id)
+        first = all_plugins[0]
+        plugin_id = first['id']
         
         # Start active
-        active = AspectService.get_active_aspects_for_evaluation(test_user.id)
-        assert aspect_id in [a['id'] for a in active]
+        active = PluginService.get_active_plugins_for_evaluation(test_user.id)
+        assert plugin_id in [a['id'] for a in active]
         
         # Deactivate
-        AspectService.deactivate_aspect(test_user.id, aspect_id)
-        active = AspectService.get_active_aspects_for_evaluation(test_user.id)
-        assert aspect_id not in [a['id'] for a in active]
+        PluginService.deactivate_plugin(test_user.id, plugin_id)
+        active = PluginService.get_active_plugins_for_evaluation(test_user.id)
+        assert plugin_id not in [a['id'] for a in active]
         
         # Reactivate
-        AspectService.activate_aspect(test_user.id, aspect_id)
-        active = AspectService.get_active_aspects_for_evaluation(test_user.id)
-        assert aspect_id in [a['id'] for a in active]
+        PluginService.activate_plugin(test_user.id, plugin_id)
+        active = PluginService.get_active_plugins_for_evaluation(test_user.id)
+        assert plugin_id in [a['id'] for a in active]
 
 
 class TestOrchestrationFullPipeline:
-    """Integration tests for full pipeline with aspects."""
+    """Integration tests for full pipeline with plugins."""
     
-    def test_full_pipeline_with_aspects(self, test_job, test_user, test_paper_analysis, test_execution_details):
-        """Full pipeline should work end-to-end with aspects."""
+    def test_full_pipeline_with_plugins(self, test_job, test_user, test_paper_analysis, test_execution_details):
+        """Full pipeline should work end-to-end with plugins."""
         # Setup
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         # Create orchestrator
         orchestrator = PipelineOrchestrator()
@@ -434,8 +434,8 @@ class TestOrchestrationFullPipeline:
         # Mock evaluate_paper
         with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
             mock_eval.return_value = {
-                "aspect1": {"status": "PASS", "reasoning": "Good"},
-                "aspect2": {"status": "FAIL", "reasoning": "Bad"},
+                "plugin1": {"status": "PASS", "reasoning": "Good"},
+                "plugin2": {"status": "FAIL", "reasoning": "Bad"},
             }
             
             result = orchestrator._run_stage_3(test_job.id, Mock())
@@ -445,11 +445,11 @@ class TestOrchestrationFullPipeline:
         # Verify results
         updated_job = Job.get_by_id(test_job.id)
         assert updated_job.status == 'completed'
-        assert updated_job.evaluation_results is not None
+        assert updated_job.evidence is not None
     
     def test_evaluation_handles_missing_analysis(self, test_job, test_user):
         """Evaluation should handle missing paper analysis gracefully."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         # Don't create paper_analysis or execution - they're missing
         orchestrator = PipelineOrchestrator()
@@ -462,18 +462,18 @@ class TestOrchestrationFullPipeline:
         updated_job = Job.get_by_id(test_job.id)
         assert updated_job.status == 'error'
     
-    def test_evaluation_results_json_format(self, test_job, test_user, test_paper_analysis, test_execution_details):
+    def test_evidence_json_format(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """Evaluation results should be valid JSON with proper structure."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         orchestrator = PipelineOrchestrator()
         
         test_data = {
-            "aspect_id_1": {
+            "plugin_id_1": {
                 "status": "PASS",
                 "reasoning": "Code available"
             },
-            "aspect_id_2": {
+            "plugin_id_2": {
                 "status": "FAIL",
                 "reasoning": "Missing dependencies"
             }
@@ -487,11 +487,11 @@ class TestOrchestrationFullPipeline:
         assert result == True
         
         updated_job = Job.get_by_id(test_job.id)
-        results = updated_job.get_evaluation_results()
+        results = updated_job.get_evidence()
         
         # Verify structure
         assert isinstance(results, dict)
-        for aspect_id, eval_data in results.items():
+        for plugin_id, eval_data in results.items():
             assert 'status' in eval_data
             assert 'reasoning' in eval_data
             assert eval_data['status'] in ['PASS', 'FAIL', 'UNCLEAR']
@@ -502,7 +502,7 @@ class TestEventEmission:
     
     def test_start_event_emitted(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """Stage 3 should emit a start event."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         dispatcher = Mock()
         orchestrator = PipelineOrchestrator(dispatcher=dispatcher)
@@ -517,7 +517,7 @@ class TestEventEmission:
     
     def test_completion_event_emitted(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """Stage 3 should emit a completion event with status counts."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         dispatcher = Mock()
         orchestrator = PipelineOrchestrator(dispatcher=dispatcher)
@@ -540,7 +540,7 @@ class TestLoggerCompatibility:
     
     def test_stage3_eval_with_function_logger(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """stage_3_evaluation should handle function-style logger."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         # Create a function logger
         log_messages = []
@@ -558,7 +558,7 @@ class TestLoggerCompatibility:
     
     def test_stage3_eval_with_logger_object(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """stage_3_evaluation should handle logger objects with info/error methods."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         # Create a logger object
         import logging
@@ -574,7 +574,7 @@ class TestLoggerCompatibility:
     
     def test_stage3_eval_with_none_logger(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """stage_3_evaluation should handle None logger gracefully."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
             mock_eval.return_value = {}
@@ -586,7 +586,7 @@ class TestLoggerCompatibility:
     
     def test_stage3_eval_logger_handles_errors(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """stage_3_evaluation should properly call logger.error on exceptions."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         # Create a logger object that tracks error calls
         import logging
@@ -617,17 +617,17 @@ class TestLoggerCompatibility:
 class TestStage3EvaluationStandaloneFunction:
     """Tests for standalone stage_3_evaluation() function."""
     
-    def test_stage3_eval_with_active_aspects(self, test_job, test_user, test_paper_analysis, test_execution_details):
-        """stage_3_evaluation should evaluate all active aspects."""
-        AspectService.get_or_create_default_aspects(test_user.id)
-        active_aspects = AspectService.get_active_aspects_for_evaluation(test_user.id)
+    def test_stage3_eval_with_active_plugins(self, test_job, test_user, test_paper_analysis, test_execution_details):
+        """stage_3_evaluation should evaluate all active plugins."""
+        PluginService.get_or_create_default_plugins(test_user.id)
+        active_plugins = PluginService.get_active_plugins_for_evaluation(test_user.id)
         
-        assert len(active_aspects) > 0
+        assert len(active_plugins) > 0
         
         # Mock evaluate_paper
         with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
             mock_eval.return_value = {
-                str(active_aspects[0]['id']): {
+                str(active_plugins[0]['id']): {
                     "status": "PASS",
                     "reasoning": "Code is available"
                 }
@@ -640,12 +640,12 @@ class TestStage3EvaluationStandaloneFunction:
         
         updated_job = Job.get_by_id(test_job.id)
         assert updated_job.status == 'completed'
-        results = updated_job.get_evaluation_results()
+        results = updated_job.get_evidence()
         assert len(results) > 0
     
-    def test_stage3_eval_with_no_aspects(self, test_job, test_user, test_paper_analysis, test_execution_details):
-        """stage_3_evaluation should handle zero active aspects."""
-        # No aspects seeded
+    def test_stage3_eval_with_no_plugins(self, test_job, test_user, test_paper_analysis, test_execution_details):
+        """stage_3_evaluation should handle zero active plugins."""
+        # No plugins seeded
         with patch('services.pipeline_orchestrator.EventDispatcher'):
             result = stage_3_evaluation(test_job.id, Mock())
         
@@ -653,7 +653,7 @@ class TestStage3EvaluationStandaloneFunction:
         
         updated_job = Job.get_by_id(test_job.id)
         assert updated_job.status == 'completed'
-        assert len(updated_job.get_evaluation_results()) == 0
+        assert len(updated_job.get_evidence()) == 0
     
     def test_stage3_eval_handles_missing_job(self):
         """stage_3_evaluation should handle missing job gracefully."""
@@ -665,7 +665,7 @@ class TestStage3EvaluationStandaloneFunction:
     
     def test_stage3_eval_with_error(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """stage_3_evaluation should handle errors gracefully."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         # Mock evaluate_paper to raise error
         with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
@@ -682,11 +682,11 @@ class TestStage3EvaluationStandaloneFunction:
     
     def test_stage3_eval_stores_results_json(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """stage_3_evaluation should store results as valid JSON."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         test_results = {
-            "aspect1": {"status": "PASS", "reasoning": "Good"},
-            "aspect2": {"status": "FAIL", "reasoning": "Bad"},
+            "plugin1": {"status": "PASS", "reasoning": "Good"},
+            "plugin2": {"status": "FAIL", "reasoning": "Bad"},
         }
         
         with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
@@ -698,7 +698,7 @@ class TestStage3EvaluationStandaloneFunction:
         assert result == True
         
         updated_job = Job.get_by_id(test_job.id)
-        results = updated_job.get_evaluation_results()
+        results = updated_job.get_evidence()
         
         # Verify valid JSON parsing
         assert isinstance(results, dict)
@@ -706,7 +706,7 @@ class TestStage3EvaluationStandaloneFunction:
     
     def test_stage3_eval_completes_job(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """stage_3_evaluation should mark job as completed."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_plugins(test_user.id)
         
         with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
             mock_eval.return_value = {}

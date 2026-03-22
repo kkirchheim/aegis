@@ -1,6 +1,8 @@
-# Paper Reproducibility Checker 📄
+# Artifact Review
 
-Analyze scientific papers for reproducibility. Automatically extracts code artifacts, executes them in isolated Docker containers, and evaluates them against 15 reproducibility metrics.
+Prototype implementation for *"Towards Supporting Software Artefact Review via LLMs"*. Generates structured evidence about software artifacts referenced in scientific papers through a three-stage pipeline: extract artifacts, generate evidence, and assess results.
+
+> **Warning:** This is a research prototype intended for local use only. Do not deploy publicly. The application mounts the Docker socket into the container, which grants the container effective root access to the host. See [Security](#security) below.
 
 ## Quick Start
 
@@ -24,7 +26,7 @@ docker-compose up
 ### Web UI
 Open http://localhost:5000 to upload papers and view results.
 
-### Command Line
+### CLI
 ```bash
 python scripts/repro-cli.py \
   -u http://localhost:5000 \
@@ -35,12 +37,30 @@ python scripts/repro-cli.py \
 
 ## How It Works
 
-**Three-stage pipeline:**
-1. **Paper Analysis** — Extract methodology, claims, datasets
-2. **Code Execution** — Clone and run code in isolated containers
-3. **Evaluation** — Compare paper claims vs execution results
+1. **Extract** — Parse the PDF, identify software artifacts, and extract metadata
+2. **Generate Evidence** — Run three types of evidence generators against extracted artifacts:
+   - *Deterministic* — execution checks (scripts run inside Docker containers)
+   - *Semantic* — LLM-based evaluation plugins
+   - *Interactive* — agentic exploration of repositories in sandboxed containers
+3. **Assess** — Aggregate evidence into a structured review context
 
-Result: Detailed reproducibility report with 15-aspect scoring.
+## Agent Containers
+
+Code execution happens inside isolated Docker containers, built automatically on first use. To build manually:
+
+```bash
+# Standard agent
+docker build -t paper-reproducibility-agent:latest -f docker/Dockerfile.agent .
+
+# ML agent (PyTorch, scikit-learn, etc.)
+docker build -t paper-reproducibility-agent-ml:latest -f docker/Dockerfile.agent-ml .
+```
+
+## Security
+
+This application requires the Docker socket (`/var/run/docker.sock`) to be mounted so it can spawn agent containers. This effectively gives the application root-level access to the host system. Additionally, the agent containers clone and execute arbitrary code from repositories referenced in uploaded papers.
+
+**Do not expose this application to the public internet.** It is designed for local or trusted-network use only.
 
 ## Documentation
 
@@ -48,6 +68,4 @@ Result: Detailed reproducibility report with 15-aspect scoring.
 - **[API Reference](./docs/API.md)** — REST endpoints
 - **[Development](./docs/DEVELOPMENT.md)** — Setup, configuration, workflow
 - **[Testing](./docs/TESTING.md)** — Running tests
-
-See `/docs` for full documentation.
 

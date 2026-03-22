@@ -1,6 +1,7 @@
 """Docker service - Docker agent spawning and container management."""
 
 import os
+import re
 import hashlib
 import docker
 import json
@@ -8,9 +9,24 @@ from models.database import Job, ExecutionDetails
 from repositories import JobRepository, ExecutionDetailsRepository
 from config import Config
 
+# Regex to strip ANSI escape sequences from container output
+ANSI_ESCAPE_RE = re.compile(r'\x1b\[[0-9;]*m')
+
 
 DOCKER_CLIENT = None
 DOCKER_AVAILABLE = False
+
+# Agent image definitions
+AGENT_IMAGES = {
+    "standard": {
+        "tag": "paper-reproducibility-agent:latest",
+        "dockerfile": "docker/Dockerfile.agent",
+    },
+    "ml": {
+        "tag": "paper-reproducibility-agent-ml:latest",
+        "dockerfile": "docker/Dockerfile.agent-ml",
+    },
+}
 
 
 def init_docker():
@@ -65,29 +81,40 @@ def validate_network(network_name, app_logger=None):
         return False, msg
 
 
-def build_agent_image(app_logger=None):
-    """Build Docker image for agent sandbox."""
+def build_agent_image(image_type="standard", app_logger=None):
+    """Build Docker image for agent sandbox.
+
+    Args:
+        image_type: "standard" or "ml"
+        app_logger: Flask app logger
+    """
     if not DOCKER_AVAILABLE:
         return False
-    
+
+    image_config = AGENT_IMAGES.get(image_type)
+    if not image_config:
+        if app_logger:
+            app_logger.error(f"✗ Unknown agent image type: {image_type}")
+        return False
+
     try:
         if app_logger:
-            app_logger.info("Building agent Docker image...")
-        
+            app_logger.info(f"Building agent Docker image ({image_type})...")
+
         DOCKER_CLIENT.images.build(
             path=".",
-            dockerfile="Dockerfile.agent",
-            tag="paper-reproducibility-agent:latest",
+            dockerfile=image_config["dockerfile"],
+            tag=image_config["tag"],
             quiet=False
         )
-        
+
         if app_logger:
-            app_logger.info("✓ Agent image built successfully")
-        
+            app_logger.info(f"✓ Agent image ({image_type}) built successfully")
+
         return True
     except Exception as e:
         if app_logger:
-            app_logger.error(f"✗ Failed to build agent image: {e}")
+            app_logger.error(f"✗ Failed to build agent image ({image_type}): {e}")
         return False
 
 
@@ -116,8 +143,9 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
     if config is None:
         config = {
             "storage_limit": 10,
-            "memory_limit": 2048,
-            "cpu_limit": 2
+            "memory_limit": 4096,
+            "cpu_limit": 2,
+            "max_iterations": 15
         }
     
     # Check cache: if we've analyzed this repo before, reuse results
@@ -192,15 +220,26 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
                 "message": f"Spawning agent container for: {repo_url}"
             })
         
+        # Determine which agent image to use
+        image_type = config.get("docker_image", "standard")
+        if image_type not in AGENT_IMAGES:
+            if app_logger:
+                app_logger.warning(f"[{job_id}] Unknown image type '{image_type}', falling back to standard")
+            image_type = "standard"
+        image_tag = AGENT_IMAGES[image_type]["tag"]
+
+        if app_logger:
+            app_logger.info(f"[{job_id}] Using agent image: {image_tag}")
+
         # Verify image exists
         try:
-            DOCKER_CLIENT.images.get("paper-reproducibility-agent:latest")
+            DOCKER_CLIENT.images.get(image_tag)
             if app_logger:
                 app_logger.info(f"[{job_id}] Agent image verified")
         except Exception as e:
             if app_logger:
                 app_logger.warning(f"[{job_id}] Agent image not found, attempting build: {e}")
-            build_agent_image(app_logger)
+            build_agent_image(image_type, app_logger)
         
         # Validate storage limit
         storage_limit = config.get("storage_limit", 10)
@@ -217,37 +256,52 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
         
         storage_limit_str = f"{storage_limit}g"
         
-        # Get active execution scripts for this user
+        # Get active execution checks for this user
         try:
             job = Job.get_by_id(job_id)
             user_id = job.user_id
-            
-            from services.script_service import ScriptService
-            active_scripts = ScriptService.get_active_scripts_for_user(user_id)
-            
-            scripts_data = {}
-            for script in active_scripts:
-                scripts_data[script['script_hash']] = {
-                    "name": script['name'],
-                    "script_text": script['script_text']
+
+            from services.check_service import CheckService
+            active_checks = CheckService.get_active_checks_for_user(user_id)
+
+            checks_data = {}
+            for check in active_checks:
+                checks_data[check['script_hash']] = {
+                    "name": check['name'],
+                    "script_text": check['script_text']
                 }
-            
+
             if app_logger:
-                app_logger.info(f"[{job_id}] Found {len(scripts_data)} active scripts for user")
+                app_logger.info(f"[{job_id}] Found {len(checks_data)} active checks for user")
         except Exception as e:
             if app_logger:
-                app_logger.warning(f"[{job_id}] Failed to get active scripts: {e}, using all scripts")
-            
-            # Fallback: use all scripts if lookup fails
-            from models.execution_script import ExecutionScript
-            scripts_list = list(ExecutionScript.select())
-            scripts_data = {}
-            for script in scripts_list:
-                scripts_data[script.script_hash] = {
-                    "name": script.name,
-                    "script_text": script.script_text
+                app_logger.warning(f"[{job_id}] Failed to get active checks: {e}, using all checks")
+
+            # Fallback: use all checks if lookup fails
+            from models.check import Check
+            checks_list = list(Check.select())
+            checks_data = {}
+            for check in checks_list:
+                checks_data[check.script_hash] = {
+                    "name": check.name,
+                    "script_text": check.script_text
                 }
         
+        # Memory and CPU limits from config
+        memory_limit_mb = config.get("memory_limit", 2048)
+        try:
+            memory_limit_mb = int(memory_limit_mb)
+            if memory_limit_mb < 512 or memory_limit_mb > 32768:
+                if app_logger:
+                    app_logger.warning(f"[{job_id}] Memory limit {memory_limit_mb}MB out of range, using default 2048MB")
+                memory_limit_mb = 2048
+        except (ValueError, TypeError):
+            memory_limit_mb = 2048
+        memory_limit_str = f"{memory_limit_mb}m"
+
+        max_iterations = config.get("max_iterations", 15)
+        cpu_limit = config.get("cpu_limit", 2)
+
         # Prepare network configuration
         # If DOCKER_NETWORK is empty, Docker uses default bridge network
         container_kwargs = {
@@ -257,13 +311,13 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
                 "REPO_URL": repo_url,
                 "JOB_ID": job_id,
                 "BACKEND_URL": backend_url,
-                "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
                 "STORAGE_LIMIT": storage_limit_str,
-                "SCRIPTS": json.dumps(scripts_data)
+                "MAX_ITERATIONS": str(max_iterations),
+                "CHECKS": json.dumps(checks_data)
             },
-            "mem_limit": "2g",
-            "memswap_limit": "2g",
-            "nano_cpus": int(2 * 1e9),
+            "mem_limit": memory_limit_str,
+            "memswap_limit": memory_limit_str,
+            "nano_cpus": int(cpu_limit * 1e9),
             "tmpfs": {"/tmp": f"size={storage_limit_str}"},
             "remove": False,
             "stdout": True,
@@ -294,7 +348,7 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
         
         # Run agent container
         container = DOCKER_CLIENT.containers.run(
-            "paper-reproducibility-agent:latest",
+            image_tag,
             **container_kwargs
         )
         
@@ -307,9 +361,11 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
                 app_logger.info(f"[{job_id}] Waiting for container to complete...")
             
             line_count = 0
-            for line in container.logs(stream=True):
+            for line in container.logs(stream=True, follow=True):
                 message = line.decode('utf-8').strip()
                 if message:
+                    # Strip ANSI color codes from container output
+                    message = ANSI_ESCAPE_RE.sub('', message)
                     line_count += 1
                     if app_logger:
                         app_logger.info(f"[{job_id}] [Agent] {message}")

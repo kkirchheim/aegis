@@ -2,7 +2,7 @@
 
 from typing import Optional, List, Dict, Any
 from models.database import (
-    User, Job, PaperAnalysis, ExecutionDetails, AspectEvaluation,
+    User, Job, PaperAnalysis, ExecutionDetails, PluginEvaluation,
     ChatSession, ChatMessage, Artifact, Event,
     CachePaperAnalysis, CacheCodeExecution, CacheEvaluation
 )
@@ -185,32 +185,32 @@ class ExecutionDetailsRepository:
 # Aspect Evaluation Repository
 # ============================================================================
 
-class AspectEvaluationRepository:
-    """Aspect evaluation data access."""
-    
+class PluginEvaluationRepository:
+    """Plugin evaluation data access."""
+
     @staticmethod
-    def list_by_job(job_id: str) -> List[AspectEvaluation]:
+    def list_by_job(job_id: str) -> List[PluginEvaluation]:
         """Get all evaluations for a job."""
         try:
             return list(
-                AspectEvaluation.select()
-                .where(AspectEvaluation.job == job_id)
-                .order_by(AspectEvaluation.aspect_id)
+                PluginEvaluation.select()
+                .where(PluginEvaluation.job == job_id)
+                .order_by(PluginEvaluation.plugin_id)
             )
         except Exception:
             return []
-    
+
     @staticmethod
-    def save(evaluation: AspectEvaluation) -> bool:
+    def save(evaluation: PluginEvaluation) -> bool:
         """Save evaluation. Returns True on success."""
         try:
             evaluation.save()
             return True
         except Exception:
             return False
-    
+
     @staticmethod
-    def save_all(evaluations: List[AspectEvaluation]) -> bool:
+    def save_all(evaluations: List[PluginEvaluation]) -> bool:
         """Save multiple evaluations. Returns True on success."""
         try:
             for evaluation in evaluations:
@@ -407,23 +407,23 @@ class CacheEvaluationRepository:
 
 
 # ============================================================================
-# Aspect Repositories (from aspect plugin system Phase 1)
+# Plugin Repositories (from plugin system)
 # ============================================================================
 
-from .aspect_repository import AspectRepository, UserAspectRepository
+from .plugin_repository import PluginRepository, UserPluginRepository
 
 __all__ = [
     'UserRepository',
     'JobRepository',
     'PaperAnalysisRepository',
     'ExecutionDetailsRepository',
-    'AspectEvaluationRepository',
+    'PluginEvaluationRepository',
     'ChatRepository',
     'ArtifactRepository',
     'EventRepository',
     'CachePaperAnalysisRepository',
     'CacheCodeExecutionRepository',
     'CacheEvaluationRepository',
-    'AspectRepository',
-    'UserAspectRepository',
+    'PluginRepository',
+    'UserPluginRepository',
 ]

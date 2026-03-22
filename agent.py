@@ -19,7 +19,7 @@ from typing import Optional, Dict, Any
 REPO_URL = os.getenv("REPO_URL", "")
 JOB_ID = os.getenv("JOB_ID", "")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://host.docker.internal:5000")
-MAX_ITERATIONS = 8
+MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "15"))
 COMMAND_TIMEOUT = 300  # 5 minutes per command
 REPO_PATH = "/workspace/repo"
 
@@ -49,9 +49,6 @@ def log_message(message: str, severity: str = "info"):
     except Exception as e:
         print(f"{Color.YELLOW}[WARN]{Color.RESET} Failed to log to backend: {e}")
 
-def print_command(command: str):
-    """Print command being executed (for debugging)."""
-    print(f"{Color.CYAN}$ {command}{Color.RESET}")
 
 def execute_command(command: str, cwd: Optional[str] = None, shell: bool = True) -> Dict[str, Any]:
     """
@@ -69,52 +66,46 @@ def execute_command(command: str, cwd: Optional[str] = None, shell: bool = True)
     if not cwd:
         cwd = REPO_PATH
     
-    print_command(command)
-    log_message(f"Executing: {command}")
-    
+    log_message(f"$ {command}")
+
     try:
-        # Always use shell=True (we're in container sandbox, safe here)
-        # This allows: pipes (|), redirects (>, 2>&1), operators (&&, ||)
+        # Use pipefail so piped commands report the real exit code
+        wrapped = f"set -o pipefail; {command}"
         result = subprocess.run(
-            command,  # Pass command as string when shell=True
+            wrapped,
             cwd=cwd,
             capture_output=True,
             text=True,
             timeout=COMMAND_TIMEOUT,
-            shell=True  # Always True - allows full bash syntax
+            shell=True,
+            executable="/bin/bash"
         )
-        
+
         success = result.returncode == 0
-        
-        # Print stdout (regardless of success)
+
+        # Log output once (log_message prints to stdout AND posts to backend)
         if result.stdout:
-            print(f"{Color.GREEN}{result.stdout}{Color.RESET}")
-            # Log first 500 chars of stdout to backend
-            log_message(f"Output: {result.stdout[:500]}", severity="info")
-        
-        # Print and log stderr
+            log_message(result.stdout[:2000].rstrip(), severity="info")
+
         if result.stderr:
-            print(f"{Color.RED}{result.stderr}{Color.RESET}")
-            # Log stderr to backend
-            log_message(f"Error output: {result.stderr[:500]}", severity="warning" if success else "error")
-        
+            log_message(result.stderr[:2000].rstrip(), severity="warning" if success else "error")
+
         output = {
             "success": success,
             "returncode": result.returncode,
-            "stdout": result.stdout[:2000],  # Truncate for safety
-            "stderr": result.stderr[:2000]
+            "stdout": result.stdout[:5000],
+            "stderr": result.stderr[:5000]
         }
-        
+
         if success:
-            log_message(f"✓ Command succeeded (exit code 0)", severity="info")
+            log_message(f"✓ Exit code 0", severity="info")
         else:
-            log_message(f"✗ Command failed (exit code {result.returncode})", severity="error")
+            log_message(f"✗ Exit code {result.returncode}", severity="error")
         
         return output
         
     except subprocess.TimeoutExpired:
-        print(f"{Color.RED}Command timed out after {COMMAND_TIMEOUT}s{Color.RESET}")
-        log_message(f"✗ Command timed out", severity="error")
+        log_message(f"✗ Command timed out after {COMMAND_TIMEOUT}s", severity="error")
         return {
             "success": False,
             "returncode": -1,
@@ -122,7 +113,6 @@ def execute_command(command: str, cwd: Optional[str] = None, shell: bool = True)
             "stderr": f"Command timed out after {COMMAND_TIMEOUT}s"
         }
     except Exception as e:
-        print(f"{Color.RED}Error executing command: {e}{Color.RESET}")
         log_message(f"✗ Error executing command: {e}", severity="error")
         return {
             "success": False,
@@ -131,26 +121,35 @@ def execute_command(command: str, cwd: Optional[str] = None, shell: bool = True)
             "stderr": str(e)
         }
 
-def read_file(path: str, max_lines: int = 100) -> Optional[str]:
-    """Read file from repo (sandbox)."""
+def read_file(path: str, start_line: int = 1, max_lines: int = 200) -> Optional[str]:
+    """Read file from repo (sandbox).
+
+    Args:
+        path: Relative path inside REPO_PATH.
+        start_line: 1-based line number to start reading from.
+        max_lines: Maximum number of lines to return.
+    """
     full_path = Path(REPO_PATH) / path
-    
+
     # Security: Prevent path traversal
     try:
         if not full_path.resolve().is_relative_to(Path(REPO_PATH).resolve()):
             log_message(f"✗ Path traversal attempt blocked: {path}", severity="error")
             return None
     except ValueError:
-        # is_relative_to not available in older Python, use different check
         if not str(full_path.resolve()).startswith(str(Path(REPO_PATH).resolve())):
             log_message(f"✗ Path traversal attempt blocked: {path}", severity="error")
             return None
-    
+
     try:
         with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
-            lines = f.readlines()[:max_lines]
-            content = ''.join(lines)
-            print(f"{Color.GREEN}Read {len(lines)} lines from {path}{Color.RESET}")
+            all_lines = f.readlines()
+            total = len(all_lines)
+            start_idx = max(0, start_line - 1)
+            selected = all_lines[start_idx:start_idx + max_lines]
+            content = ''.join(selected)
+            shown_end = start_idx + len(selected)
+            log_message(f"Read lines {start_idx+1}-{shown_end} of {total} from {path}")
             return content
     except FileNotFoundError:
         log_message(f"✗ File not found: {path}", severity="error")
@@ -185,7 +184,7 @@ def ask_claude(state: Dict[str, Any]) -> Optional[Dict[str, str]]:
                 "job_id": JOB_ID,
                 "repo_state": state
             },
-            timeout=30
+            timeout=120
         )
         
         if response.status_code == 200:
@@ -380,10 +379,10 @@ def check_for_randomness_seeds() -> str:
     return "\n".join(findings)
 
 
-def build_reproducibility_aspects(state: Dict[str, Any]) -> Dict[str, Any]:
-    """Build reproducibility aspects array from analysis state."""
-    aspects = {
-        "aspects": [
+def build_reproducibility_plugins(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Build reproducibility plugins array from analysis state."""
+    plugins = {
+        "plugins": [
             {
                 "id": "code_availability",
                 "name": "Code Availability",
@@ -413,7 +412,7 @@ def build_reproducibility_aspects(state: Dict[str, Any]) -> Dict[str, Any]:
             }
         ]
     }
-    return aspects
+    return plugins
 
 def report_completion(success: bool, message: str = "", accuracy: Optional[float] = None, state: Optional[Dict[str, Any]] = None):
     """Report completion back to backend to terminate agent loop."""
@@ -427,7 +426,7 @@ def report_completion(success: bool, message: str = "", accuracy: Optional[float
         
         # Add reproducibility aspects if state is provided
         if state:
-            payload["reproducibility_aspects"] = build_reproducibility_aspects(state)
+            payload["reproducibility_plugins"] = build_reproducibility_plugins(state)
         
         response = requests.post(
             f"{BACKEND_URL}/api/agent/complete",
@@ -446,69 +445,124 @@ def report_completion(success: bool, message: str = "", accuracy: Optional[float
         log_message(f"✗ Failed to report completion: {e}", severity="error")
         return False
 
+def validate_repo_url(url):
+    """Validate that the repository URL is safe to clone.
+
+    Only allow http(s) and git:// schemes. Block shell metacharacters,
+    local file:// URLs, and private/link-local IP ranges.
+    """
+    import re
+    from urllib.parse import urlparse
+
+    if not url or not isinstance(url, str):
+        return False, "Empty or invalid URL"
+
+    # Block shell metacharacters before any parsing
+    dangerous_chars = set(';|&$`(){}!#\n\r')
+    if dangerous_chars & set(url):
+        return False, "URL contains disallowed characters"
+
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False, "Malformed URL"
+
+    # Only allow safe schemes
+    if parsed.scheme not in ('http', 'https', 'git'):
+        return False, f"Disallowed URL scheme: {parsed.scheme}"
+
+    # Must have a hostname
+    hostname = parsed.hostname
+    if not hostname:
+        return False, "No hostname in URL"
+
+    # Block localhost and private IPs (SSRF prevention)
+    import ipaddress
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return False, "URL points to a private/reserved address"
+    except ValueError:
+        # hostname is not an IP — that's fine, it's a domain name
+        pass
+
+    # Block localhost by name
+    if hostname.lower() in ('localhost', 'host.docker.internal'):
+        return False, "URL points to localhost"
+
+    return True, None
+
+
 def clone_repository():
     """Clone repository into sandbox."""
     log_message(f"🔍 Cloning repository: {REPO_URL}")
-    
+
+    # Validate URL before cloning
+    is_valid, reason = validate_repo_url(REPO_URL)
+    if not is_valid:
+        log_message(f"✗ Invalid repository URL: {reason}", severity="error")
+        return False
+
     # Create workspace directory
     os.makedirs(REPO_PATH, exist_ok=True)
-    
-    result = execute_command(f"git clone {REPO_URL} {REPO_PATH}")
-    
+
+    # Use shlex.quote to prevent command injection
+    result = execute_command(f"git clone {shlex.quote(REPO_URL)} {shlex.quote(REPO_PATH)}")
+
     if not result["success"]:
         log_message(f"✗ Failed to clone repository", severity="error")
         return False
-    
+
     log_message(f"✓ Repository cloned successfully")
     return True
 
 
-def run_scripts():
-    """Execute all scripts from SCRIPTS environment variable.
-    
-    Phase 1 MVP: Run user-provided scripts before Claude loop.
-    Scripts are identified by hash and stored in /workspace/scripts/{hash}.
-    Results are reported to /agent/script_result endpoint.
+def run_checks():
+    """Execute all checks from CHECKS environment variable.
+
+    Run user-provided checks before Claude loop.
+    Checks are identified by hash and stored in /workspace/checks/{hash}.
+    Results are reported to /agent/check_result endpoint.
     """
-    scripts_json = os.getenv('SCRIPTS', '{}')
-    
-    if not scripts_json or scripts_json == '{}':
-        log_message("No execution scripts to run (SCRIPTS not set)")
+    checks_json = os.getenv('CHECKS', '{}')
+
+    if not checks_json or checks_json == '{}':
+        log_message("No execution checks to run (CHECKS not set)")
         return
-    
+
     try:
-        scripts = json.loads(scripts_json)
+        checks = json.loads(checks_json)
     except json.JSONDecodeError:
-        log_message(f"Error: Invalid SCRIPTS JSON: {scripts_json}", severity="error")
+        log_message(f"Error: Invalid CHECKS JSON: {checks_json}", severity="error")
         return
-    
-    if not scripts:
-        log_message("No execution scripts to run")
+
+    if not checks:
+        log_message("No execution checks to run")
         return
-    
-    log_message(f"🔬 Running {len(scripts)} execution script(s)...")
-    
-    # Create scripts directory (in /workspace where agent user has write permission)
-    scripts_dir = Path('/workspace/scripts')
-    scripts_dir.mkdir(exist_ok=True, parents=True)
-    
-    for script_hash, script_data in scripts.items():
-        script_name = script_data.get('name', script_hash[:8])
-        script_text = script_data.get('script_text', '')
-        
-        log_message(f"Running script: {script_name}")
-        
+
+    log_message(f"🔬 Running {len(checks)} execution check(s)...")
+
+    # Create checks directory (in /workspace where agent user has write permission)
+    checks_dir = Path('/workspace/checks')
+    checks_dir.mkdir(exist_ok=True, parents=True)
+
+    for script_hash, check_data in checks.items():
+        check_name = check_data.get('name', script_hash[:8])
+        script_text = check_data.get('script_text', '')
+
+        log_message(f"Running check: {check_name}")
+
         try:
             # Write script to file
-            script_path = scripts_dir / script_hash
+            script_path = checks_dir / script_hash
             script_path.write_text(script_text)
-            
+
             # Make executable
             os.chmod(script_path, 0o755)
-            
-            # Execute script
+
+            # Execute check
             start_time = time.time()
-            
+
             result = subprocess.run(
                 [str(script_path)],
                 capture_output=True,
@@ -516,39 +570,39 @@ def run_scripts():
                 timeout=300,
                 cwd=REPO_PATH
             )
-            
+
             duration_ms = int((time.time() - start_time) * 1000)
-            
+
             # Log output
             if result.stdout:
                 log_message(f"Output: {result.stdout}")
             if result.stderr:
                 log_message(f"Stderr: {result.stderr}", severity="warning")
-            
+
             # Report result to backend
-            report_script_result(
+            report_check_result(
                 script_hash=script_hash,
                 exit_code=result.returncode,
                 stdout=result.stdout,
                 stderr=result.stderr,
                 duration_ms=duration_ms
             )
-            
-            log_message(f"Script complete: {script_name} (exit {result.returncode})")
-        
+
+            log_message(f"Check complete: {check_name} (exit {result.returncode})")
+
         except subprocess.TimeoutExpired:
-            log_message(f"Script timeout: {script_name}", severity="error")
-            report_script_result(
+            log_message(f"Check timeout: {check_name}", severity="error")
+            report_check_result(
                 script_hash=script_hash,
                 exit_code=124,
                 stdout="",
-                stderr="Script timeout after 5 minutes",
+                stderr="Check timeout after 5 minutes",
                 duration_ms=300000
             )
-        
+
         except Exception as e:
-            log_message(f"Script error: {script_name} - {str(e)}", severity="error")
-            report_script_result(
+            log_message(f"Check error: {check_name} - {str(e)}", severity="error")
+            report_check_result(
                 script_hash=script_hash,
                 exit_code=127,
                 stdout="",
@@ -557,9 +611,9 @@ def run_scripts():
             )
 
 
-def report_script_result(script_hash: str, exit_code: int, stdout: str, 
+def report_check_result(script_hash: str, exit_code: int, stdout: str,
                         stderr: str, duration_ms: int):
-    """Report script result back to backend."""
+    """Report check result back to backend."""
     try:
         payload = {
             'job_id': JOB_ID,
@@ -569,20 +623,20 @@ def report_script_result(script_hash: str, exit_code: int, stdout: str,
             'stderr': stderr[:5000],
             'duration_ms': duration_ms
         }
-        
+
         response = requests.post(
-            f"{BACKEND_URL}/api/agent/script_result",
+            f"{BACKEND_URL}/api/agent/check_result",
             json=payload,
             timeout=10
         )
-        
+
         if response.status_code == 200:
-            log_message(f"Reported script result: {script_hash[:8]}")
+            log_message(f"Reported check result: {script_hash[:8]}")
         else:
-            log_message(f"Failed to report script result: {response.status_code}", severity="error")
-    
+            log_message(f"Failed to report check result: {response.status_code}", severity="error")
+
     except Exception as e:
-        log_message(f"Error reporting script result: {str(e)}", severity="error")
+        log_message(f"Error reporting check result: {str(e)}", severity="error")
 
 
 def main():
@@ -600,8 +654,8 @@ def main():
         log_message("Agent failed to clone repository", severity="error")
         return 1
     
-    # Step 2: PHASE 1 NEW - Run execution scripts (if any)
-    run_scripts()
+    # Step 2: Run execution checks (if any)
+    run_checks()
     
     # Initialize state
     state = {
@@ -613,6 +667,7 @@ def main():
         "last_output": None,
         "errors": [],
         "iteration": 0,
+        "max_iterations": MAX_ITERATIONS,
         "executed_commands": [],  # Track all commands
         "combined_output": ""     # Accumulate all output
     }
@@ -623,109 +678,141 @@ def main():
     print(f"   Files: {', '.join(state['discovered_files'][:5])}...")
     print()
     
-    # Step 4: Agent loop (Claude decision loop - same as before)
+    # Step 4: Agent loop (Claude decision loop)
     iteration = 0
+    completed = False  # Track whether agent reported completion itself
+    exit_reason = ""
+    exit_success = False
+    consecutive_reads = 0  # Track consecutive read_file actions (debugging detection)
+    read_files_set = set()  # Track which files have been read
+    failed_commands = set()  # Track commands that already failed
+
     while iteration < MAX_ITERATIONS:
         iteration += 1
         state["iteration"] = iteration
-        
+
         print(f"{Color.YELLOW}--- Iteration {iteration}/{MAX_ITERATIONS} ---{Color.RESET}")
-        
+
         # Ask Claude what to do
         decision = ask_claude(state)
-        
+
         if not decision:
             log_message("Failed to get decision from Claude", severity="error")
+            exit_reason = "Backend communication failed"
             break
-        
+
         action = decision.get("action", "done")
         target = decision.get("target", "")
         reasoning = decision.get("reasoning", "")
-        
+
         print(f"Action: {action}")
         print(f"Reasoning: {reasoning}")
         print()
-        
+
+        # --- Guardrail: detect debugging loops ---
+        if action == "read_file":
+            consecutive_reads += 1
+            file_key = target.split(":")[0] if ":" in target else target
+            # Block re-reading the same source file (allow README, docs, configs)
+            is_doc_file = any(p in file_key.lower() for p in [
+                "readme", "setup", "config", "requirements", "environment",
+                "makefile", "dockerfile", ".cfg", ".ini", ".toml", ".yml", ".yaml"
+            ])
+            if file_key in read_files_set and not is_doc_file:
+                log_message(f"⚠ Skipping re-read of {file_key} (already read)", severity="warning")
+                state["last_output"] = f"[AGENT] Already read {file_key}. Move on to the next script or report results."
+                state["combined_output"] += f"\n[AGENT] Skipped re-read of {file_key}\n"
+                continue
+            read_files_set.add(file_key)
+
+            if consecutive_reads >= 3:
+                log_message(f"⚠ 3 consecutive reads detected — forcing agent to act or report", severity="warning")
+                state["last_output"] = "[AGENT] Too many consecutive file reads. Run a script or report results."
+                state["combined_output"] += "\n[AGENT] Forced: stop reading, run something or report results.\n"
+                consecutive_reads = 0
+                continue
+        else:
+            consecutive_reads = 0
+
+        # --- Guardrail: block diagnostic python -c commands (debugging) ---
+        if action == "run_command" and target.strip().startswith("python -c") and iteration > 5:
+            log_message(f"⚠ Blocking diagnostic command (no debugging)", severity="warning")
+            state["last_output"] = "[AGENT] Diagnostic commands are not allowed. Run actual scripts or report results."
+            state["combined_output"] += f"\n[AGENT] Blocked diagnostic: {target[:80]}\n"
+            continue
+
         # Execute action
         if action == "read_file":
-            log_message(f"📖 Reading file: {target}")
-            content = read_file(target, max_lines=100)
+            # Support "path:start_line" syntax (e.g. "models/foo.py:80")
+            start_line = 1
+            file_path = target
+            if ":" in target:
+                parts = target.rsplit(":", 1)
+                if parts[1].isdigit():
+                    file_path = parts[0]
+                    start_line = int(parts[1])
+            log_message(f"📖 Reading file: {file_path} (from line {start_line})")
+            content = read_file(file_path, start_line=start_line)
             if content:
                 state["last_output"] = content
                 state["last_command"] = f"read_file({target})"
                 # Add to combined output history
                 state["executed_commands"].append(f"read_file({target})")
-                state["combined_output"] += f"\n--- Reading file: {target} ---\n"
+                state["combined_output"] += f"\n--- Reading file: {file_path} (lines {start_line}+) ---\n"
                 state["combined_output"] += content + "\n"
-            
+
         elif action == "run_command":
             state["last_command"] = target
             result = execute_command(target)
             state["last_output"] = result.get("stdout", "") + result.get("stderr", "")
-            
+
             # Track command and output for execution details
             state["executed_commands"].append(target)
             state["combined_output"] += f"\n$ {target}\n"
             state["combined_output"] += result.get("stdout", "")
             if result.get("stderr"):
                 state["combined_output"] += f"[STDERR] {result.get('stderr')}\n"
-            
+
             if not result["success"]:
                 state["errors"].append({
                     "command": target,
                     "returncode": result["returncode"],
                     "stderr": result["stderr"]
                 })
-        
+                failed_commands.add(target)
+
         elif action == "check_success":
             log_message("✓ Reproducibility check passed!")
-            # Extract accuracy if available in output
-            accuracy = None
-            if "accuracy" in state.get("last_output", "").lower():
-                # Try to extract accuracy from output
-                import re
-                match = re.search(r'(\d+\.?\d*)\s*%|\baccuracy[:\s]+([0-9.]+)', state.get("last_output", ""), re.IGNORECASE)
-                if match:
-                    try:
-                        accuracy = float(match.group(1) or match.group(2)) / 100 if '%' in (match.group(0) or '') else float(match.group(1) or match.group(2))
-                    except:
-                        pass
-            
-            # Report execution details first (for evaluation stage)
-            report_execution_details(state)
-            
-            # Report success to backend
-            report_completion(
-                success=True,
-                message=reasoning,  # Use Claude's reasoning as message
-                accuracy=accuracy,
-                state=state
-            )
-            print()
-            break  # Exit the loop after reporting success
-            
+            completed = True
+            exit_success = True
+            exit_reason = reasoning
+            break
+
         elif action == "done":
             log_message(f"✓ Agent completed analysis (iteration {iteration})")
-            report_execution_details(state)
-            report_completion(success=True, message="Analysis completed", state=state)
+            completed = True
+            exit_success = len(state["errors"]) == 0
+            exit_reason = reasoning or "Analysis completed"
             break
-        
+
         else:
             log_message(f"Unknown action: {action}", severity="error")
+            exit_reason = f"Unknown action: {action}"
             break
-        
+
         print()
-    
-    if iteration >= MAX_ITERATIONS:
-        log_message(f"⚠ Max iterations reached ({MAX_ITERATIONS})", severity="warn")
-        # Report execution details even on failure
-        report_execution_details(state)
-        # Report failure if max iterations without success
-        report_completion(
-            success=False,
-            message=f"Max iterations ({MAX_ITERATIONS}) reached without successful execution. {len(state['errors'])} errors encountered.",
-            state=state
-        )
+
+    if not completed and iteration >= MAX_ITERATIONS:
+        exit_reason = f"Max iterations ({MAX_ITERATIONS}) reached. {len(state['errors'])} errors encountered."
+        log_message(f"⚠ {exit_reason}", severity="warn")
+
+    # Always report execution details and completion, regardless of how we exited
+    report_execution_details(state)
+    report_completion(
+        success=exit_success,
+        message=exit_reason,
+        state=state
+    )
     
     # Final summary
     print(f"{Color.CYAN}=== Final Report ==={Color.RESET}")

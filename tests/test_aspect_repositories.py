@@ -1,117 +1,117 @@
-"""Tests for AspectRepository and UserAspectRepository."""
+"""Tests for PluginRepository and UserPluginRepository."""
 
 import pytest
 from uuid import UUID
 from models.database import User
-from models.aspect import Aspect, UserAspect
-from repositories.aspect_repository import AspectRepository, UserAspectRepository
-from services.exceptions import AspectDeletionError
+from models.plugin import Plugin, UserPlugin
+from repositories.plugin_repository import PluginRepository, UserPluginRepository
+from services.exceptions import PluginDeletionError
 
 
 @pytest.mark.db
-class TestAspectRepository:
-    """Tests for AspectRepository."""
+class TestPluginRepository:
+    """Tests for PluginRepository."""
     
-    def test_create_aspect(self, app):
-        """Test creating an aspect."""
+    def test_create_plugin(self, app):
+        """Test creating an plugin."""
         with app.app_context():
-            aspect = AspectRepository.create_aspect(
-                name="Test Aspect",
+            plugin = PluginRepository.create_plugin(
+                name="Test Plugin",
                 description="Test Description",
                 prompt="Test Prompt",
                 is_default=False,
             )
             
-            assert aspect.id is not None
-            assert aspect.name == "Test Aspect"
-            assert aspect.is_default is False
+            assert plugin.id is not None
+            assert plugin.name == "Test Plugin"
+            assert plugin.is_default is False
     
-    def test_create_default_aspect(self, app):
-        """Test creating a default aspect."""
+    def test_create_default_plugin(self, app):
+        """Test creating a default plugin."""
         with app.app_context():
-            aspect = AspectRepository.create_aspect(
-                name="Default Aspect",
+            plugin = PluginRepository.create_plugin(
+                name="Default Plugin",
                 description="Desc",
                 prompt="Prompt",
                 is_default=True,
             )
             
-            assert aspect.is_default is True
+            assert plugin.is_default is True
     
-    def test_get_aspect_by_id(self, app):
-        """Test getting an aspect by ID."""
+    def test_get_plugin_by_id(self, app):
+        """Test getting an plugin by ID."""
         with app.app_context():
-            created = AspectRepository.create_aspect(
+            created = PluginRepository.create_plugin(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            retrieved = AspectRepository.get_aspect(created.id)
+            retrieved = PluginRepository.get_plugin(created.id)
             
             assert retrieved is not None
             assert retrieved.id == created.id
             assert retrieved.name == "Test"
     
-    def test_get_aspect_by_id_not_found(self, app):
-        """Test getting a non-existent aspect returns None."""
+    def test_get_plugin_by_id_not_found(self, app):
+        """Test getting a non-existent plugin returns None."""
         with app.app_context():
             from uuid import uuid4
-            result = AspectRepository.get_aspect(uuid4())
+            result = PluginRepository.get_plugin(uuid4())
             assert result is None
     
-    def test_get_all_aspects(self, app):
-        """Test getting all aspects."""
+    def test_get_all_plugins(self, app):
+        """Test getting all plugins."""
         with app.app_context():
-            aspect1 = AspectRepository.create_aspect(
-                name="Aspect 1",
+            plugin1 = PluginRepository.create_plugin(
+                name="Plugin 1",
                 description="Desc 1",
                 prompt="Prompt 1",
             )
-            aspect2 = AspectRepository.create_aspect(
-                name="Aspect 2",
+            plugin2 = PluginRepository.create_plugin(
+                name="Plugin 2",
                 description="Desc 2",
                 prompt="Prompt 2",
             )
             
-            all_aspects = AspectRepository.get_all_aspects()
+            all_plugins = PluginRepository.get_all_plugins()
             
-            assert len(all_aspects) >= 2
-            assert any(a.id == aspect1.id for a in all_aspects)
-            assert any(a.id == aspect2.id for a in all_aspects)
+            assert len(all_plugins) >= 2
+            assert any(a.id == plugin1.id for a in all_plugins)
+            assert any(a.id == plugin2.id for a in all_plugins)
     
-    def test_get_default_aspects(self, app):
-        """Test getting only default aspects."""
+    def test_get_default_plugins(self, app):
+        """Test getting only default plugins."""
         with app.app_context():
-            default = AspectRepository.create_aspect(
+            default = PluginRepository.create_plugin(
                 name="Default",
                 description="Desc",
                 prompt="Prompt",
                 is_default=True,
             )
-            non_default = AspectRepository.create_aspect(
+            non_default = PluginRepository.create_plugin(
                 name="Non-Default",
                 description="Desc",
                 prompt="Prompt",
                 is_default=False,
             )
             
-            defaults = AspectRepository.get_default_aspects()
+            defaults = PluginRepository.get_default_plugins()
             
             assert any(a.id == default.id for a in defaults)
             assert not any(a.id == non_default.id for a in defaults)
     
-    def test_update_aspect(self, app):
-        """Test updating an aspect."""
+    def test_update_plugin(self, app):
+        """Test updating an plugin."""
         with app.app_context():
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Original",
                 description="Original Desc",
                 prompt="Original Prompt",
             )
             
-            updated = AspectRepository.update_aspect(
-                aspect.id,
+            updated = PluginRepository.update_plugin(
+                plugin.id,
                 name="Updated",
                 description="Updated Desc",
                 prompt="Updated Prompt",
@@ -121,17 +121,17 @@ class TestAspectRepository:
             assert updated.description == "Updated Desc"
             assert updated.prompt == "Updated Prompt"
     
-    def test_update_aspect_partial(self, app):
+    def test_update_plugin_partial(self, app):
         """Test updating only some fields."""
         with app.app_context():
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Original",
                 description="Original Desc",
                 prompt="Original Prompt",
             )
             
-            updated = AspectRepository.update_aspect(
-                aspect.id,
+            updated = PluginRepository.update_plugin(
+                plugin.id,
                 name="Updated",
             )
             
@@ -139,155 +139,155 @@ class TestAspectRepository:
             assert updated.description == "Original Desc"
             assert updated.prompt == "Original Prompt"
     
-    def test_update_aspect_not_found(self, app):
-        """Test updating a non-existent aspect."""
+    def test_update_plugin_not_found(self, app):
+        """Test updating a non-existent plugin."""
         with app.app_context():
             from uuid import uuid4
-            result = AspectRepository.update_aspect(uuid4(), name="New")
+            result = PluginRepository.update_plugin(uuid4(), name="New")
             assert result is None
     
-    def test_delete_non_default_aspect(self, app):
-        """Test deleting a non-default aspect succeeds."""
+    def test_delete_non_default_plugin(self, app):
+        """Test deleting a non-default plugin succeeds."""
         with app.app_context():
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Non-Default",
                 description="Desc",
                 prompt="Prompt",
                 is_default=False,
             )
             
-            result = AspectRepository.delete_aspect(aspect.id)
+            result = PluginRepository.delete_plugin(plugin.id)
             
             assert result is True
-            assert AspectRepository.get_aspect(aspect.id) is None
+            assert PluginRepository.get_plugin(plugin.id) is None
     
-    def test_delete_default_aspect_fails(self, app):
-        """Test deleting a default aspect raises AspectDeletionError."""
+    def test_delete_default_plugin_fails(self, app):
+        """Test deleting a default plugin raises PluginDeletionError."""
         with app.app_context():
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Default",
                 description="Desc",
                 prompt="Prompt",
                 is_default=True,
             )
             
-            with pytest.raises(AspectDeletionError):
-                AspectRepository.delete_aspect(aspect.id)
+            with pytest.raises(PluginDeletionError):
+                PluginRepository.delete_plugin(plugin.id)
     
-    def test_delete_non_existent_aspect(self, app):
-        """Test deleting a non-existent aspect returns False."""
+    def test_delete_non_existent_plugin(self, app):
+        """Test deleting a non-existent plugin returns False."""
         with app.app_context():
             from uuid import uuid4
-            result = AspectRepository.delete_aspect(uuid4())
+            result = PluginRepository.delete_plugin(uuid4())
             assert result is False
     
-    def test_update_multiple_aspects_isolation(self, app):
-        """Test that updating multiple aspects doesn't affect others."""
+    def test_update_multiple_plugins_isolation(self, app):
+        """Test that updating multiple plugins doesn't affect others."""
         with app.app_context():
-            aspect1 = AspectRepository.create_aspect(
-                name="Aspect 1",
+            plugin1 = PluginRepository.create_plugin(
+                name="Plugin 1",
                 description="Desc 1",
                 prompt="Prompt 1",
             )
-            aspect2 = AspectRepository.create_aspect(
-                name="Aspect 2",
+            plugin2 = PluginRepository.create_plugin(
+                name="Plugin 2",
                 description="Desc 2",
                 prompt="Prompt 2",
             )
             
-            AspectRepository.update_aspect(aspect1.id, name="Updated 1")
+            PluginRepository.update_plugin(plugin1.id, name="Updated 1")
             
-            updated1 = AspectRepository.get_aspect(aspect1.id)
-            unchanged2 = AspectRepository.get_aspect(aspect2.id)
+            updated1 = PluginRepository.get_plugin(plugin1.id)
+            unchanged2 = PluginRepository.get_plugin(plugin2.id)
             
             assert updated1.name == "Updated 1"
-            assert unchanged2.name == "Aspect 2"
+            assert unchanged2.name == "Plugin 2"
 
 
 @pytest.mark.db
-class TestUserAspectRepository:
-    """Tests for UserAspectRepository."""
+class TestUserPluginRepository:
+    """Tests for UserPluginRepository."""
     
-    def test_create_user_aspect(self, app):
-        """Test creating a user aspect."""
+    def test_create_user_plugin(self, app):
+        """Test creating a user plugin."""
         with app.app_context():
             user = User.create(
                 username="testuser",
                 email="test@example.com",
                 password_hash="hash",
             )
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            user_aspect = UserAspectRepository.create_user_aspect(
+            user_plugin = UserPluginRepository.create_user_plugin(
                 user_id=user.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
             )
             
-            assert user_aspect.user_id == user.id
-            assert user_aspect.aspect_id == aspect.id
-            assert user_aspect.is_active is True
+            assert user_plugin.user_id == user.id
+            assert user_plugin.plugin_id == plugin.id
+            assert user_plugin.is_active is True
     
-    def test_create_user_aspect_with_custom_prompt(self, app):
-        """Test creating a user aspect with custom prompt."""
+    def test_create_user_plugin_with_custom_prompt(self, app):
+        """Test creating a user plugin with custom prompt."""
         with app.app_context():
             user = User.create(
                 username="testuser",
                 email="test@example.com",
                 password_hash="hash",
             )
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            user_aspect = UserAspectRepository.create_user_aspect(
+            user_plugin = UserPluginRepository.create_user_plugin(
                 user_id=user.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
                 custom_prompt="Custom Prompt",
             )
             
-            assert user_aspect.custom_prompt == "Custom Prompt"
+            assert user_plugin.custom_prompt == "Custom Prompt"
     
-    def test_get_user_aspect(self, app):
-        """Test getting a specific user aspect."""
+    def test_get_user_plugin(self, app):
+        """Test getting a specific user plugin."""
         with app.app_context():
             user = User.create(
                 username="testuser",
                 email="test@example.com",
                 password_hash="hash",
             )
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
-            created = UserAspectRepository.create_user_aspect(
+            created = UserPluginRepository.create_user_plugin(
                 user_id=user.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
             )
             
-            retrieved = UserAspectRepository.get_user_aspect(
+            retrieved = UserPluginRepository.get_user_plugin(
                 user_id=user.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
             )
             
             assert retrieved is not None
             assert retrieved.id == created.id
     
-    def test_get_user_aspect_not_found(self, app):
-        """Test getting a non-existent user aspect."""
+    def test_get_user_plugin_not_found(self, app):
+        """Test getting a non-existent user plugin."""
         with app.app_context():
             from uuid import uuid4
-            result = UserAspectRepository.get_user_aspect(uuid4(), uuid4())
+            result = UserPluginRepository.get_user_plugin(uuid4(), uuid4())
             assert result is None
     
-    def test_get_user_aspects(self, app):
-        """Test getting all aspects for a user."""
+    def test_get_user_plugins(self, app):
+        """Test getting all plugins for a user."""
         with app.app_context():
             user = User.create(
                 username="testuser",
@@ -295,28 +295,28 @@ class TestUserAspectRepository:
                 password_hash="hash",
             )
             
-            aspect1 = AspectRepository.create_aspect(
-                name="Aspect 1",
+            plugin1 = PluginRepository.create_plugin(
+                name="Plugin 1",
                 description="Desc 1",
                 prompt="Prompt 1",
             )
-            aspect2 = AspectRepository.create_aspect(
-                name="Aspect 2",
+            plugin2 = PluginRepository.create_plugin(
+                name="Plugin 2",
                 description="Desc 2",
                 prompt="Prompt 2",
             )
             
-            UserAspectRepository.create_user_aspect(user_id=user.id, aspect_id=aspect1.id)
-            UserAspectRepository.create_user_aspect(user_id=user.id, aspect_id=aspect2.id)
+            UserPluginRepository.create_user_plugin(user_id=user.id, plugin_id=plugin1.id)
+            UserPluginRepository.create_user_plugin(user_id=user.id, plugin_id=plugin2.id)
             
-            user_aspects = UserAspectRepository.get_user_aspects(user.id)
+            user_plugins = UserPluginRepository.get_user_plugins(user.id)
             
-            assert len(user_aspects) == 2
-            assert any(ua.aspect_id == aspect1.id for ua in user_aspects)
-            assert any(ua.aspect_id == aspect2.id for ua in user_aspects)
+            assert len(user_plugins) == 2
+            assert any(ua.plugin_id == plugin1.id for ua in user_plugins)
+            assert any(ua.plugin_id == plugin2.id for ua in user_plugins)
     
-    def test_get_active_aspects(self, app):
-        """Test getting only active aspects."""
+    def test_get_active_plugins(self, app):
+        """Test getting only active plugins."""
         with app.app_context():
             user = User.create(
                 username="testuser",
@@ -324,30 +324,30 @@ class TestUserAspectRepository:
                 password_hash="hash",
             )
             
-            aspect1 = AspectRepository.create_aspect(
-                name="Aspect 1",
+            plugin1 = PluginRepository.create_plugin(
+                name="Plugin 1",
                 description="Desc 1",
                 prompt="Prompt 1",
             )
-            aspect2 = AspectRepository.create_aspect(
-                name="Aspect 2",
+            plugin2 = PluginRepository.create_plugin(
+                name="Plugin 2",
                 description="Desc 2",
                 prompt="Prompt 2",
             )
             
-            ua1 = UserAspectRepository.create_user_aspect(user_id=user.id, aspect_id=aspect1.id)
-            ua2 = UserAspectRepository.create_user_aspect(user_id=user.id, aspect_id=aspect2.id)
+            ua1 = UserPluginRepository.create_user_plugin(user_id=user.id, plugin_id=plugin1.id)
+            ua2 = UserPluginRepository.create_user_plugin(user_id=user.id, plugin_id=plugin2.id)
             
-            # Deactivate aspect2
-            UserAspectRepository.update_user_aspect(user.id, aspect2.id, is_active=False)
+            # Deactivate plugin2
+            UserPluginRepository.update_user_plugin(user.id, plugin2.id, is_active=False)
             
-            active = UserAspectRepository.get_active_aspects(user.id)
+            active = UserPluginRepository.get_active_plugins(user.id)
             
             assert len(active) == 1
-            assert active[0].id == aspect1.id
+            assert active[0].id == plugin1.id
     
-    def test_get_active_aspects_excludes_soft_deleted(self, app):
-        """Test that soft-deleted aspects are excluded from active."""
+    def test_get_active_plugins_excludes_soft_deleted(self, app):
+        """Test that soft-deleted plugins are excluded from active."""
         with app.app_context():
             user = User.create(
                 username="testuser",
@@ -355,22 +355,22 @@ class TestUserAspectRepository:
                 password_hash="hash",
             )
             
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            UserAspectRepository.create_user_aspect(user_id=user.id, aspect_id=aspect.id)
+            UserPluginRepository.create_user_plugin(user_id=user.id, plugin_id=plugin.id)
             
             # Soft delete
-            UserAspectRepository.delete_user_aspect(user.id, aspect.id)
+            UserPluginRepository.delete_user_plugin(user.id, plugin.id)
             
-            active = UserAspectRepository.get_active_aspects(user.id)
+            active = UserPluginRepository.get_active_plugins(user.id)
             
             assert len(active) == 0
     
-    def test_update_user_aspect_is_active(self, app):
+    def test_update_user_plugin_is_active(self, app):
         """Test updating is_active flag."""
         with app.app_context():
             user = User.create(
@@ -378,23 +378,23 @@ class TestUserAspectRepository:
                 email="test@example.com",
                 password_hash="hash",
             )
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            UserAspectRepository.create_user_aspect(user_id=user.id, aspect_id=aspect.id)
+            UserPluginRepository.create_user_plugin(user_id=user.id, plugin_id=plugin.id)
             
-            updated = UserAspectRepository.update_user_aspect(
+            updated = UserPluginRepository.update_user_plugin(
                 user_id=user.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
                 is_active=False,
             )
             
             assert updated.is_active is False
     
-    def test_update_user_aspect_custom_prompt(self, app):
+    def test_update_user_plugin_custom_prompt(self, app):
         """Test updating custom_prompt."""
         with app.app_context():
             user = User.create(
@@ -402,23 +402,23 @@ class TestUserAspectRepository:
                 email="test@example.com",
                 password_hash="hash",
             )
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            UserAspectRepository.create_user_aspect(user_id=user.id, aspect_id=aspect.id)
+            UserPluginRepository.create_user_plugin(user_id=user.id, plugin_id=plugin.id)
             
-            updated = UserAspectRepository.update_user_aspect(
+            updated = UserPluginRepository.update_user_plugin(
                 user_id=user.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
                 custom_prompt="Custom",
             )
             
             assert updated.custom_prompt == "Custom"
     
-    def test_update_user_aspect_both_fields(self, app):
+    def test_update_user_plugin_both_fields(self, app):
         """Test updating both is_active and custom_prompt."""
         with app.app_context():
             user = User.create(
@@ -426,17 +426,17 @@ class TestUserAspectRepository:
                 email="test@example.com",
                 password_hash="hash",
             )
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            UserAspectRepository.create_user_aspect(user_id=user.id, aspect_id=aspect.id)
+            UserPluginRepository.create_user_plugin(user_id=user.id, plugin_id=plugin.id)
             
-            updated = UserAspectRepository.update_user_aspect(
+            updated = UserPluginRepository.update_user_plugin(
                 user_id=user.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
                 is_active=False,
                 custom_prompt="Custom",
             )
@@ -444,39 +444,39 @@ class TestUserAspectRepository:
             assert updated.is_active is False
             assert updated.custom_prompt == "Custom"
     
-    def test_delete_user_aspect(self, app):
-        """Test soft deleting a user aspect."""
+    def test_delete_user_plugin(self, app):
+        """Test soft deleting a user plugin."""
         with app.app_context():
             user = User.create(
                 username="testuser",
                 email="test@example.com",
                 password_hash="hash",
             )
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            UserAspectRepository.create_user_aspect(user_id=user.id, aspect_id=aspect.id)
+            UserPluginRepository.create_user_plugin(user_id=user.id, plugin_id=plugin.id)
             
-            result = UserAspectRepository.delete_user_aspect(user.id, aspect.id)
+            result = UserPluginRepository.delete_user_plugin(user.id, plugin.id)
             
             assert result is True
             
             # Check that deleted_at is set
-            user_aspect = UserAspectRepository.get_user_aspect(user.id, aspect.id)
-            assert user_aspect.deleted_at is not None
+            user_plugin = UserPluginRepository.get_user_plugin(user.id, plugin.id)
+            assert user_plugin.deleted_at is not None
     
-    def test_delete_user_aspect_not_found(self, app):
-        """Test deleting a non-existent user aspect."""
+    def test_delete_user_plugin_not_found(self, app):
+        """Test deleting a non-existent user plugin."""
         with app.app_context():
             from uuid import uuid4
-            result = UserAspectRepository.delete_user_aspect(uuid4(), uuid4())
+            result = UserPluginRepository.delete_user_plugin(uuid4(), uuid4())
             assert result is False
     
     def test_multiple_users_isolated(self, app):
-        """Test that multiple users have isolated aspect states."""
+        """Test that multiple users have isolated plugin states."""
         with app.app_context():
             user1 = User.create(
                 username="user1",
@@ -489,22 +489,22 @@ class TestUserAspectRepository:
                 password_hash="hash",
             )
             
-            aspect = AspectRepository.create_aspect(
+            plugin = PluginRepository.create_plugin(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            ua1 = UserAspectRepository.create_user_aspect(user_id=user1.id, aspect_id=aspect.id)
-            ua2 = UserAspectRepository.create_user_aspect(user_id=user2.id, aspect_id=aspect.id)
+            ua1 = UserPluginRepository.create_user_plugin(user_id=user1.id, plugin_id=plugin.id)
+            ua2 = UserPluginRepository.create_user_plugin(user_id=user2.id, plugin_id=plugin.id)
             
-            # Update user1's aspect
-            UserAspectRepository.update_user_aspect(
+            # Update user1's plugin
+            UserPluginRepository.update_user_plugin(
                 user_id=user1.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
                 is_active=False,
             )
             
             # Check user2 is unaffected
-            user2_aspect = UserAspectRepository.get_user_aspect(user2.id, aspect.id)
-            assert user2_aspect.is_active is True
+            user2_plugin = UserPluginRepository.get_user_plugin(user2.id, plugin.id)
+            assert user2_plugin.is_active is True

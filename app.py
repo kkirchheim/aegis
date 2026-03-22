@@ -1,13 +1,15 @@
 """
-Paper Reproducibility Checker - Flask Backend
+Artifact Review - Flask Backend
 
-Analyzes scientific papers for reproducibility by extracting code artifacts
-and running them in isolated Docker containers with an LLM agent.
+Analyzes scientific papers by extracting software artifacts,
+generating evidence, and producing structured review assessments.
 """
 
 import os
 from flask import Flask, render_template
 from flask_apispec import FlaskApiSpec
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from config import Config
 from models.database import init_db as init_peewee_db
 from services.auth_service import create_default_admin_user
@@ -17,7 +19,7 @@ from blueprints.auth import auth_bp
 from blueprints.admin import admin_bp
 from blueprints.jobs import jobs_bp, emit_event
 from blueprints.api import api_bp
-from blueprints.aspects import aspects_bp
+from blueprints.plugins import plugins_bp
 
 # Export for backward compatibility with tests and other imports
 DATABASE = Config.DATABASE
@@ -27,9 +29,18 @@ def create_app():
     """Create and configure Flask application."""
     
     app = Flask(__name__)
-    
+
     # Load configuration
     app.config.from_object(Config)
+
+    # Rate limiting (in-memory by default; use Redis in production)
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=["200 per hour"],
+        storage_uri="memory://",
+    )
+    app.limiter = limiter  # Expose for use in blueprints
     
     # Initialize database (Peewee ORM)
     init_peewee_db(app.logger)
@@ -37,10 +48,10 @@ def create_app():
     
     # Seed default execution scripts
     try:
-        from utils.script_utils import seed_default_scripts
-        seed_default_scripts()
+        from utils.check_utils import seed_default_checks
+        seed_default_checks()
     except Exception as e:
-        app.logger.error(f"Failed to seed execution scripts: {e}")
+        app.logger.error(f"Failed to seed execution checks: {e}")
     
     # Initialize LLM provider
     try:
@@ -62,16 +73,21 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(jobs_bp)
     app.register_blueprint(api_bp)
-    app.register_blueprint(aspects_bp)
+    app.register_blueprint(plugins_bp)
+
+    # Apply rate limits to sensitive endpoints
+    limiter.limit("5 per minute")(app.view_functions.get("api.api_login"))
+    limiter.limit("3 per minute")(app.view_functions.get("api.api_register"))
+    limiter.limit("10 per minute")(app.view_functions.get("api.upload_pdf"))
     
     # Initialize API documentation (FlaskApiSpec)
     app.config.update({
-        "APISPEC_TITLE": "Paper Reproducibility Checker API",
+        "APISPEC_TITLE": "Artifact Review API",
         "APISPEC_VERSION": "1.0.0",
         "OPENAPI_VERSION": "3.0.2",
         "APISPEC_SWAGGER_URL": "/swagger/",      # Raw OpenAPI JSON spec
         "APISPEC_SWAGGER_UI_URL": "/docs/",      # Interactive Swagger UI
-        "API_TITLE": "Paper Reproducibility Checker",
+        "API_TITLE": "Artifact Review",
         "API_VERSION": "v1",
     })
     
@@ -175,6 +191,17 @@ def create_app():
         
         # Referrer policy (don't leak referrer to external sites)
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+
+        # Content Security Policy
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "img-src 'self' data:; "
+            "font-src 'self'; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'"
+        )
         
         return response
     
@@ -253,4 +280,4 @@ app = create_app()
 
 if __name__ == "__main__":
     # Run development server
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=os.getenv("FLASK_DEBUG", "0") == "1")

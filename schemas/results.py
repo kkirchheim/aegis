@@ -15,13 +15,13 @@ class ArtifactSchema(Schema):
     description = fields.Str(allow_none=True)
 
 
-class AspectEvaluationSchema(Schema):
-    """Schema for aspect evaluation results.
-    
-    Represents the evaluation of a specific aspect of reproducibility
+class PluginEvaluationSchema(Schema):
+    """Schema for plugin evaluation results.
+
+    Represents the evaluation of a specific plugin of reproducibility
     (e.g., code availability, data availability, methodology clarity).
     """
-    aspect_id = fields.Str(allow_none=True)
+    plugin_id = fields.Str(allow_none=True)
     name = fields.Str(allow_none=True)
     status = fields.Str(allow_none=True)
     evidence = fields.Str(allow_none=True)

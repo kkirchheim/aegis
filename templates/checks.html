@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Execution Checks</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>🔧</text></svg>">
+
+    <!-- Tailwind CSS + DaisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+
+    <!-- Custom styles -->
+    <style>
+        /* Override primary color to blue - match other pages */
+        .text-primary { color: #0068b4; }
+        .bg-primary { background-color: #0068b4; }
+        .btn-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .btn-primary:hover { background-color: #004d8f; }
+        .btn-primary:disabled { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .badge-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .link-primary { color: #0068b4; }
+
+        /* Secondary button red */
+        .btn-secondary { background-color: #ef4444; border-color: #ef4444; color: white; }
+        .btn-secondary:hover { background-color: #dc2626; }
+
+        /* Error button red */
+        .btn-error { background-color: #ef4444; border-color: #ef4444; color: white; }
+        .btn-error:hover { background-color: #dc2626; }
+
+        html[data-theme="light"] {
+            color-scheme: light;
+        }
+
+        /* Modal centering */
+        .modal {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.modal-open {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-box {
+            position: relative;
+            margin: 0;
+        }
+    </style>
+</head>
+<body class="bg-base-100">
+    {% include 'navbar.html' %}
+
+    <!-- Main Container -->
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+
+        <!-- Page Header -->
+        <section class="mb-8">
+            <h1 class="text-4xl font-bold mb-4">🔧 Execution Checks</h1>
+            <p class="text-lg text-base-content/70 mb-6">
+                Manage checks that run during artifact review to validate your repository.
+            </p>
+            <p class="text-base text-base-content/60">
+                <strong>Default checks</strong> are provided by the system. <strong>Custom checks</strong> are created by you to validate specific aspects of your code.
+            </p>
+        </section>
+
+        <!-- Error Alert -->
+        <div id="errorAlert" class="alert alert-error shadow-lg mb-4" style="display: none;">
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2m2-2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span id="errorMessage"></span>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="flex justify-center items-center py-12">
+            <div class="loading loading-spinner loading-lg text-primary"></div>
+        </div>
+
+        <!-- Content (hidden during loading) -->
+        <div id="contentState" style="display: none;">
+
+            <!-- Custom Checks Section (First!) -->
+            <section class="mb-8">
+                <div class="card bg-base-100 shadow-lg">
+                    <div class="card-body">
+                        <div class="flex justify-between items-center mb-6">
+                            <div>
+                                <h2 class="card-title flex items-center gap-2">
+                                    <span>✨</span>
+                                    <span>Custom Checks</span>
+                                </h2>
+                                <p class="text-sm text-base-content/60 mt-2">Checks you've created to validate your repositories</p>
+                            </div>
+                            <button class="btn btn-primary btn-sm gap-2" onclick="openCreateModal()">
+                                <span>+</span>
+                                <span>Create</span>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" id="custom-checks">
+                            <!-- Loaded via JS -->
+                        </div>
+
+                        <!-- Empty state for custom checks -->
+                        <div id="emptyCustomChecks" class="text-center py-8 text-base-content/60">
+                            <p class="text-lg">No custom checks yet</p>
+                            <p class="text-sm">Click "Create" to write your first custom validation check</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Default Checks Section -->
+            <section class="mb-8">
+                <div class="card bg-base-100 shadow-lg">
+                    <div class="card-body">
+                        <div class="mb-6">
+                            <h2 class="card-title flex items-center gap-2">
+                                <span>📋</span>
+                                <span>Default Checks</span>
+                            </h2>
+                            <p class="text-sm text-base-content/60 mt-2">System-provided validation checks</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" id="default-checks">
+                            <!-- Loaded via JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+    </div>
+
+    <!-- Create/Edit Check Modal -->
+    <div id="check-modal" class="modal" style="display: none;">
+        <div class="modal-box w-11/12 max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="modalTitle" class="text-2xl font-bold">Create Execution Check</h2>
+                <button class="btn btn-sm btn-circle btn-ghost" onclick="closeCreateModal()">✕</button>
+            </div>
+
+            <form onsubmit="handleCreateCheck(event)" class="space-y-4">
+                <!-- Check Name -->
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Name <span class="text-error">*</span></span>
+                    </label>
+                    <input
+                        id="checkName"
+                        type="text"
+                        placeholder="e.g., verify_tests, check_documentation"
+                        class="input input-bordered w-full"
+                        maxlength="255"
+                        required
+                    />
+                    <label class="label">
+                        <span class="label-text-alt">1-255 characters</span>
+                    </label>
+                </div>
+
+                <!-- Description -->
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Description</span>
+                    </label>
+                    <textarea
+                        id="checkDescription"
+                        placeholder="What does this check validate?"
+                        class="textarea textarea-bordered w-full"
+                        rows="3"
+                    ></textarea>
+                </div>
+
+                <!-- Script Code -->
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Script Code <span class="text-error">*</span></span>
+                    </label>
+                    <textarea
+                        id="checkText"
+                        placeholder="#!/bin/bash&#10;# Your validation script here"
+                        class="textarea textarea-bordered font-mono text-sm w-full"
+                        rows="8"
+                        required
+                    ></textarea>
+                    <label class="label">
+                        <span class="label-text-alt">
+                            Exit codes: 0=PASS, 1=UNDETERMINED, 2+=FAIL
+                        </span>
+                    </label>
+                </div>
+
+                <!-- Form actions -->
+                <div class="modal-action justify-between">
+                    <button type="button" class="btn btn-ghost" onclick="closeCreateModal()">Cancel</button>
+                    <button id="submitBtn" type="submit" class="btn btn-primary">Save Check</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Modal backdrop -->
+        <form method="dialog" class="modal-backdrop">
+            <button onclick="closeCreateModal()">Close</button>
+        </form>
+    </div>
+
+    <!-- Theme Toggle (duplicated from navbar for consistency) -->
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+
+    <script src="/static/checks.js"></script>
+</body>
+</html>

@@ -7,7 +7,7 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 
 from models.database import db, Job, User, PaperAnalysis, ExecutionDetails
-from services.aspect_service import AspectService
+from services.plugin_service import PluginService
 from services.pipeline_orchestrator import stage_3_evaluation
 from services.evaluation_service import evaluate_paper
 
@@ -79,7 +79,7 @@ class TestLoggerFunctionIntegration:
     
     def test_evaluate_paper_with_function_logger(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """evaluate_paper should work with a function-style logger."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_aspects(test_user.id)
         
         # Create a real function logger
         log_messages = []
@@ -109,7 +109,7 @@ Reasoning: Code is available on GitHub
     
     def test_evaluate_paper_with_none_logger(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """evaluate_paper should work with None logger."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_aspects(test_user.id)
         
         mock_provider = Mock()
         mock_provider.complete.return_value = """
@@ -132,7 +132,7 @@ Reasoning: Code is available
     
     def test_stage3_evaluation_with_function_logger_full_path(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """stage_3_evaluation should work with function logger in full pipeline."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_aspects(test_user.id)
         
         # Create a real function logger
         log_messages = []
@@ -155,7 +155,7 @@ Reasoning: Code is available
     
     def test_stage3_evaluation_error_path_with_function_logger(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """stage_3_evaluation error handling should work with function logger."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_aspects(test_user.id)
         
         log_messages = []
         def func_logger(msg):
@@ -178,7 +178,7 @@ Reasoning: Code is available
     
     def test_stage3_evaluation_passes_logger_wrapper_to_evaluate_paper(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """stage_3_evaluation should pass logger wrapper, not original logger."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_aspects(test_user.id)
         
         log_messages = []
         def func_logger(msg):
@@ -235,7 +235,7 @@ Reasoning: Code is available
     
     def test_evaluate_paper_calls_logger_methods_correctly(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """evaluate_paper should call logger.info/error/warning, not logger()."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_aspects(test_user.id)
         
         # Create a fake logger object with tracked calls
         class TrackingLogger:
@@ -282,7 +282,7 @@ class TestLoggerEdgeCases:
     
     def test_logger_wrapper_with_mock_object(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """Logger wrapper should work with Mock objects."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_aspects(test_user.id)
         
         mock_logger = Mock()
         mock_logger.info = Mock()
@@ -309,7 +309,7 @@ Reasoning: Test
     
     def test_stage3_evaluation_catches_logger_exceptions(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """stage_3_evaluation should not crash even if logger raises exception."""
-        AspectService.get_or_create_default_aspects(test_user.id)
+        PluginService.get_or_create_default_aspects(test_user.id)
         
         # Create a logger that raises on error()
         class BrokenLogger:

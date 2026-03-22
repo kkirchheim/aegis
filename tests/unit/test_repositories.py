@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import Mock, patch
 from repositories import (
     UserRepository, JobRepository, PaperAnalysisRepository,
-    ExecutionDetailsRepository, AspectEvaluationRepository
+    ExecutionDetailsRepository, PluginEvaluationRepository
 )
 
 pytestmark = [pytest.mark.unit, pytest.mark.db]

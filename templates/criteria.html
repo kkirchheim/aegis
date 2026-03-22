@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Criteria - Artifact Review</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
+
+    <!-- Tailwind CSS + DaisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+
+    <!-- Custom styles -->
+    <style>
+        .text-primary { color: #0068b4; }
+        .bg-primary { background-color: #0068b4; }
+        .btn-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .btn-primary:hover { background-color: #004d8f; }
+        .btn-primary:disabled { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .badge-primary { background-color: #0068b4; border-color: #0068b4; color: white; }
+        .link-primary { color: #0068b4; }
+
+        .btn-secondary { background-color: #ef4444; border-color: #ef4444; color: white; }
+        .btn-secondary:hover { background-color: #dc2626; }
+
+        .btn-error { background-color: #ef4444; border-color: #ef4444; color: white; }
+        .btn-error:hover { background-color: #dc2626; }
+
+        html[data-theme="light"] { color-scheme: light; }
+
+        .modal {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.modal-open { background-color: rgba(0, 0, 0, 0.5); }
+        .modal-box { position: relative; margin: 0; }
+
+        /* Active tab styling - override DaisyUI purple */
+        .tab-active,
+        .tabs-boxed .tab-active,
+        .tabs-boxed .tab-active:hover {
+            background-color: #0068b4 !important;
+            color: white !important;
+            font-weight: 600;
+            border-color: #0068b4 !important;
+        }
+        .tabs-boxed .tab:hover:not(.tab-active) {
+            color: #0068b4;
+        }
+    </style>
+</head>
+<body class="bg-base-100">
+    {% include 'navbar.html' %}
+
+    <!-- Main Container -->
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+
+        <!-- Page Header -->
+        <section class="mb-6">
+            <h1 class="text-4xl font-bold mb-4">🎯 Review Criteria</h1>
+            <p class="text-lg text-base-content/70 mb-2">
+                Configure the criteria used during artifact review. Evaluation plugins provide semantic LLM-based assessment. Execution checks run deterministic scripts against repositories.
+            </p>
+        </section>
+
+        <!-- Tabs -->
+        <div class="tabs tabs-boxed bg-base-200 mb-6 p-1">
+            <a class="tab tab-lg tab-active" id="tab-plugins" onclick="switchTab('plugins')">
+                Evaluation Plugins
+            </a>
+            <a class="tab tab-lg" id="tab-checks" onclick="switchTab('checks')">
+                Execution Checks
+            </a>
+        </div>
+
+        <!-- Error Alert -->
+        <div id="errorAlert" class="alert alert-error shadow-lg mb-4" style="display: none;">
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2m2-2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span id="errorMessage"></span>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="flex justify-center items-center py-12">
+            <div class="loading loading-spinner loading-lg text-primary"></div>
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- PLUGINS TAB CONTENT                                              -->
+        <!-- ================================================================ -->
+        <div id="plugins-content" style="display: none;">
+            <p class="text-base text-base-content/60 mb-6">
+                <strong>Default plugins</strong> are provided by the system. <strong>Custom plugins</strong> let you define additional evaluation criteria with LLM prompts.
+            </p>
+
+            <!-- Custom Plugins Section -->
+            <section class="mb-8">
+                <div class="card bg-base-100 shadow-lg">
+                    <div class="card-body">
+                        <div class="flex justify-between items-center mb-6">
+                            <div>
+                                <h2 class="card-title flex items-center gap-2">
+                                    <span>✨</span>
+                                    <span>Custom Plugins</span>
+                                </h2>
+                                <p class="text-sm text-base-content/60 mt-2">Create custom evaluation criteria tailored to your review needs</p>
+                            </div>
+                            <button class="btn btn-primary btn-sm gap-2" onclick="openPluginCreateModal()">
+                                <span>+</span>
+                                <span>Add</span>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" id="custom-plugins">
+                        </div>
+
+                        <div id="emptyCustomPlugins" class="text-center py-8 text-base-content/60">
+                            <p class="text-lg">No custom plugins yet</p>
+                            <p class="text-sm">Click "Add" to create your first evaluation plugin</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Default Plugins Section -->
+            <section class="mb-8">
+                <div class="card bg-base-100 shadow-lg">
+                    <div class="card-body">
+                        <div class="mb-6">
+                            <h2 class="card-title flex items-center gap-2">
+                                <span>📋</span>
+                                <span>Default Plugins</span>
+                            </h2>
+                            <p class="text-sm text-base-content/60 mt-2">System-provided evaluation criteria</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" id="default-plugins">
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- CHECKS TAB CONTENT                                               -->
+        <!-- ================================================================ -->
+        <div id="checks-content" style="display: none;">
+            <p class="text-base text-base-content/60 mb-6">
+                <strong>Default checks</strong> are provided by the system. <strong>Custom checks</strong> are shell scripts you write to validate specific repository properties.
+            </p>
+
+            <!-- Custom Checks Section -->
+            <section class="mb-8">
+                <div class="card bg-base-100 shadow-lg">
+                    <div class="card-body">
+                        <div class="flex justify-between items-center mb-6">
+                            <div>
+                                <h2 class="card-title flex items-center gap-2">
+                                    <span>✨</span>
+                                    <span>Custom Checks</span>
+                                </h2>
+                                <p class="text-sm text-base-content/60 mt-2">Checks you've created to validate repositories</p>
+                            </div>
+                            <button class="btn btn-primary btn-sm gap-2" onclick="openCheckCreateModal()">
+                                <span>+</span>
+                                <span>Create</span>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" id="custom-checks">
+                        </div>
+
+                        <div id="emptyCustomChecks" class="text-center py-8 text-base-content/60">
+                            <p class="text-lg">No custom checks yet</p>
+                            <p class="text-sm">Click "Create" to write your first execution check</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Default Checks Section -->
+            <section class="mb-8">
+                <div class="card bg-base-100 shadow-lg">
+                    <div class="card-body">
+                        <div class="mb-6">
+                            <h2 class="card-title flex items-center gap-2">
+                                <span>📋</span>
+                                <span>Default Checks</span>
+                            </h2>
+                            <p class="text-sm text-base-content/60 mt-2">System-provided execution checks</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" id="default-checks">
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- PLUGIN MODAL                                                     -->
+    <!-- ================================================================ -->
+    <div id="plugin-modal" class="modal" style="display: none;">
+        <div class="modal-box w-11/12 max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="plugin-modal-title" class="text-2xl font-bold">Create Evaluation Plugin</h2>
+                <button class="btn btn-sm btn-circle btn-ghost" onclick="closePluginModal()">✕</button>
+            </div>
+
+            <form id="plugin-form" onsubmit="submitPluginForm(event)" class="space-y-4">
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Name <span class="text-error">*</span></span>
+                    </label>
+                    <input type="text" id="plugin-name" name="name" placeholder="e.g., Code Availability" maxlength="255" required class="input input-bordered w-full">
+                    <label class="label"><span class="label-text-alt">1-255 characters</span></label>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Description <span class="text-error">*</span></span>
+                    </label>
+                    <textarea id="plugin-description" name="description" placeholder="Brief explanation of this criterion" rows="3" required class="textarea textarea-bordered w-full font-sans"></textarea>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text font-semibold">Evaluation Prompt <span class="text-error">*</span></span>
+                    </label>
+                    <textarea id="plugin-prompt" name="prompt" placeholder="Write the prompt that will be given to the model..." rows="8" required class="textarea textarea-bordered w-full font-mono text-sm"></textarea>
+                    <label class="label"><span class="label-text-alt">The model will use this prompt to evaluate the criterion</span></label>
+                </div>
+
+                <div class="alert alert-info">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div class="text-sm">
+                        <p class="font-semibold mb-2">Available template variables:</p>
+                        <ul class="space-y-1">
+                            <li><code class="badge badge-ghost">{paper_content}</code> - Full paper text</li>
+                            <li><code class="badge badge-ghost">{code_output}</code> - Code execution output</li>
+                            <li><code class="badge badge-ghost">{execution_log}</code> - Code execution log</li>
+                            <li><code class="badge badge-ghost">{paper_metadata}</code> - Paper title, abstract, citations</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div id="plugin-modal-error" class="alert alert-error" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2m2-2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span id="plugin-modal-error-message"></span>
+                </div>
+
+                <div class="modal-action justify-between">
+                    <button type="button" class="btn btn-ghost" onclick="closePluginModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Plugin</button>
+                </div>
+            </form>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button onclick="closePluginModal()">Close</button></form>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- CHECK MODAL                                                      -->
+    <!-- ================================================================ -->
+    <div id="check-modal" class="modal" style="display: none;">
+        <div class="modal-box w-11/12 max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="check-modal-title" class="text-2xl font-bold">Create Execution Check</h2>
+                <button class="btn btn-sm btn-circle btn-ghost" onclick="closeCheckModal()">✕</button>
+            </div>
+
+            <form onsubmit="submitCheckForm(event)" class="space-y-4">
+                <div class="form-control">
+                    <label class="label"><span class="label-text font-semibold">Name <span class="text-error">*</span></span></label>
+                    <input id="checkName" type="text" placeholder="e.g., verify_tests, check_documentation" class="input input-bordered w-full" maxlength="255" required />
+                    <label class="label"><span class="label-text-alt">1-255 characters</span></label>
+                </div>
+
+                <div class="form-control">
+                    <label class="label"><span class="label-text font-semibold">Description</span></label>
+                    <textarea id="checkDescription" placeholder="What does this check validate?" class="textarea textarea-bordered w-full" rows="3"></textarea>
+                </div>
+
+                <div class="form-control">
+                    <label class="label"><span class="label-text font-semibold">Script Code <span class="text-error">*</span></span></label>
+                    <textarea id="checkText" placeholder="#!/bin/bash&#10;# Your validation script here" class="textarea textarea-bordered font-mono text-sm w-full" rows="8" required></textarea>
+                    <label class="label"><span class="label-text-alt">Exit codes: 0=PASS, 1=UNDETERMINED, 2+=FAIL</span></label>
+                </div>
+
+                <div class="modal-action justify-between">
+                    <button type="button" class="btn btn-ghost" onclick="closeCheckModal()">Cancel</button>
+                    <button id="checkSubmitBtn" type="submit" class="btn btn-primary">Save Check</button>
+                </div>
+            </form>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button onclick="closeCheckModal()">Close</button></form>
+    </div>
+
+    <script>
+    // ====================================================================
+    // Tab switching
+    // ====================================================================
+    let activeTab = 'plugins';
+
+    function switchTab(tab) {
+        activeTab = tab;
+        document.getElementById('plugins-content').style.display = tab === 'plugins' ? 'block' : 'none';
+        document.getElementById('checks-content').style.display = tab === 'checks' ? 'block' : 'none';
+        document.getElementById('tab-plugins').classList.toggle('tab-active', tab === 'plugins');
+        document.getElementById('tab-checks').classList.toggle('tab-active', tab === 'checks');
+    }
+
+    // ====================================================================
+    // Theme
+    // ====================================================================
+    function initTheme() {
+        const saved = localStorage.getItem('theme');
+        const preferred = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', saved || preferred);
+        updateThemeIcon();
+    }
+    function toggleTheme() {
+        const html = document.documentElement;
+        const newTheme = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        html.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        updateThemeIcon();
+    }
+    function updateThemeIcon() {
+        const el = document.getElementById('themeIcon');
+        if (el) el.textContent = document.documentElement.getAttribute('data-theme') === 'light' ? '🌙' : '☀️';
+    }
+
+    // ====================================================================
+    // Shared helpers
+    // ====================================================================
+    function escapeHtml(text) {
+        if (!text) return '';
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    function showError(message) {
+        const alert = document.getElementById('errorAlert');
+        document.getElementById('errorMessage').textContent = message;
+        alert.style.display = 'flex';
+        setTimeout(() => { alert.style.display = 'none'; }, 5000);
+    }
+
+    // ====================================================================
+    // PLUGINS
+    // ====================================================================
+    async function loadPlugins() {
+        try {
+            const response = await fetch('/api/plugins', { credentials: 'include' });
+            if (!response.ok) throw new Error(`Failed to load plugins: ${response.statusText}`);
+            const data = await response.json();
+            const plugins = data.plugins || [];
+
+            const defaults = plugins.filter(a => a.is_default);
+            const custom = plugins.filter(a => !a.is_default);
+
+            renderPluginCards(custom, 'custom-plugins');
+            renderPluginCards(defaults, 'default-plugins');
+
+            document.getElementById('emptyCustomPlugins').style.display = custom.length === 0 ? 'block' : 'none';
+        } catch (error) {
+            console.error('Error loading plugins:', error);
+            showError('Failed to load plugins: ' + error.message);
+        }
+    }
+
+    function renderPluginCards(plugins, containerId) {
+        const container = document.getElementById(containerId);
+        if (plugins.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+        container.innerHTML = plugins.map(plugin => `
+            <div class="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow">
+                <div class="card-body p-4">
+                    <div class="flex justify-between items-start gap-2 mb-2">
+                        <h3 class="card-title text-base leading-snug flex-1">${escapeHtml(plugin.name)}</h3>
+                        <span class="badge badge-sm ${plugin.is_default ? 'badge-secondary' : 'badge-primary'} whitespace-nowrap flex-shrink-0">
+                            ${plugin.is_default ? 'DEFAULT' : 'CUSTOM'}
+                        </span>
+                    </div>
+                    <p class="text-xs text-base-content/60 mb-3 line-clamp-2">${escapeHtml(plugin.description)}</p>
+                    <div class="flex flex-col gap-2 mt-auto">
+                        <label class="label cursor-pointer p-0 gap-2">
+                            <input type="checkbox" class="checkbox checkbox-sm" ${plugin.is_active ? 'checked' : ''}
+                                onchange="togglePlugin('${plugin.id}', this.checked)">
+                            <span class="label-text text-xs">${plugin.is_active ? 'Active' : 'Inactive'}</span>
+                        </label>
+                        ${!plugin.is_default ? `
+                            <div class="flex gap-1">
+                                <button class="btn btn-xs btn-ghost flex-1" onclick="editPlugin('${plugin.id}')">✎ Edit</button>
+                                <button class="btn btn-xs btn-ghost text-error" onclick="deletePlugin('${plugin.id}')">🗑</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function togglePlugin(pluginId, isActive) {
+        try {
+            const response = await fetch(`/api/plugins/${pluginId}/activate`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', body: JSON.stringify({ is_active: isActive })
+            });
+            if (!response.ok) throw new Error('Failed to update plugin');
+            await loadPlugins();
+        } catch (error) {
+            showError('Failed to update plugin: ' + error.message);
+            await loadPlugins();
+        }
+    }
+
+    function openPluginCreateModal() {
+        document.getElementById('plugin-modal-title').textContent = 'Create Evaluation Plugin';
+        document.getElementById('plugin-form').reset();
+        document.getElementById('plugin-form').dataset.mode = 'create';
+        delete document.getElementById('plugin-form').dataset.pluginId;
+        document.getElementById('plugin-modal-error').style.display = 'none';
+        openModal('plugin-modal');
+        setTimeout(() => document.getElementById('plugin-name').focus(), 100);
+    }
+
+    async function editPlugin(pluginId) {
+        try {
+            const response = await fetch(`/api/plugins/${pluginId}`, { credentials: 'include' });
+            if (!response.ok) throw new Error('Failed to load plugin');
+            const plugin = await response.json();
+
+            document.getElementById('plugin-modal-title').textContent = 'Edit Plugin';
+            document.getElementById('plugin-name').value = plugin.name || '';
+            document.getElementById('plugin-description').value = plugin.description || '';
+            document.getElementById('plugin-prompt').value = plugin.prompt_to_use || plugin.custom_prompt || plugin.prompt || '';
+
+            const form = document.getElementById('plugin-form');
+            form.dataset.mode = 'edit';
+            form.dataset.pluginId = pluginId;
+            document.getElementById('plugin-modal-error').style.display = 'none';
+            openModal('plugin-modal');
+        } catch (error) {
+            showError('Failed to load plugin: ' + error.message);
+        }
+    }
+
+    async function submitPluginForm(event) {
+        event.preventDefault();
+        const form = event.target;
+        const mode = form.dataset.mode;
+        const pluginId = form.dataset.pluginId;
+
+        const data = {
+            name: document.getElementById('plugin-name').value.trim(),
+            description: document.getElementById('plugin-description').value.trim(),
+            prompt: document.getElementById('plugin-prompt').value.trim()
+        };
+
+        if (!data.name || !data.description || !data.prompt) {
+            showPluginModalError('All fields are required'); return;
+        }
+
+        try {
+            const url = mode === 'create' ? '/api/plugins' : `/api/plugins/${pluginId}`;
+            const method = mode === 'create' ? 'POST' : 'PUT';
+            const response = await fetch(url, {
+                method, headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', body: JSON.stringify(data)
+            });
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to save plugin');
+            }
+            closePluginModal();
+            await loadPlugins();
+        } catch (error) {
+            showPluginModalError(error.message);
+        }
+    }
+
+    async function deletePlugin(pluginId) {
+        if (!confirm('Delete this plugin? This action cannot be undone.')) return;
+        try {
+            const response = await fetch(`/api/plugins/${pluginId}`, { method: 'DELETE', credentials: 'include' });
+            if (!response.ok) { const e = await response.json(); throw new Error(e.error || 'Failed'); }
+            await loadPlugins();
+        } catch (error) { showError('Failed to delete plugin: ' + error.message); }
+    }
+
+    function openModal(id) {
+        const modal = document.getElementById(id);
+        modal.classList.add('modal-open');
+        modal.style.display = 'flex';
+    }
+    function closePluginModal() {
+        const modal = document.getElementById('plugin-modal');
+        modal.classList.remove('modal-open');
+        modal.style.display = 'none';
+    }
+    function showPluginModalError(msg) {
+        document.getElementById('plugin-modal-error-message').textContent = msg;
+        document.getElementById('plugin-modal-error').style.display = 'flex';
+    }
+
+    // ====================================================================
+    // CHECKS
+    // ====================================================================
+    let allChecks = [];
+    let editingCheckHash = null;
+
+    async function loadChecks() {
+        try {
+            const response = await fetch('/api/user/checks', { credentials: 'include' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            allChecks = data.checks || [];
+            renderChecks();
+        } catch (error) {
+            console.error('Error loading checks:', error);
+            showError('Failed to load checks: ' + error.message);
+        }
+    }
+
+    function renderChecks() {
+        const custom = allChecks.filter(s => !s.is_default);
+        const defaults = allChecks.filter(s => s.is_default);
+
+        const customContainer = document.getElementById('custom-checks');
+        const emptyState = document.getElementById('emptyCustomChecks');
+
+        if (custom.length === 0) {
+            customContainer.style.display = 'none';
+            emptyState.style.display = 'block';
+        } else {
+            customContainer.style.display = 'grid';
+            emptyState.style.display = 'none';
+            customContainer.innerHTML = custom.map(renderCheckCard).join('');
+        }
+
+        const defaultContainer = document.getElementById('default-checks');
+        defaultContainer.innerHTML = defaults.length > 0
+            ? defaults.map(renderCheckCard).join('')
+            : '<p class="text-base-content/50 text-center py-8">No default checks available</p>';
+    }
+
+    function renderCheckCard(check) {
+        const customBadge = !check.is_default ? '<span class="badge badge-sm badge-primary whitespace-nowrap flex-shrink-0">CUSTOM</span>' : '';
+        const actions = check.is_default ? '' : `
+            <div class="flex gap-1">
+                <button class="btn btn-xs btn-ghost flex-1" onclick="openCheckEditModal('${check.script_hash}')">✎ Edit</button>
+                <button class="btn btn-xs btn-ghost text-error" onclick="deleteCheck('${check.script_hash}')">🗑</button>
+            </div>`;
+
+        return `
+            <div class="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow">
+                <div class="card-body p-4">
+                    <div class="flex justify-between items-start gap-2 mb-2">
+                        <h3 class="card-title text-base leading-snug flex-1">${escapeHtml(check.name)}</h3>
+                        ${customBadge}
+                    </div>
+                    <p class="text-xs text-base-content/60 mb-3 line-clamp-2">
+                        ${check.description ? escapeHtml(check.description) : '<span class="text-base-content/50">No description</span>'}
+                    </p>
+                    <div class="flex flex-col gap-2 mt-auto">
+                        <label class="label cursor-pointer p-0 gap-2">
+                            <input type="checkbox" class="checkbox checkbox-sm" ${check.is_active ? 'checked' : ''}
+                                onchange="toggleCheck('${check.script_hash}', this.checked)">
+                            <span class="label-text text-xs">Active</span>
+                        </label>
+                        ${actions}
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    async function toggleCheck(hash, isChecked) {
+        const endpoint = isChecked ? 'activate' : 'deactivate';
+        try {
+            const response = await fetch(`/api/user/checks/${hash}/${endpoint}`, { method: 'POST', credentials: 'include' });
+            if (response.ok) await loadChecks();
+            else showError(`Failed to ${endpoint} check`);
+        } catch (error) { showError(`Error: ${error.message}`); }
+    }
+
+    function openCheckCreateModal() {
+        editingCheckHash = null;
+        document.getElementById('check-modal-title').textContent = 'Create Execution Check';
+        document.getElementById('checkName').value = '';
+        document.getElementById('checkDescription').value = '';
+        document.getElementById('checkText').value = '#!/bin/bash\n';
+        openModal('check-modal');
+    }
+
+    function openCheckEditModal(hash) {
+        const check = allChecks.find(s => s.script_hash === hash);
+        if (!check) { showError('Check not found'); return; }
+        editingCheckHash = hash;
+        document.getElementById('check-modal-title').textContent = 'Edit Execution Check';
+        document.getElementById('checkName').value = check.name;
+        document.getElementById('checkDescription').value = check.description || '';
+        document.getElementById('checkText').value = check.script_text_preview || '';
+        openModal('check-modal');
+    }
+
+    function closeCheckModal() {
+        const modal = document.getElementById('check-modal');
+        modal.classList.remove('modal-open');
+        modal.style.display = 'none';
+    }
+
+    async function submitCheckForm(event) {
+        event.preventDefault();
+        const name = document.getElementById('checkName').value.trim();
+        const description = document.getElementById('checkDescription').value.trim();
+        const script_text = document.getElementById('checkText').value.trim();
+
+        if (!name || !script_text) { showError('Name and script code are required'); return; }
+
+        try {
+            let response;
+            if (editingCheckHash) {
+                response = await fetch(`/api/user/checks/${editingCheckHash}`, {
+                    method: 'PATCH', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description, script_text })
+                });
+            } else {
+                response = await fetch('/api/user/checks', {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description, script_text })
+                });
+            }
+            if (response.ok || response.status === 201) {
+                closeCheckModal();
+                await loadChecks();
+            } else {
+                const err = await response.json();
+                showError(err.error || 'Failed to save check');
+            }
+        } catch (error) { showError('Error saving check: ' + error.message); }
+    }
+
+    async function deleteCheck(hash) {
+        if (!confirm('Delete this check? This cannot be undone.')) return;
+        try {
+            const response = await fetch(`/api/user/checks/${hash}`, { method: 'DELETE', credentials: 'include' });
+            if (response.ok || response.status === 204) await loadChecks();
+            else showError('Failed to delete check');
+        } catch (error) { showError('Error deleting check: ' + error.message); }
+    }
+
+    // ====================================================================
+    // Modal backdrop close handlers
+    // ====================================================================
+    document.addEventListener('click', function(event) {
+        if (event.target.id === 'plugin-modal' || (event.target.closest && event.target.closest('.modal-backdrop') && event.target.closest('#plugin-modal'))) closePluginModal();
+        if (event.target.id === 'check-modal' || (event.target.closest && event.target.closest('.modal-backdrop') && event.target.closest('#check-modal'))) closeCheckModal();
+    });
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') { closePluginModal(); closeCheckModal(); }
+    });
+
+    // ====================================================================
+    // Init
+    // ====================================================================
+    document.addEventListener('DOMContentLoaded', () => {
+        initTheme();
+        // Load both in parallel
+        Promise.all([loadPlugins(), loadChecks()]).then(() => {
+            document.getElementById('loadingState').style.display = 'none';
+            // Show the active tab content
+            switchTab('plugins');
+        });
+    });
+    </script>
+
+</body>
+</html>

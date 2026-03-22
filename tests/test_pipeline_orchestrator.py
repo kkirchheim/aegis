@@ -48,7 +48,7 @@ class TestPipelineOrchestrator:
              patch('services.pipeline_orchestrator.extract_and_analyze_pdf') as mock_extract, \
              patch('services.pipeline_orchestrator.store_artifacts') as mock_store, \
              patch('services.pipeline_orchestrator.spawn_agent_container') as mock_spawn, \
-             patch('services.pipeline_orchestrator.evaluate_reproducibility_aspects') as mock_eval:
+             patch('services.pipeline_orchestrator.evaluate_reproducibility_plugins') as mock_eval:
             
             # Setup mocks
             mock_extract.return_value = ("text content", {"artifacts": []})
@@ -100,7 +100,7 @@ class TestPipelineOrchestrator:
         with patch('services.pipeline_orchestrator.update_job_status') as mock_update, \
              patch('services.pipeline_orchestrator.extract_and_analyze_pdf') as mock_extract, \
              patch('services.pipeline_orchestrator.store_artifacts') as mock_store, \
-             patch('services.pipeline_orchestrator.evaluate_reproducibility_aspects') as mock_eval:
+             patch('services.pipeline_orchestrator.evaluate_reproducibility_plugins') as mock_eval:
             
             # Setup mocks
             mock_extract.return_value = ("text", {"artifacts": []})
@@ -169,7 +169,7 @@ class TestPipelineOrchestrator:
         """Test stage 3: evaluate reproducibility."""
         orchestrator = PipelineOrchestrator(logger=lambda msg: None)
         
-        with patch('services.pipeline_orchestrator.evaluate_reproducibility_aspects') as mock_eval:
+        with patch('services.pipeline_orchestrator.evaluate_reproducibility_plugins') as mock_eval:
             mock_eval.return_value = True
             
             result = orchestrator._run_stage_3("job123", Mock())
@@ -181,7 +181,7 @@ class TestPipelineOrchestrator:
         """Test stage 3: fails if evaluation returns False."""
         orchestrator = PipelineOrchestrator(logger=lambda msg: None)
         
-        with patch('services.pipeline_orchestrator.evaluate_reproducibility_aspects') as mock_eval:
+        with patch('services.pipeline_orchestrator.evaluate_reproducibility_plugins') as mock_eval:
             mock_eval.return_value = False
             
             result = orchestrator._run_stage_3("job123", Mock())
@@ -204,7 +204,7 @@ class TestPipelineOrchestrator:
         with patch('services.pipeline_orchestrator.update_job_status'), \
              patch('services.pipeline_orchestrator.extract_and_analyze_pdf') as mock_extract, \
              patch('services.pipeline_orchestrator.store_artifacts'), \
-             patch('services.pipeline_orchestrator.evaluate_reproducibility_aspects') as mock_eval:
+             patch('services.pipeline_orchestrator.evaluate_reproducibility_plugins') as mock_eval:
             
             mock_extract.return_value = ("text", {"artifacts": []})
             mock_eval.return_value = True
@@ -247,7 +247,7 @@ class TestPipelineOrchestratorFactory:
         with patch('services.pipeline_orchestrator.update_job_status'), \
              patch('services.pipeline_orchestrator.extract_and_analyze_pdf') as mock_extract, \
              patch('services.pipeline_orchestrator.store_artifacts'), \
-             patch('services.pipeline_orchestrator.evaluate_reproducibility_aspects') as mock_eval:
+             patch('services.pipeline_orchestrator.evaluate_reproducibility_plugins') as mock_eval:
             
             mock_extract.return_value = ("text", {"artifacts": []})
             mock_eval.return_value = True
@@ -272,7 +272,7 @@ class TestPipelineIntegration:
              patch('services.pipeline_orchestrator.extract_and_analyze_pdf') as mock_extract, \
              patch('services.pipeline_orchestrator.store_artifacts'), \
              patch('services.pipeline_orchestrator.spawn_agent_container'), \
-             patch('services.pipeline_orchestrator.evaluate_reproducibility_aspects') as mock_eval:
+             patch('services.pipeline_orchestrator.evaluate_reproducibility_plugins') as mock_eval:
             
             artifacts = [
                 {"type": "github_repo", "url": "https://github.com/user/repo"}

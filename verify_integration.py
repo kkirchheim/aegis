@@ -7,8 +7,8 @@ import traceback
 def test_imports():
     """Test all necessary imports."""
     try:
-        from services.aspect_service import AspectService
-        print("✅ AspectService imported")
+        from services.plugin_service import PluginService
+        print("✅ PluginService imported")
         
         from services.evaluation_service import evaluate_paper
         print("✅ evaluate_paper imported")
@@ -16,11 +16,11 @@ def test_imports():
         from services.pipeline_orchestrator import stage_3_evaluation
         print("✅ stage_3_evaluation imported")
         
-        from repositories import AspectRepository, UserAspectRepository
+        from repositories import AspectRepository, UserPluginRepository
         print("✅ Repositories imported")
         
-        from models.aspect import Aspect, UserAspect
-        print("✅ Aspect models imported")
+        from models.plugin import Plugin, UserPlugin
+        print("✅ Plugin models imported")
         
         return True
     except Exception as e:
@@ -46,9 +46,9 @@ def test_stage_3_function():
         return False
 
 def test_aspect_service_methods():
-    """Test AspectService has required methods."""
+    """Test PluginService has required methods."""
     try:
-        from services.aspect_service import AspectService
+        from services.plugin_service import PluginService
         
         required_methods = [
             'get_or_create_default_aspects',
@@ -60,14 +60,14 @@ def test_aspect_service_methods():
         ]
         
         for method in required_methods:
-            if not hasattr(AspectService, method):
-                print(f"❌ AspectService missing method: {method}")
+            if not hasattr(PluginService, method):
+                print(f"❌ PluginService missing method: {method}")
                 return False
         
-        print(f"✅ AspectService has all {len(required_methods)} required methods")
+        print(f"✅ PluginService has all {len(required_methods)} required methods")
         return True
     except Exception as e:
-        print(f"❌ Error testing AspectService: {e}")
+        print(f"❌ Error testing PluginService: {e}")
         traceback.print_exc()
         return False
 
@@ -88,7 +88,7 @@ def main():
     results.append(test_stage_3_function())
     print()
     
-    print("3. Testing AspectService methods...")
+    print("3. Testing PluginService methods...")
     results.append(test_aspect_service_methods())
     print()
     

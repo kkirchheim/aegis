@@ -159,14 +159,14 @@ class JobDetailSchema(Schema):
         allow_none=True,
         description="Final reproducibility report and recommendations"
     )
-    evaluation_results = fields.Dict(
+    evidence = fields.Dict(
         allow_none=True,
-        description="Aspect evaluation results: {aspect_id: {status, reasoning}}"
+        description="Plugin evaluation evidence: {plugin_id: {status, reasoning}}"
     )
-    script_results = fields.List(
+    check_results = fields.List(
         fields.Dict(),
         allow_none=True,
-        description="Execution script results with name, exit code, output, duration"
+        description="Execution check results with name, exit code, output, duration"
     )
     
     class Meta:

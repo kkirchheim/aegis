@@ -1,111 +1,111 @@
-"""Tests for Aspect and UserAspect models."""
+"""Tests for Plugin and UserPlugin models."""
 
 import pytest
 import uuid
 from datetime import datetime
-from models.aspect import Aspect, UserAspect
+from models.plugin import Plugin, UserPlugin
 from models.database import User, init_db
 
 
 @pytest.mark.db
-class TestAspectModel:
-    """Tests for Aspect model."""
+class TestPluginModel:
+    """Tests for Plugin model."""
     
-    def test_aspect_creation_with_all_fields(self, app):
-        """Test creating an aspect with all fields."""
+    def test_plugin_creation_with_all_fields(self, app):
+        """Test creating an plugin with all fields."""
         with app.app_context():
-            aspect = Aspect.create(
-                name="Test Aspect",
+            plugin = Plugin.create(
+                name="Test Plugin",
                 description="Test Description",
                 prompt="Test Prompt",
                 is_default=True,
             )
             
-            assert aspect.id is not None
-            assert aspect.name == "Test Aspect"
-            assert aspect.description == "Test Description"
-            assert aspect.prompt == "Test Prompt"
-            assert aspect.is_default is True
-            assert isinstance(aspect.created_at, datetime)
-            assert isinstance(aspect.updated_at, datetime)
+            assert plugin.id is not None
+            assert plugin.name == "Test Plugin"
+            assert plugin.description == "Test Description"
+            assert plugin.prompt == "Test Prompt"
+            assert plugin.is_default is True
+            assert isinstance(plugin.created_at, datetime)
+            assert isinstance(plugin.updated_at, datetime)
     
-    def test_aspect_creation_default_is_false(self, app):
+    def test_plugin_creation_default_is_false(self, app):
         """Test that is_default defaults to False."""
         with app.app_context():
-            aspect = Aspect.create(
+            plugin = Plugin.create(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            assert aspect.is_default is False
+            assert plugin.is_default is False
     
-    def test_aspect_timestamps_auto_set(self, app):
+    def test_plugin_timestamps_auto_set(self, app):
         """Test that timestamps are automatically set."""
         with app.app_context():
             before = datetime.now()
-            aspect = Aspect.create(
+            plugin = Plugin.create(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             after = datetime.now()
             
-            assert before <= aspect.created_at <= after
-            assert before <= aspect.updated_at <= after
+            assert before <= plugin.created_at <= after
+            assert before <= plugin.updated_at <= after
     
-    def test_aspect_multiple_creation(self, app):
-        """Test creating multiple aspects."""
+    def test_plugin_multiple_creation(self, app):
+        """Test creating multiple plugins."""
         with app.app_context():
-            aspect1 = Aspect.create(
-                name="Aspect 1",
+            plugin1 = Plugin.create(
+                name="Plugin 1",
                 description="Desc 1",
                 prompt="Prompt 1",
             )
-            aspect2 = Aspect.create(
-                name="Aspect 2",
+            plugin2 = Plugin.create(
+                name="Plugin 2",
                 description="Desc 2",
                 prompt="Prompt 2",
             )
             
-            assert aspect1.id != aspect2.id
-            assert aspect1.name != aspect2.name
+            assert plugin1.id != plugin2.id
+            assert plugin1.name != plugin2.name
 
 
 @pytest.mark.db
-class TestUserAspectModel:
-    """Tests for UserAspect model."""
+class TestUserPluginModel:
+    """Tests for UserPlugin model."""
     
-    def test_user_aspect_creation(self, app):
-        """Test creating a user aspect."""
+    def test_user_plugin_creation(self, app):
+        """Test creating a user plugin."""
         with app.app_context():
             user = User.create(
                 username="testuser",
                 email="test@example.com",
                 password_hash="hash",
             )
-            aspect = Aspect.create(
+            plugin = Plugin.create(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            user_aspect = UserAspect.create(
+            user_plugin = UserPlugin.create(
                 user_id=user.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
                 is_active=True,
             )
             
-            assert user_aspect.id is not None
-            assert user_aspect.user_id == user.id
-            assert user_aspect.aspect_id == aspect.id
-            assert user_aspect.is_active is True
-            assert user_aspect.custom_prompt is None
-            assert user_aspect.deleted_at is None
-            assert isinstance(user_aspect.created_at, datetime)
-            assert isinstance(user_aspect.updated_at, datetime)
+            assert user_plugin.id is not None
+            assert user_plugin.user_id == user.id
+            assert user_plugin.plugin_id == plugin.id
+            assert user_plugin.is_active is True
+            assert user_plugin.custom_prompt is None
+            assert user_plugin.deleted_at is None
+            assert isinstance(user_plugin.created_at, datetime)
+            assert isinstance(user_plugin.updated_at, datetime)
     
-    def test_user_aspect_custom_prompt_nullable(self, app):
+    def test_user_plugin_custom_prompt_nullable(self, app):
         """Test that custom_prompt is nullable."""
         with app.app_context():
             user = User.create(
@@ -113,57 +113,57 @@ class TestUserAspectModel:
                 email="test@example.com",
                 password_hash="hash",
             )
-            aspect = Aspect.create(
+            plugin = Plugin.create(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            user_aspect = UserAspect.create(
+            user_plugin = UserPlugin.create(
                 user_id=user.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
                 custom_prompt=None,
             )
             
-            assert user_aspect.custom_prompt is None
+            assert user_plugin.custom_prompt is None
             
             # Update with a custom prompt
-            user_aspect.custom_prompt = "Custom Prompt"
-            user_aspect.save()
+            user_plugin.custom_prompt = "Custom Prompt"
+            user_plugin.save()
             
             # Refresh from DB
-            user_aspect = UserAspect.get_by_id(user_aspect.id)
-            assert user_aspect.custom_prompt == "Custom Prompt"
+            user_plugin = UserPlugin.get_by_id(user_plugin.id)
+            assert user_plugin.custom_prompt == "Custom Prompt"
     
-    def test_user_aspect_unique_constraint(self, app):
-        """Test that unique(user_id, aspect_id) constraint is enforced."""
+    def test_user_plugin_unique_constraint(self, app):
+        """Test that unique(user_id, plugin_id) constraint is enforced."""
         with app.app_context():
             user = User.create(
                 username="testuser",
                 email="test@example.com",
                 password_hash="hash",
             )
-            aspect = Aspect.create(
+            plugin = Plugin.create(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            # Create first user aspect
-            UserAspect.create(
+            # Create first user plugin
+            UserPlugin.create(
                 user_id=user.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
             )
             
             # Try to create duplicate - should raise IntegrityError
             with pytest.raises(Exception):  # Peewee raises IntegrityError
-                UserAspect.create(
+                UserPlugin.create(
                     user_id=user.id,
-                    aspect_id=aspect.id,
+                    plugin_id=plugin.id,
                 )
     
-    def test_user_aspect_multiple_per_user(self, app):
-        """Test that a user can have multiple aspects."""
+    def test_user_plugin_multiple_per_user(self, app):
+        """Test that a user can have multiple plugins."""
         with app.app_context():
             user = User.create(
                 username="testuser",
@@ -171,30 +171,30 @@ class TestUserAspectModel:
                 password_hash="hash",
             )
             
-            aspect1 = Aspect.create(
-                name="Aspect 1",
+            plugin1 = Plugin.create(
+                name="Plugin 1",
                 description="Desc 1",
                 prompt="Prompt 1",
             )
-            aspect2 = Aspect.create(
-                name="Aspect 2",
+            plugin2 = Plugin.create(
+                name="Plugin 2",
                 description="Desc 2",
                 prompt="Prompt 2",
             )
             
-            ua1 = UserAspect.create(
+            ua1 = UserPlugin.create(
                 user_id=user.id,
-                aspect_id=aspect1.id,
+                plugin_id=plugin1.id,
             )
-            ua2 = UserAspect.create(
+            ua2 = UserPlugin.create(
                 user_id=user.id,
-                aspect_id=aspect2.id,
+                plugin_id=plugin2.id,
             )
             
             assert ua1.id != ua2.id
-            assert ua1.aspect_id != ua2.aspect_id
+            assert ua1.plugin_id != ua2.plugin_id
     
-    def test_user_aspect_is_active_default(self, app):
+    def test_user_plugin_is_active_default(self, app):
         """Test that is_active defaults to True."""
         with app.app_context():
             user = User.create(
@@ -202,20 +202,20 @@ class TestUserAspectModel:
                 email="test@example.com",
                 password_hash="hash",
             )
-            aspect = Aspect.create(
+            plugin = Plugin.create(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            user_aspect = UserAspect.create(
+            user_plugin = UserPlugin.create(
                 user_id=user.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
             )
             
-            assert user_aspect.is_active is True
+            assert user_plugin.is_active is True
     
-    def test_user_aspect_soft_delete(self, app):
+    def test_user_plugin_soft_delete(self, app):
         """Test that deleted_at marks soft delete."""
         with app.app_context():
             user = User.create(
@@ -223,24 +223,24 @@ class TestUserAspectModel:
                 email="test@example.com",
                 password_hash="hash",
             )
-            aspect = Aspect.create(
+            plugin = Plugin.create(
                 name="Test",
                 description="Desc",
                 prompt="Prompt",
             )
             
-            user_aspect = UserAspect.create(
+            user_plugin = UserPlugin.create(
                 user_id=user.id,
-                aspect_id=aspect.id,
+                plugin_id=plugin.id,
             )
             
             # Initially should be None
-            assert user_aspect.deleted_at is None
+            assert user_plugin.deleted_at is None
             
             # Mark as deleted
-            user_aspect.deleted_at = datetime.now()
-            user_aspect.save()
+            user_plugin.deleted_at = datetime.now()
+            user_plugin.save()
             
             # Refresh from DB
-            user_aspect = UserAspect.get_by_id(user_aspect.id)
-            assert user_aspect.deleted_at is not None
+            user_plugin = UserPlugin.get_by_id(user_plugin.id)
+            assert user_plugin.deleted_at is not None

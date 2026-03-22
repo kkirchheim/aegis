@@ -54,4 +54,6 @@ WORKDIR /workspace
 # 1. Clone repository to /workspace/repo
 # 2. Execute commands in isolated environment
 # 3. Report back to backend via API
+# PYTHONUNBUFFERED ensures print() output is immediately visible in container logs
+ENV PYTHONUNBUFFERED=1
 ENTRYPOINT ["python", "/app/agent.py"]

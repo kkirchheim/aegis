@@ -8,6 +8,93 @@ from models.database import PaperAnalysis
 from repositories import PaperAnalysisRepository
 
 
+def _repair_truncated_json(text):
+    """Attempt to repair JSON truncated by max_tokens.
+
+    Walks through the string tracking open braces/brackets/strings,
+    then appends the necessary closing tokens.  Returns the parsed
+    dict on success, or None on failure.
+    """
+    # Strip trailing incomplete key/value fragments after last comma
+    import re
+    # Remove trailing partial value (e.g. truncated string without closing quote)
+    # Find the last structurally complete point
+    stripped = text.rstrip()
+
+    # If the string ends mid-string-literal, close it
+    in_string = False
+    escape = False
+    stack = []
+    last_good = 0
+    for i, ch in enumerate(stripped):
+        if escape:
+            escape = False
+            continue
+        if ch == '\\' and in_string:
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            if not in_string:
+                last_good = i
+            continue
+        if in_string:
+            continue
+        if ch in ('{', '['):
+            stack.append(ch)
+            last_good = i
+        elif ch in ('}', ']'):
+            if stack:
+                stack.pop()
+            last_good = i
+        elif ch in (',', ':'):
+            last_good = i
+
+    # If we ended inside a string, close the string and trim back
+    if in_string:
+        stripped = stripped[:last_good + 1]
+        # Recalculate stack
+        in_string = False
+        escape = False
+        stack = []
+        for ch in stripped:
+            if escape:
+                escape = False
+                continue
+            if ch == '\\' and in_string:
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch in ('{', '['):
+                stack.append(ch)
+            elif ch in ('}', ']'):
+                if stack:
+                    stack.pop()
+
+    # Remove trailing comma if present
+    stripped = stripped.rstrip()
+    if stripped and stripped[-1] == ',':
+        stripped = stripped[:-1]
+
+    # Close all open braces/brackets
+    closing = ''
+    for bracket in reversed(stack):
+        if bracket == '{':
+            closing += '}'
+        elif bracket == '[':
+            closing += ']'
+
+    repaired = stripped + closing
+    try:
+        return json.loads(repaired)
+    except json.JSONDecodeError:
+        return None
+
+
 def extract_and_analyze_pdf(pdf_path, job_id, llm_provider, app_logger=None):
     """
     Extract PDF and analyze with Claude.
@@ -112,7 +199,7 @@ Paper text:
                 "role": "user",
                 "content": prompt
             }],
-            max_tokens=2000
+            max_tokens=8000
         )
         
         if app_logger:
@@ -124,16 +211,23 @@ Paper text:
         except json.JSONDecodeError:
             if app_logger:
                 app_logger.info(f"Direct JSON parsing failed, trying to extract from markdown")
-            
+
             # If Claude wrapped in markdown, extract it
+            json_str = response_text
             if "```json" in response_text:
                 json_str = response_text.split("```json")[1].split("```")[0].strip()
-                result = json.loads(json_str)
             elif "```" in response_text:
                 json_str = response_text.split("```")[1].split("```")[0].strip()
+
+            try:
                 result = json.loads(json_str)
-            else:
-                raise ValueError(f"Could not parse Claude response")
+            except json.JSONDecodeError:
+                # Response was likely truncated by max_tokens — try to repair
+                if app_logger:
+                    app_logger.info(f"JSON truncated, attempting repair")
+                result = _repair_truncated_json(json_str)
+                if result is None:
+                    raise ValueError(f"Could not parse Claude response")
         
         return result
     

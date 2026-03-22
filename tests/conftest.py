@@ -337,7 +337,7 @@ def peewee_test_db(app):
     with all models created and ready for use.
     """
     from models.database import init_db, db, User, Job, Event
-    from models.database import PaperAnalysis, ExecutionDetails, AspectEvaluation
+    from models.database import PaperAnalysis, ExecutionDetails, PluginEvaluation
     
     with app.app_context():
         # Initialize database with all tables

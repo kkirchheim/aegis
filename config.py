@@ -26,19 +26,19 @@ def _get_or_generate_secret_key():
     if secret_key:
         return secret_key
     
-    # If not set, generate a new one
-    # This is only suitable for development - production MUST set this explicitly
-    generated_key = secrets.token_hex(32)
-    
     env = os.getenv('FLASK_ENV', 'development')
     if env == 'production':
-        _logger.warning(
-            "⚠️  SECRET_KEY not set in environment! Using auto-generated key. "
-            "This will cause session loss on application restart. "
-            "Set SECRET_KEY in .env immediately!"
+        raise RuntimeError(
+            "SECRET_KEY is not set! Refusing to start in production without an "
+            "explicit SECRET_KEY. Set it in your .env or environment variables."
         )
-    
-    return generated_key
+
+    # Development only: generate an ephemeral key (sessions lost on restart)
+    _logger.warning(
+        "⚠️  SECRET_KEY not set — using auto-generated key. "
+        "Sessions will be lost on restart. Set SECRET_KEY in .env for persistence."
+    )
+    return secrets.token_hex(32)
 
 
 class Config:
@@ -70,7 +70,7 @@ class Config:
     BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000")
     
     # Agent configuration
-    AGENT_CONTEXT_LIMIT = int(os.getenv("AGENT_CONTEXT_LIMIT", "10000"))
+    AGENT_CONTEXT_LIMIT = int(os.getenv("AGENT_CONTEXT_LIMIT", "100000"))
     
     # Caching
     ENABLE_CACHING = os.getenv('ENABLE_CACHING', 'false').lower() == 'true'

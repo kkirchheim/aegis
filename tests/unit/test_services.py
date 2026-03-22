@@ -511,7 +511,7 @@ class TestCacheService:
         
         with patch.object(cache_service, 'ExecutionDetails') as mock_exec, \
              patch.object(cache_service, 'PaperAnalysis') as mock_paper, \
-             patch.object(cache_service, 'AspectEvaluation') as mock_eval:
+             patch.object(cache_service, 'PluginEvaluation') as mock_eval:
             
             mock_exec.select.return_value.where.return_value.count.return_value = 5
             mock_paper.select.return_value.where.return_value.count.return_value = 3
@@ -635,13 +635,13 @@ class TestEvaluationService:
     """Test EvaluationService - reproducibility evaluation."""
     
     @pytest.mark.skip(reason="Complex database mocking - needs refactoring")
-    def test_evaluate_reproducibility_aspects_success(self):
+    def test_evaluate_reproducibility_plugins_success(self):
         """Test successful aspect evaluation."""
         from services import evaluation_service
         
         with patch.object(evaluation_service, 'PaperAnalysisRepository') as mock_paper_repo, \
              patch.object(evaluation_service, 'ExecutionDetailsRepository') as mock_exec_repo, \
-             patch.object(evaluation_service, 'AspectEvaluation') as mock_eval, \
+             patch.object(evaluation_service, 'PluginEvaluation') as mock_eval, \
              patch.object(evaluation_service, 'Job') as mock_job, \
              patch('services.evaluation_service.Config') as mock_config:
             
@@ -697,7 +697,7 @@ class TestEvaluationService:
             })
             mock_llm.complete.return_value = eval_response
             
-            result = evaluation_service.evaluate_reproducibility_aspects(
+            result = evaluation_service.evaluate_reproducibility_plugins(
                 job_id="job123",
                 llm_provider=mock_llm
             )
