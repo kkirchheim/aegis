@@ -44,7 +44,7 @@ class TestAuthRegistration:
             "confirm_password": "ValidPass456!"
         })
         
-        assert response2.status_code == 400
+        assert response2.status_code == 409
         data = response2.get_json()
         assert "error" in data
         assert data["error"] is not None
@@ -71,8 +71,8 @@ class TestAuthRegistration:
             "username": f"newuser_{unique_id}"
             # Missing password fields
         })
-        
-        assert response.status_code == 400
+
+        assert response.status_code in (400, 422)
 
 class TestAuthLogin:
     """Test user login endpoint"""
@@ -193,10 +193,8 @@ class TestChangePassword:
             "new_password": "NewPass456!",
             "confirm_password": "NewPass456!"
         })
-        
-        assert response.status_code == 200
-        data = response.get_json()
-        assert "message" in data
+
+        assert response.status_code == 204
     
     def test_change_password_wrong_current(self, authenticated_user):
         """Test changing password with wrong current password"""

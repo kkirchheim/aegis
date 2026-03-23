@@ -10,7 +10,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.api]
 class TestJobUpload:
     """Test PDF upload endpoint"""
     
-    def test_upload_pdf_success(self, authenticated_user, test_pdf_file):
+    def test_upload_pdf_success(self, authenticated_user, test_pdf_file, mock_upload_externals):
         """Test uploading PDF successfully"""
         response = authenticated_user.post('/api/job/upload',
             data={
@@ -89,11 +89,11 @@ class TestJobList:
         
         assert response.status_code == 401
     
-    def test_list_jobs_isolation(self, authenticated_user, other_user):
+    def test_list_jobs_isolation(self, authenticated_user, other_user, mock_upload_externals, test_pdf_file):
         """Test users only see their own jobs"""
         # User 1 creates a job
         authenticated_user.post('/api/job/upload',
-            data={'pdf': (BytesIO(b"test"), 'test.pdf')}
+            data={'pdf': (test_pdf_file, 'test.pdf')}
         )
         
         # User 2 lists jobs (should see none)

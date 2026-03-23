@@ -227,10 +227,10 @@ class TestUserPluginRepository:
                 plugin_id=plugin.id,
             )
             
-            assert user_plugin.user_id == user.id
-            assert user_plugin.plugin_id == plugin.id
+            assert user_plugin.user_id_id == user.id
+            assert user_plugin.plugin_id_id == plugin.id
             assert user_plugin.is_active is True
-    
+
     def test_create_user_plugin_with_custom_prompt(self, app):
         """Test creating a user plugin with custom prompt."""
         with app.app_context():
@@ -283,7 +283,7 @@ class TestUserPluginRepository:
         """Test getting a non-existent user plugin."""
         with app.app_context():
             from uuid import uuid4
-            result = UserPluginRepository.get_user_plugin(uuid4(), uuid4())
+            result = UserPluginRepository.get_user_plugin(999999, 999999)
             assert result is None
     
     def test_get_user_plugins(self, app):
@@ -312,8 +312,8 @@ class TestUserPluginRepository:
             user_plugins = UserPluginRepository.get_user_plugins(user.id)
             
             assert len(user_plugins) == 2
-            assert any(ua.plugin_id == plugin1.id for ua in user_plugins)
-            assert any(ua.plugin_id == plugin2.id for ua in user_plugins)
+            assert any(ua.plugin_id_id == plugin1.id for ua in user_plugins)
+            assert any(ua.plugin_id_id == plugin2.id for ua in user_plugins)
     
     def test_get_active_plugins(self, app):
         """Test getting only active plugins."""
@@ -472,7 +472,7 @@ class TestUserPluginRepository:
         """Test deleting a non-existent user plugin."""
         with app.app_context():
             from uuid import uuid4
-            result = UserPluginRepository.delete_user_plugin(uuid4(), uuid4())
+            result = UserPluginRepository.delete_user_plugin(999999, 999999)
             assert result is False
     
     def test_multiple_users_isolated(self, app):

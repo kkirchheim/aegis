@@ -387,8 +387,18 @@ def stage_3_evaluation(job_id, app_logger=None):
     from services.plugin_service import PluginService
     from services.evaluation_service import evaluate_paper
     from models.database import Job, PaperAnalysis, ExecutionDetails
-    from services.event_dispatcher import EventDispatcher
+    from services.event_dispatcher import EventDispatcher, JobEvent
     import logging
+
+    def _emit(job_id, step, message=None, progress=None, stage_duration_ms=None):
+        """Helper to emit events, silently ignoring failures."""
+        try:
+            EventDispatcher().emit(JobEvent(
+                job_id=job_id, step=step, message=message,
+                progress=progress, stage_duration_ms=stage_duration_ms
+            ))
+        except Exception:
+            pass
     
     # Create a wrapper logger that handles both function and logger objects
     class LoggerWrapper:
@@ -448,17 +458,8 @@ def stage_3_evaluation(job_id, app_logger=None):
         logger.info(f"[Job {job_id}] Stage 3: {len(active_plugins)} active plugins for evaluation")
 
         # Emit progress event: evaluation starting
-        EventDispatcher().emit_event(
-            job_id=job_id,
-            event_type="stage_3_start",
-            data={
-                "stage": "evaluation",
-                "message": f"Evaluating across {len(active_plugins)} plugins",
-                "plugins_count": len(active_plugins),
-                "progress": 0.66  # Stage 3 of 3
-            },
-            stage_duration_ms=None
-        )
+        _emit(job_id, "stage_3_start",
+              f"Evaluating across {len(active_plugins)} plugins", progress=0.66)
 
         # If no active plugins, skip evaluation (complete with empty results)
         if not active_plugins:
@@ -469,17 +470,7 @@ def stage_3_evaluation(job_id, app_logger=None):
             job.progress = 1.0
             job.save()
             
-            EventDispatcher().emit_event(
-                job_id=job_id,
-                event_type="stage_3_complete",
-                data={
-                    "stage": "evaluation",
-                    "message": "Evaluation skipped (no active plugins)",
-                    "plugins_evaluated": 0,
-                    "progress": 1.0
-                },
-                stage_duration_ms=0
-            )
+            _emit(job_id, "stage_3_complete", "Evaluation skipped (no active plugins)", progress=1.0)
             return True
         
         # Get paper analysis and execution details
@@ -529,20 +520,9 @@ def stage_3_evaluation(job_id, app_logger=None):
         job.save()
         
         # Emit completion event
-        EventDispatcher().emit_event(
-            job_id=job_id,
-            event_type="stage_3_complete",
-            data={
-                "stage": "evaluation",
-                "message": f"Evaluation complete: {passed} passed, {failed} failed",
-                "plugins_evaluated": total_plugins,
-                "passed": passed,
-                "failed": failed,
-                "unclear": unclear,
-                "progress": 1.0
-            },
-            stage_duration_ms=elapsed_ms
-        )
+        _emit(job_id, "stage_3_complete",
+              f"Evaluation complete: {passed} passed, {failed} failed",
+              progress=1.0, stage_duration_ms=elapsed_ms)
         
         return True
     
@@ -557,16 +537,7 @@ def stage_3_evaluation(job_id, app_logger=None):
             job.current_stage = 'evaluation'
             job.save()
         
-        EventDispatcher().emit_event(
-            job_id=job_id,
-            event_type="stage_3_error",
-            data={
-                "stage": "evaluation",
-                "message": f"Evaluation error: {str(e)}",
-                "progress": 1.0
-            },
-            stage_duration_ms=0
-        )
+        _emit(job_id, "stage_3_error", f"Evaluation error: {str(e)}", progress=1.0)
         
         return False
 

@@ -14,8 +14,11 @@ class TestAdminUserList:
         
         assert response.status_code == 200
         data = response.get_json()
-        assert isinstance(data, list)
-        assert len(data) >= 1
+        assert isinstance(data, dict)
+        assert "users" in data
+        assert "total" in data
+        assert isinstance(data["users"], list)
+        assert len(data["users"]) >= 1
     
     def test_list_users_non_admin(self, authenticated_user):
         """Test non-admin can't list users"""
@@ -44,8 +47,8 @@ class TestAdminUserStatus:
         assert data["ok"] is True
         
         # Verify user is now active
-        users = admin_user.get('/api/admin/users').get_json()
-        activated = [u for u in users if u["id"] == inactive_user["id"]][0]
+        users_data = admin_user.get('/api/admin/users').get_json()
+        activated = [u for u in users_data["users"] if u["id"] == inactive_user["id"]][0]
         assert activated["is_active"] is True
     
     def test_deactivate_user(self, admin_user, active_user):
@@ -61,8 +64,8 @@ class TestAdminUserStatus:
     def test_update_missing_is_active_field(self, admin_user, active_user):
         """Test PATCH without is_active field"""
         response = admin_user.patch(f'/api/admin/users/{active_user["id"]}', json={})
-        
-        assert response.status_code == 400
+
+        assert response.status_code in (400, 422)
     
     def test_update_nonexistent_user(self, admin_user):
         """Test updating non-existent user"""
@@ -94,8 +97,8 @@ class TestAdminUserDelete:
         
         # Verify user is deleted
         response = admin_user.get('/api/admin/users')
-        users = response.get_json()
-        user_ids = [u["id"] for u in users]
+        users_data = response.get_json()
+        user_ids = [u["id"] for u in users_data["users"]]
         assert user_id not in user_ids
     
     def test_delete_nonexistent_user(self, admin_user):

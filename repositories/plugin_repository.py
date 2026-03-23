@@ -6,6 +6,8 @@ from uuid import UUID
 from models.plugin import Plugin, UserPlugin
 from models.database import User
 
+_UNSET = object()  # Sentinel to distinguish "not provided" from None
+
 
 class PluginRepository:
     """Data access layer for Plugin model."""
@@ -156,7 +158,7 @@ class UserPluginRepository:
         user_id: Union[int, UUID],
         plugin_id: Union[str, UUID],
         is_active: Optional[bool] = None,
-        custom_prompt: Optional[str] = None
+        custom_prompt=_UNSET
     ) -> Optional[UserPlugin]:
         """Update user plugin (is_active and/or custom_prompt)."""
         user_plugin = UserPluginRepository.get_user_plugin(user_id, plugin_id)
@@ -165,7 +167,7 @@ class UserPluginRepository:
 
         if is_active is not None:
             user_plugin.is_active = is_active
-        if custom_prompt is not None:
+        if custom_prompt is not _UNSET:
             user_plugin.custom_prompt = custom_prompt
 
         user_plugin.save()

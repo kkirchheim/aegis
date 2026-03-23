@@ -17,14 +17,22 @@ Test Coverage:
 """
 
 import json
+import sqlite3
 import tempfile
 import os
 import pytest
 from app import app
-from models.database import init_db
+from models.database import init_db, db
 from services.auth_service import hash_password
 from config import Config
 DATABASE = Config.DATABASE
+
+
+def get_db():
+    """Get raw SQLite connection from Peewee."""
+    conn = db.connection()
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 @pytest.fixture
@@ -41,33 +49,34 @@ def client():
         with app.app_context():
             init_db()
             
-            # Create test users
-            conn = get_db()
-            c = conn.cursor()
-            
-            # User 1: regular user
-            password_hash = hash_password("password123")
-            c.execute(
-                "INSERT INTO users (username, email, password_hash, is_active) VALUES (?, ?, ?, 1)",
-                ("testuser1", "user1@example.com", password_hash)
+            # Create test users via ORM
+            from models.database import User
+            u1 = User.create(
+                username="testuser1",
+                email="user1@example.com",
+                password_hash=hash_password("password123"),
+                is_active=True
             )
-            
-            # User 2: regular user
-            password_hash = hash_password("password456")
-            c.execute(
-                "INSERT INTO users (username, email, password_hash, is_active) VALUES (?, ?, ?, 1)",
-                ("testuser2", "user2@example.com", password_hash)
+            u2 = User.create(
+                username="testuser2",
+                email="user2@example.com",
+                password_hash=hash_password("password456"),
+                is_active=True
             )
-            
-            # Admin user
-            password_hash = hash_password("adminpass")
-            c.execute(
-                "INSERT INTO users (username, email, password_hash, is_active) VALUES (?, ?, ?, 1)",
-                ("admin", "admin@example.com", password_hash)
-            )
-            
-            conn.commit()
-            conn.close()
+            # Note: admin may already exist from create_default_admin_user
+            admin = User.get_or_none(User.username == "admin")
+            if not admin:
+                admin = User.create(
+                    username="admin",
+                    email="admin@example.com",
+                    password_hash=hash_password("adminpass"),
+                    is_active=True
+                )
+
+            # Store IDs for session fixtures
+            client._test_user1_id = u1.id
+            client._test_user2_id = u2.id
+            client._test_admin_id = admin.id
         
         yield client
     
@@ -79,7 +88,7 @@ def client():
 def user1_session(client):
     """Create authenticated session for user1."""
     with client.session_transaction() as sess:
-        sess['user_id'] = 1
+        sess['user_id'] = client._test_user1_id
         sess['username'] = 'testuser1'
     return client
 
@@ -88,7 +97,7 @@ def user1_session(client):
 def user2_session(client):
     """Create authenticated session for user2."""
     with client.session_transaction() as sess:
-        sess['user_id'] = 2
+        sess['user_id'] = client._test_user2_id
         sess['username'] = 'testuser2'
     return client
 
@@ -97,7 +106,7 @@ def user2_session(client):
 def admin_session(client):
     """Create authenticated session for admin."""
     with client.session_transaction() as sess:
-        sess['user_id'] = 3
+        sess['user_id'] = client._test_admin_id
         sess['username'] = 'admin'
     return client
 
@@ -267,11 +276,11 @@ class TestCrossUserAccessControl:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
-                ("job-user2-456", "completed", "/tmp/test.pdf", 2, "evaluation")
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+                ("job-user2-456", "completed", "/tmp/test.pdf", 2, "evaluation", 0.0)
             )
             conn.commit()
-            conn.close()
+            pass  # Don't close Peewee-managed connection
         
         # Try to access with user1
         with user1_session.session_transaction() as sess:
@@ -288,11 +297,11 @@ class TestCrossUserAccessControl:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
-                ("job-user2-789", "completed", "/tmp/test.pdf", 2, "evaluation")
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+                ("job-user2-789", "completed", "/tmp/test.pdf", 2, "evaluation", 0.0)
             )
             conn.commit()
-            conn.close()
+            pass  # Don't close Peewee-managed connection
         
         # Try to delete with user1
         with user1_session.session_transaction() as sess:
@@ -309,11 +318,11 @@ class TestCrossUserAccessControl:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
-                ("job-user2-chat", "completed", "/tmp/test.pdf", 2, "evaluation")
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+                ("job-user2-chat", "completed", "/tmp/test.pdf", 2, "evaluation", 0.0)
             )
             conn.commit()
-            conn.close()
+            pass  # Don't close Peewee-managed connection
         
         # Try to chat with user1
         with user1_session.session_transaction() as sess:
@@ -332,15 +341,15 @@ class TestCrossUserAccessControl:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
-                ("job-user2-hist", "completed", "/tmp/test.pdf", 2, "evaluation")
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+                ("job-user2-hist", "completed", "/tmp/test.pdf", 2, "evaluation", 0.0)
             )
             c.execute(
-                "INSERT INTO chat_sessions (job_id) VALUES (?)",
+                "INSERT INTO chat_sessions (job_id, created_at) VALUES (?, datetime('now'))",
                 ("job-user2-hist",)
             )
             conn.commit()
-            conn.close()
+            pass  # Don't close Peewee-managed connection
         
         # Try to get chat history with user1
         with user1_session.session_transaction() as sess:
@@ -357,15 +366,15 @@ class TestCrossUserAccessControl:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
-                ("job-user2-del", "completed", "/tmp/test.pdf", 2, "evaluation")
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+                ("job-user2-del", "completed", "/tmp/test.pdf", 2, "evaluation", 0.0)
             )
             c.execute(
-                "INSERT INTO chat_sessions (job_id) VALUES (?)",
+                "INSERT INTO chat_sessions (job_id, created_at) VALUES (?, datetime('now'))",
                 ("job-user2-del",)
             )
             conn.commit()
-            conn.close()
+            pass  # Don't close Peewee-managed connection
         
         # Try to delete chat history with user1
         with user1_session.session_transaction() as sess:
@@ -382,11 +391,11 @@ class TestCrossUserAccessControl:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
-                ("job-user2-events", "processing", "/tmp/test.pdf", 2, "stage_1")
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+                ("job-user2-events", "processing", "/tmp/test.pdf", 2, "stage_1", 0.0)
             )
             conn.commit()
-            conn.close()
+            pass  # Don't close Peewee-managed connection
         
         # Try to access events with user1
         with user1_session.session_transaction() as sess:
@@ -435,9 +444,10 @@ class TestAdminAuthorization:
         response = admin_session.get('/api/admin/users')
         assert response.status_code == 200
         data = response.get_json()
-        assert isinstance(data, list)
+        users = data['users']
+        assert isinstance(users, list)
         # Should see all users including themselves
-        assert len(data) >= 3
+        assert len(users) >= 3
     
     def test_admin_can_update_user_status(self, admin_session):
         """Admin user can update user status via PATCH."""
@@ -455,9 +465,7 @@ class TestAdminAuthorization:
     def test_admin_can_delete_regular_user(self, admin_session):
         """Admin can delete a regular user."""
         response = admin_session.delete('/api/admin/users/1')
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data.get('ok') == True
+        assert response.status_code == 204
 
 
 # ============================================================================
@@ -537,11 +545,11 @@ class TestCriticalSecurityGaps:
             conn = get_db()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage) VALUES (?, ?, ?, ?, ?)",
-                ("job-detail-test", "completed", "/tmp/test.pdf", 2, "evaluation")
+                "INSERT INTO jobs (id, status, pdf_path, user_id, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+                ("job-detail-test", "completed", "/tmp/test.pdf", 2, "evaluation", 0.0)
             )
             conn.commit()
-            conn.close()
+            pass  # Don't close Peewee-managed connection
         
         # Try to access with user1
         with user1_session.session_transaction() as sess:

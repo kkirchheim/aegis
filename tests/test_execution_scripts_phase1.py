@@ -5,30 +5,30 @@ import json
 from uuid import uuid4
 from models.database import User, Job
 from models.check import Check, CheckResult
-from utils.check_utils import hash_check, get_or_create_check, seed_default_checks, DEFAULT_CHECKS
+from utils.check_utils import hash_script, get_or_create_check, seed_default_checks, DEFAULT_CHECKS
 
 
 @pytest.mark.db
 class TestChecksMVP:
     """Phase 1: MVP tests for hardcoded README check."""
     
-    def test_hash_check_stable(self):
+    def test_hash_script_stable(self):
         """Test that check hash is stable."""
         chk = "#!/bin/bash\ntest -f README.md && exit 0 || exit 1"
 
-        hash1 = hash_check(chk)
-        hash2 = hash_check(chk)
+        hash1 = hash_script(chk)
+        hash2 = hash_script(chk)
         
         assert hash1 == hash2
         assert len(hash1) == 64  # SHA256 hex is 64 chars
     
-    def test_hash_check_different_for_different_input(self):
+    def test_hash_script_different_for_different_input(self):
         """Test that different checks have different hashes."""
         check1 = "#!/bin/bash\ntest -f README.md && exit 0 || exit 1"
         check2 = "#!/bin/bash\ntest -f requirements.txt && exit 0 || exit 1"
 
-        hash1 = hash_check(check1)
-        hash2 = hash_check(check2)
+        hash1 = hash_script(check1)
+        hash2 = hash_script(check2)
         
         assert hash1 != hash2
     
@@ -52,7 +52,7 @@ class TestChecksMVP:
                 None
             )
             assert readme_check is not None
-            assert "README.md" in readme_check.check_text
+            assert "README.md" in readme_check.script_text
     
     def test_seed_default_checks_idempotent(self, app):
         """Test that seeding is idempotent."""
@@ -76,8 +76,8 @@ class TestChecksMVP:
             chk = get_or_create_check("test", check_text)
 
             assert chk.name == "test"
-            assert chk.check_text == check_text
-            assert chk.check_hash == hash_check(check_text)
+            assert chk.script_text == check_text
+            assert chk.script_hash == hash_script(check_text)
     
     def test_get_or_create_check_returns_existing(self, app):
         """Test get_or_create returns existing checks."""
@@ -90,7 +90,7 @@ class TestChecksMVP:
             # Get second time
             chk2 = get_or_create_check("test", check_text)
 
-            assert chk1.check_hash == chk2.check_hash
+            assert chk1.script_hash == chk2.script_hash
     
     def test_check_result_storage(self, app):
         """Test storing check execution results."""
@@ -116,7 +116,7 @@ class TestChecksMVP:
             result = CheckResult.create(
                 id=uuid4(),
                 job=job,
-                check_hash=chk.check_hash,
+                script_hash=chk.script_hash,
                 exit_code=0,
                 stdout="README.md exists",
                 stderr="",
@@ -130,7 +130,7 @@ class TestChecksMVP:
             retrieved = CheckResult.get_by_id(result.id)
             assert retrieved.exit_code == 0
             assert retrieved.job_id == job.id
-            assert retrieved.check_hash == chk.check_hash
+            assert retrieved.script_hash == chk.script_hash
     
     def test_check_result_retrieval_by_job(self, app):
         """Test retrieving check results for a job."""
@@ -156,7 +156,7 @@ class TestChecksMVP:
             result1 = CheckResult.create(
                 id=uuid4(),
                 job=job,
-                check_hash=chk1.check_hash,
+                script_hash=chk1.script_hash,
                 exit_code=0,
                 stdout="README found",
                 stderr="",
@@ -166,7 +166,7 @@ class TestChecksMVP:
             result2 = CheckResult.create(
                 id=uuid4(),
                 job=job,
-                check_hash=chk2.check_hash,
+                script_hash=chk2.script_hash,
                 exit_code=1,
                 stdout="",
                 stderr="requirements.txt not found",
@@ -191,10 +191,10 @@ class TestChecksMVP:
             chk = Check.get(Check.name == "check_readme")
 
             # Verify it has correct structure
-            assert chk.check_text.startswith("#!")
-            assert "README.md" in chk.check_text
-            assert "exit 0" in chk.check_text
-            assert "exit 1" in chk.check_text
+            assert chk.script_text.startswith("#!")
+            assert "README.md" in chk.script_text
+            assert "exit 0" in chk.script_text
+            assert "exit 1" in chk.script_text
     
     def test_api_endpoint_check_result(self, app):
         """Test /agent/check_result API endpoint."""
@@ -218,7 +218,7 @@ class TestChecksMVP:
             # Call endpoint
             response = client.post('/api/agent/check_result', json={
                 'job_id': str(job.id),
-                'check_hash': chk.check_hash,
+                'script_hash': chk.script_hash,
                 'exit_code': 0,
                 'stdout': 'test output',
                 'stderr': '',
@@ -246,7 +246,7 @@ class TestChecksMVP:
         with app.test_client() as client:
             response = client.post('/api/agent/check_result', json={
                 'job_id': 'invalid-job-id',
-                'check_hash': chk.check_hash,
+                'script_hash': chk.script_hash,
                 'exit_code': 0,
                 'stdout': 'test',
                 'stderr': '',
@@ -275,7 +275,7 @@ class TestChecksMVP:
         with app.test_client() as client:
             response = client.post('/api/agent/check_result', json={
                 'job_id': str(job.id),
-                'check_hash': 'invalid-hash-that-does-not-exist',
+                'script_hash': 'invalid-hash-that-does-not-exist',
                 'exit_code': 0,
                 'stdout': 'test',
                 'stderr': '',
@@ -283,7 +283,7 @@ class TestChecksMVP:
             })
             
             assert response.status_code == 404
-            assert 'Invalid check_hash' in response.json['error']
+            assert 'Invalid script_hash' in response.json['error']
     
     def test_get_check_results_endpoint(self, app):
         """Test /api/job/<id>/check_results endpoint."""
@@ -306,7 +306,7 @@ class TestChecksMVP:
             result = CheckResult.create(
                 id=uuid4(),
                 job=job,
-                check_hash=chk.check_hash,
+                script_hash=chk.script_hash,
                 exit_code=0,
                 stdout="output",
                 stderr="",

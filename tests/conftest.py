@@ -85,17 +85,52 @@ def reset_config():
 
 
 @pytest.fixture
-def app():
+def app(tmp_path):
     """Create a Flask app instance for testing."""
     # Use the temp database configured above
+    # Point uploads to a temp directory to avoid permission errors
+    original_upload = Config.UPLOAD_FOLDER
+    original_thumbnails = Config.THUMBNAILS_FOLDER
+    Config.UPLOAD_FOLDER = tmp_path / "uploads"
+    Config.UPLOAD_FOLDER.mkdir(exist_ok=True)
+    Config.THUMBNAILS_FOLDER = Config.UPLOAD_FOLDER / "thumbnails"
+    Config.THUMBNAILS_FOLDER.mkdir(exist_ok=True)
+
     app = create_app()
     app.config['TESTING'] = True
-    
+
     with app.app_context():
         # Initialize fresh database
         init_db()
-    
+
     yield app
+
+    Config.UPLOAD_FOLDER = original_upload
+    Config.THUMBNAILS_FOLDER = original_thumbnails
+
+
+@pytest.fixture
+def mock_upload_externals(app):
+    """Mock external dependencies used during PDF upload.
+
+    Patches PDF processing utilities (pdfplumber, ImageMagick) and replaces
+    the background analysis thread with a no-op so uploads return immediately
+    without requiring real LLM/Docker services.
+    """
+    from unittest.mock import patch
+
+    class _NoOpThread:
+        def __init__(self, *a, **kw):
+            pass
+        def start(self):
+            pass
+
+    with patch("utils.pdf_utils.extract_page_count", return_value=5), \
+         patch("utils.pdf_utils.generate_pdf_thumbnail", return_value=None), \
+         patch("services.llm_service.init_llm_provider", return_value=None), \
+         patch("blueprints.api.threading") as mock_thr:
+        mock_thr.Thread = _NoOpThread
+        yield
 
 
 @pytest.fixture

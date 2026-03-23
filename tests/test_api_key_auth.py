@@ -69,7 +69,8 @@ class TestAPIKeyStorage:
     
     def test_create_api_key_in_database(self, authenticated_user):
         """API key should be storable in database."""
-        user_id = authenticated_user.user_id
+        with authenticated_user.session_transaction() as sess:
+            user_id = sess['user_id']
         api_key = generate_api_key()
         key_hash, _ = hash_api_key(api_key)
         key_prefix = api_key[:8]
@@ -82,7 +83,7 @@ class TestAPIKeyStorage:
         )
         
         assert db_key.id is not None
-        assert db_key.user_id == user_id
+        assert db_key.user_id_id == user_id
         assert db_key.name == "Test Key"
         assert db_key.key_hash == key_hash
         assert db_key.key_prefix == key_prefix
@@ -90,7 +91,8 @@ class TestAPIKeyStorage:
     
     def test_retrieve_api_key_by_prefix(self, authenticated_user):
         """API key should be retrievable by prefix."""
-        user_id = authenticated_user.user_id
+        with authenticated_user.session_transaction() as sess:
+            user_id = sess['user_id']
         api_key = generate_api_key()
         key_hash, _ = hash_api_key(api_key)
         key_prefix = api_key[:8]
@@ -117,7 +119,8 @@ class TestAPIKeyVerification:
     
     def test_verify_valid_api_key(self, authenticated_user):
         """Valid API key should verify successfully."""
-        user_id = authenticated_user.user_id
+        with authenticated_user.session_transaction() as sess:
+            user_id = sess['user_id']
         api_key = generate_api_key()
         key_hash, _ = hash_api_key(api_key)
         key_prefix = api_key[:8]
@@ -147,7 +150,8 @@ class TestAPIKeyVerification:
     
     def test_verify_inactive_api_key(self, authenticated_user):
         """Inactive key should not verify."""
-        user_id = authenticated_user.user_id
+        with authenticated_user.session_transaction() as sess:
+            user_id = sess['user_id']
         api_key = generate_api_key()
         key_hash, _ = hash_api_key(api_key)
         key_prefix = api_key[:8]
@@ -169,7 +173,8 @@ class TestAPIKeyVerification:
         """Expired key should not verify."""
         from datetime import datetime, timedelta
         
-        user_id = authenticated_user.user_id
+        with authenticated_user.session_transaction() as sess:
+            user_id = sess['user_id']
         api_key = generate_api_key()
         key_hash, _ = hash_api_key(api_key)
         key_prefix = api_key[:8]
@@ -189,7 +194,8 @@ class TestAPIKeyVerification:
     
     def test_verify_updates_last_used(self, authenticated_user):
         """Verification should update last_used_at timestamp."""
-        user_id = authenticated_user.user_id
+        with authenticated_user.session_transaction() as sess:
+            user_id = sess['user_id']
         api_key = generate_api_key()
         key_hash, _ = hash_api_key(api_key)
         key_prefix = api_key[:8]
@@ -207,7 +213,7 @@ class TestAPIKeyVerification:
         verify_api_key(api_key)
         
         # Reload and check
-        db_key.refresh()
+        db_key = APIKey.get_by_id(db_key.id)
         assert db_key.last_used_at is not None
 
 
@@ -289,48 +295,38 @@ class TestAPIKeyEndpoints:
 class TestAPIKeyAuthentication:
     """Test using API keys to authenticate API requests."""
     
-    def test_authenticate_with_api_key(self, authenticated_user):
+    def test_authenticate_with_api_key(self, authenticated_user, client):
         """Should be able to authenticate to /api/keys using generated key."""
         # Create key
         create_response = authenticated_user.post('/api/keys', json={'name': 'Auth Test'})
         api_key = create_response.get_json()['key']
-        
-        # Create a new client (no session)
-        from tests.conftest import Client
-        client = Client()
-        
-        # Try to list keys using API key
+
+        # Try to list keys using API key (client has no session)
         response = client.get(
             '/api/keys',
             headers={'Authorization': f'ApiKey {api_key}'}
         )
-        
+
         # Should succeed
         assert response.status_code == 200
         data = response.get_json()
         assert 'keys' in data
-    
-    def test_reject_invalid_api_key_header(self):
+
+    def test_reject_invalid_api_key_header(self, client):
         """Invalid API key in header should return 401."""
-        from tests.conftest import Client
-        client = Client()
-        
         response = client.get(
             '/api/keys',
             headers={'Authorization': 'ApiKey invalid_key_12345'}
         )
-        
+
         assert response.status_code == 401
         data = response.get_json()
         assert 'error' in data
-    
-    def test_reject_missing_authorization_header(self):
+
+    def test_reject_missing_authorization_header(self, client):
         """Missing Authorization header should return 401."""
-        from tests.conftest import Client
-        client = Client()
-        
         response = client.get('/api/keys')
-        
+
         # Without session cookie or API key, should fail
         assert response.status_code == 401
     

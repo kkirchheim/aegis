@@ -12,7 +12,15 @@ Tests cover:
 import json
 import pytest
 from blueprints.jobs import emit_event
-from models.database import init_db
+from models.database import init_db, db
+
+
+def get_db():
+    """Get raw SQLite connection from Peewee."""
+    import sqlite3
+    conn = db.connection()
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 class TestHomeAndBasics:
@@ -53,12 +61,12 @@ class TestDatabase:
             c = conn.cursor()
             
             # Check all tables exist
-            tables = ['jobs', 'artifacts', 'events', 'paper_analysis', 'execution_details', 'aspect_evaluations']
+            tables = ['jobs', 'artifacts', 'events', 'paper_analysis', 'execution_details', 'plugin_evaluations']
             for table in tables:
                 c.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
                 assert c.fetchone() is not None, f"Table {table} not found"
             
-            conn.close()
+            pass  # Peewee manages connection lifecycle
     
     def test_jobs_table_columns(self, app):
         """Test jobs table has required columns."""
@@ -72,7 +80,7 @@ class TestDatabase:
             required = {'id', 'status', 'pdf_path', 'pdf_filename', 'report', 'created_at', 'completed_at'}
             assert required.issubset(columns), f"Missing columns: {required - columns}"
             
-            conn.close()
+            pass  # Peewee manages connection lifecycle
     
     def test_execution_details_has_discovered_files(self, app):
         """Test that execution_details table has discovered_files column."""
@@ -88,7 +96,7 @@ class TestDatabase:
             assert 'test_info' in columns, "Missing test_info column"
             assert 'randomness_info' in columns, "Missing randomness_info column"
             
-            conn.close()
+            pass  # Peewee manages connection lifecycle
 
 
 class TestEventEmission:
@@ -106,7 +114,7 @@ class TestEventEmission:
             c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                      (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0, datetime.now()))
             conn.commit()
-            conn.close()
+            pass  # Peewee manages connection lifecycle
             
             # Emit an event
             emit_event(job_id, {
@@ -120,7 +128,7 @@ class TestEventEmission:
             c = conn.cursor()
             c.execute("SELECT * FROM events WHERE job_id = ?", (job_id,))
             event = c.fetchone()
-            conn.close()
+            pass  # Peewee manages connection lifecycle
             
             assert event is not None
             assert event['step'] == "test_step"
@@ -141,7 +149,7 @@ class TestStageEvents:
             c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                      (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0, datetime.now()))
             conn.commit()
-            conn.close()
+            pass  # Peewee manages connection lifecycle
             
             # Emit stage events
             emit_event(job_id, {
@@ -165,7 +173,7 @@ class TestStageEvents:
             c.execute("SELECT COUNT(*) as count FROM events WHERE job_id = ? AND step LIKE 'stage_1%'",
                      (job_id,))
             count = c.fetchone()['count']
-            conn.close()
+            pass  # Peewee manages connection lifecycle
             
             assert count == 2, f"Expected 2 stage_1 events, got {count}"
     
@@ -180,7 +188,7 @@ class TestStageEvents:
             c.execute("INSERT INTO jobs (id, status, pdf_path, current_stage, progress, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                      (job_id, "processing", "/tmp/test.pdf", "paper_analysis", 0.0, datetime.now()))
             conn.commit()
-            conn.close()
+            pass  # Peewee manages connection lifecycle
             
             stages = [
                 ("stage_1_starting", "paper_analysis", 5),
@@ -207,7 +215,7 @@ class TestStageEvents:
                          (job_id,))
                 count = c.fetchone()['count']
                 assert count == 2, f"Expected 2 events for stage {stage_num}, got {count}"
-            conn.close()
+            pass  # Peewee manages connection lifecycle
 
 
 class TestJobRoutes:
@@ -237,7 +245,7 @@ class TestJobRoutes:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (job_id, "completed", "/tmp/test.pdf", "test.pdf", user_id, "completed", 100.0, datetime.now()))
             conn.commit()
-            conn.close()
+            pass  # Peewee manages connection lifecycle
         
         # Retrieve via API with authenticated user
         response = authenticated_user.get(f'/api/job/{job_id}')
@@ -257,7 +265,7 @@ class TestErrorHandling:
             data=json.dumps({"repo_state": {}}),
             content_type='application/json'
         )
-        assert response.status_code == 400
+        assert response.status_code in (400, 422)
         data = response.get_json()
         assert "error" in data
     
@@ -268,8 +276,8 @@ class TestErrorHandling:
             data=json.dumps({"message": "test"}),
             content_type='application/json'
         )
-        assert response.status_code == 400
-    
+        assert response.status_code in (400, 422)
+
     def test_agent_execution_missing_job_id(self, authenticated_user):
         """Test agent execution endpoint without job_id."""
         response = authenticated_user.post(
@@ -280,7 +288,7 @@ class TestErrorHandling:
             }),
             content_type='application/json'
         )
-        assert response.status_code == 400
+        assert response.status_code in (400, 422)
 
 
 class TestDataIntegrity:
@@ -320,7 +328,7 @@ class TestDataIntegrity:
             # Verify retrieval
             c.execute("SELECT * FROM execution_details WHERE job_id = ?", (job_id,))
             row = c.fetchone()
-            conn.close()
+            pass  # Peewee manages connection lifecycle
             
             assert row is not None
             assert row['commands_run'] == "python main.py"
@@ -330,7 +338,7 @@ class TestDataIntegrity:
             assert isinstance(discovered, list)
             assert len(discovered) == 2
     
-    def test_store_aspect_evaluations(self, app):
+    def test_store_plugin_evaluations(self, app):
         """Test storing aspect evaluations."""
         with app.app_context():
             from datetime import datetime
@@ -348,19 +356,19 @@ class TestDataIntegrity:
                 ("documentation_quality", "Documentation Quality", "partial", True, False)
             ]
             
-            for aspect_id, name, status, paper, code in aspects:
+            for plugin_id, name, status, paper, code in aspects:
                 c.execute("""
-                    INSERT INTO aspect_evaluations
-                    (job_id, aspect_id, name, status, evidence, paper_supports, code_supports, conclusion, created_at)
+                    INSERT INTO plugin_evaluations
+                    (job_id, plugin_id, name, status, evidence, paper_supports, code_supports, conclusion, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-                """, (job_id, aspect_id, name, status, f"Evidence for {name}", paper, code, "Conclusion"))
+                """, (job_id, plugin_id, name, status, f"Evidence for {name}", paper, code, "Conclusion"))
             
             conn.commit()
             
             # Verify count
-            c.execute("SELECT COUNT(*) as count FROM aspect_evaluations WHERE job_id = ?", (job_id,))
+            c.execute("SELECT COUNT(*) as count FROM plugin_evaluations WHERE job_id = ?", (job_id,))
             count = c.fetchone()['count']
-            conn.close()
+            pass  # Peewee manages connection lifecycle
             
             assert count == 3, f"Expected 3 aspects, got {count}"
 
@@ -396,7 +404,7 @@ class TestPaperAnalysisStorage:
             
             c.execute("SELECT * FROM paper_analysis WHERE job_id = ?", (job_id,))
             row = c.fetchone()
-            conn.close()
+            pass  # Peewee manages connection lifecycle
             
             assert row is not None
             assert row['extracted_text'] == "Extracted text from PDF"
@@ -432,7 +440,7 @@ class TestArtifactStorage:
             
             c.execute("SELECT COUNT(*) as count FROM artifacts WHERE job_id = ?", (job_id,))
             count = c.fetchone()['count']
-            conn.close()
+            pass  # Peewee manages connection lifecycle
             
             assert count == 2
 

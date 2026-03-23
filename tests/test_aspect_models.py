@@ -97,8 +97,8 @@ class TestUserPluginModel:
             )
             
             assert user_plugin.id is not None
-            assert user_plugin.user_id == user.id
-            assert user_plugin.plugin_id == plugin.id
+            assert user_plugin.user_id_id == user.id
+            assert user_plugin.plugin_id_id == plugin.id
             assert user_plugin.is_active is True
             assert user_plugin.custom_prompt is None
             assert user_plugin.deleted_at is None

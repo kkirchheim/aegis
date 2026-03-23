@@ -47,8 +47,10 @@ class TestAPIKeyDebug:
             verified_user_id = verify_api_key(api_key)
             print(f"  ✓ verify_api_key() succeeded!")
             print(f"  Returned user_id: {verified_user_id}")
-            print(f"  Expected user_id: {authenticated_user.user_id}")
-            assert verified_user_id == authenticated_user.user_id
+            with authenticated_user.session_transaction() as sess:
+                expected_user_id = sess['user_id']
+            print(f"  Expected user_id: {expected_user_id}")
+            assert verified_user_id == expected_user_id
         except (InvalidAPIKeyError, ExpiredAPIKeyError) as e:
             print(f"  ✗ verify_api_key() FAILED: {e}")
             raise
@@ -95,7 +97,7 @@ class TestAPIKeyDebug:
         assert result is True, "Constant-time compare failed!"
         print("✓ Constant-time comparison works")
     
-    def test_api_key_prefix_query(self):
+    def test_api_key_prefix_query(self, app):
         """Debug prefix querying from database."""
         print("\n\n=== DEBUGGING PREFIX QUERY ===\n")
         

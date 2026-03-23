@@ -36,7 +36,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Persist uploads and logs
       - ./uploads:/app/uploads
-      - ./logs:/app/logs
+      # - ./logs:/app/logs
       # Live code reload for development
       - .:/app
     

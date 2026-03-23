@@ -13,7 +13,7 @@ from repositories import PluginRepository, UserPluginRepository
 
 
 @pytest.fixture
-def test_user():
+def test_user(app):
     """Create test user."""
     user = User.create(
         username="test_user_plugins",
@@ -90,7 +90,7 @@ class TestOrchestratorStage3WithPlugins:
         orchestrator = PipelineOrchestrator()
         
         # Mock evaluate_paper to return sample results
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = {
                 str(active_plugins[0]['id']): {
                     "status": "PASS",
@@ -141,7 +141,7 @@ class TestOrchestratorStage3WithPlugins:
         orchestrator = PipelineOrchestrator()
         
         # Mock evaluation
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = {
                 custom_plugin['id']: {
                     "status": "FAIL",
@@ -164,7 +164,7 @@ class TestOrchestratorStage3WithPlugins:
         orchestrator = PipelineOrchestrator()
         
         # Mock evaluation to raise error
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.side_effect = Exception("LLM error")
             
             result = orchestrator._run_stage_3(test_job.id, Mock())
@@ -215,7 +215,7 @@ class TestOrchestratorStage3WithPlugins:
         
         orchestrator = PipelineOrchestrator()
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = results_dict
             
             result = orchestrator._run_stage_3(test_job.id, Mock())
@@ -246,7 +246,7 @@ class TestOrchestratorStage3WithPlugins:
             }
         }
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = test_results
             
             result = orchestrator._run_stage_3(test_job.id, Mock())
@@ -267,7 +267,7 @@ class TestOrchestratorStage3WithPlugins:
         
         orchestrator = PipelineOrchestrator()
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = {}
             
             result = orchestrator._run_stage_3(test_job.id, Mock())
@@ -286,7 +286,7 @@ class TestOrchestratorStage3WithPlugins:
         mock_dispatcher = Mock()
         orchestrator = PipelineOrchestrator(dispatcher=mock_dispatcher)
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = {}
             
             result = orchestrator._run_stage_3(test_job.id, Mock())
@@ -432,7 +432,7 @@ class TestOrchestrationFullPipeline:
         orchestrator = PipelineOrchestrator()
         
         # Mock evaluate_paper
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = {
                 "plugin1": {"status": "PASS", "reasoning": "Good"},
                 "plugin2": {"status": "FAIL", "reasoning": "Bad"},
@@ -479,7 +479,7 @@ class TestOrchestrationFullPipeline:
             }
         }
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = test_data
             
             result = orchestrator._run_stage_3(test_job.id, Mock())
@@ -507,7 +507,7 @@ class TestEventEmission:
         dispatcher = Mock()
         orchestrator = PipelineOrchestrator(dispatcher=dispatcher)
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = {}
             
             orchestrator._run_stage_3(test_job.id, Mock())
@@ -527,7 +527,7 @@ class TestEventEmission:
             "a2": {"status": "FAIL", "reasoning": "not ok"},
         }
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = test_results
             
             orchestrator._run_stage_3(test_job.id, Mock())
@@ -547,10 +547,10 @@ class TestLoggerCompatibility:
         def func_logger(msg):
             log_messages.append(msg)
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = {}
             
-            with patch('services.pipeline_orchestrator.EventDispatcher'):
+            with patch('services.event_dispatcher.EventDispatcher'):
                 result = stage_3_evaluation(test_job.id, func_logger)
         
         assert result == True
@@ -564,10 +564,10 @@ class TestLoggerCompatibility:
         import logging
         logger_obj = logging.getLogger('test_logger')
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = {}
             
-            with patch('services.pipeline_orchestrator.EventDispatcher'):
+            with patch('services.event_dispatcher.EventDispatcher'):
                 result = stage_3_evaluation(test_job.id, logger_obj)
         
         assert result == True
@@ -576,10 +576,10 @@ class TestLoggerCompatibility:
         """stage_3_evaluation should handle None logger gracefully."""
         PluginService.get_or_create_default_plugins(test_user.id)
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = {}
             
-            with patch('services.pipeline_orchestrator.EventDispatcher'):
+            with patch('services.event_dispatcher.EventDispatcher'):
                 result = stage_3_evaluation(test_job.id, None)
         
         assert result == True
@@ -604,10 +604,10 @@ class TestLoggerCompatibility:
         
         test_logger = TestLogger()
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.side_effect = Exception("Test error")
             
-            with patch('services.pipeline_orchestrator.EventDispatcher'):
+            with patch('services.event_dispatcher.EventDispatcher'):
                 result = stage_3_evaluation(test_job.id, test_logger)
         
         assert result == False
@@ -625,7 +625,7 @@ class TestStage3EvaluationStandaloneFunction:
         assert len(active_plugins) > 0
         
         # Mock evaluate_paper
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = {
                 str(active_plugins[0]['id']): {
                     "status": "PASS",
@@ -633,7 +633,7 @@ class TestStage3EvaluationStandaloneFunction:
                 }
             }
             
-            with patch('services.pipeline_orchestrator.EventDispatcher'):
+            with patch('services.event_dispatcher.EventDispatcher'):
                 result = stage_3_evaluation(test_job.id, Mock())
         
         assert result == True
@@ -646,7 +646,7 @@ class TestStage3EvaluationStandaloneFunction:
     def test_stage3_eval_with_no_plugins(self, test_job, test_user, test_paper_analysis, test_execution_details):
         """stage_3_evaluation should handle zero active plugins."""
         # No plugins seeded
-        with patch('services.pipeline_orchestrator.EventDispatcher'):
+        with patch('services.event_dispatcher.EventDispatcher'):
             result = stage_3_evaluation(test_job.id, Mock())
         
         assert result == True
@@ -668,10 +668,10 @@ class TestStage3EvaluationStandaloneFunction:
         PluginService.get_or_create_default_plugins(test_user.id)
         
         # Mock evaluate_paper to raise error
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.side_effect = Exception("LLM error")
             
-            with patch('services.pipeline_orchestrator.EventDispatcher'):
+            with patch('services.event_dispatcher.EventDispatcher'):
                 result = stage_3_evaluation(test_job.id, Mock())
         
         assert result == False
@@ -689,10 +689,10 @@ class TestStage3EvaluationStandaloneFunction:
             "plugin2": {"status": "FAIL", "reasoning": "Bad"},
         }
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = test_results
             
-            with patch('services.pipeline_orchestrator.EventDispatcher'):
+            with patch('services.event_dispatcher.EventDispatcher'):
                 result = stage_3_evaluation(test_job.id, Mock())
         
         assert result == True
@@ -708,10 +708,10 @@ class TestStage3EvaluationStandaloneFunction:
         """stage_3_evaluation should mark job as completed."""
         PluginService.get_or_create_default_plugins(test_user.id)
         
-        with patch('services.pipeline_orchestrator.evaluate_paper') as mock_eval:
+        with patch('services.evaluation_service.evaluate_paper') as mock_eval:
             mock_eval.return_value = {}
             
-            with patch('services.pipeline_orchestrator.EventDispatcher'):
+            with patch('services.event_dispatcher.EventDispatcher'):
                 result = stage_3_evaluation(test_job.id, Mock())
         
         assert result == True
