@@ -1,15 +1,14 @@
 """Jobs blueprint - page routes only. API endpoints moved to api.py."""
 
-import threading
-from flask import Blueprint, render_template, session, redirect, jsonify, request
-from flask_apispec import doc
-from utils.decorators import require_auth
-from services.job_service import get_job, get_user_jobs, delete_job
-from services.event_dispatcher import EventDispatcher
-from services.pipeline_orchestrator import PipelineOrchestrator
-from models.events import JobEvent
+from flask import Blueprint, jsonify, redirect, render_template, session
 
-jobs_bp = Blueprint('jobs', __name__)
+from models.events import JobEvent
+from services.event_dispatcher import EventDispatcher
+from services.job_service import delete_job, get_job, get_user_jobs
+from services.pipeline_orchestrator import PipelineOrchestrator
+from utils.decorators import require_auth
+
+jobs_bp = Blueprint("jobs", __name__)
 
 # Event dispatcher (no longer uses event_queues - all data via /api/job/<id>/full)
 _dispatcher = EventDispatcher()
@@ -20,7 +19,7 @@ _orchestrator = PipelineOrchestrator(dispatcher=_dispatcher)
 
 def emit_event(job_id, event_dict):
     """Emit event to SSE clients and update job progress for milestone events.
-    
+
     Args:
         job_id: Job ID
         event_dict: Dict with 'step', 'message' (optional), 'severity' (optional), etc.
@@ -39,23 +38,17 @@ def emit_event(job_id, event_dict):
 
 def analyze_paper_background(job_id, pdf_path, config, llm_provider, manual_artifacts=None):
     """Background job for paper analysis.
-    
+
     Delegates to PipelineOrchestrator to run the 3-stage pipeline.
     """
-    _orchestrator.run_analysis(
-        job_id,
-        pdf_path,
-        config,
-        llm_provider,
-        manual_artifacts=manual_artifacts or []
-    )
+    _orchestrator.run_analysis(job_id, pdf_path, config, llm_provider, manual_artifacts=manual_artifacts or [])
 
 
 @jobs_bp.route("/")
 def index():
     """Home page - redirect to login if not authenticated."""
-    if 'user_id' not in session:
-        return redirect('/login')
+    if "user_id" not in session:
+        return redirect("/login")
     return render_template("index.html")
 
 
@@ -70,7 +63,7 @@ def history():
 @require_auth
 def list_jobs():
     """List all jobs for current user - returns JSON."""
-    user_id = session.get('user_id')
+    user_id = session.get("user_id")
     jobs = get_user_jobs(user_id)
     return jsonify(jobs)
 
@@ -79,16 +72,16 @@ def list_jobs():
 @require_auth
 def job_detail(job_id):
     """Serve job detail page for a job - unified route for job UI."""
-    user_id = session.get('user_id')
-    
+    user_id = session.get("user_id")
+
     job = get_job(job_id)
-    
+
     if not job:
-        return redirect('/')
-    
+        return redirect("/")
+
     if job.user_id != user_id:
-        return redirect('/')
-    
+        return redirect("/")
+
     return render_template("detail.html", job_id=job_id)
 
 
@@ -97,21 +90,21 @@ def job_detail(job_id):
 def delete_job_endpoint(job_id):
     """Delete a job - returns JSON."""
     try:
-        user_id = session.get('user_id')
-        
+        user_id = session.get("user_id")
+
         job = get_job(job_id)
-        
+
         if not job:
             return jsonify({"error": "Job not found"}), 404
-        
+
         if job.user_id != user_id:
             return jsonify({"error": "Access denied"}), 403
-        
+
         if delete_job(job_id):
             return jsonify({"ok": True, "message": "Job deleted"})
         else:
             return jsonify({"error": "Failed to delete job"}), 500
-    
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -128,6 +121,7 @@ def criteria_page():
 def plugins_page():
     """Redirect to unified criteria page."""
     from flask import redirect
+
     return redirect("/criteria")
 
 
@@ -136,4 +130,5 @@ def plugins_page():
 def checks_page():
     """Redirect to unified criteria page."""
     from flask import redirect
+
     return redirect("/criteria")

@@ -1,6 +1,7 @@
 """Utilities for execution scripts."""
 
 import hashlib
+
 from models.execution_script import ExecutionScript
 
 
@@ -11,18 +12,18 @@ def hash_script(script_text: str) -> str:
 
 def get_or_create_script(name: str, script_text: str, user_id=None, description=None):
     """Get existing script or create new one.
-    
+
     Args:
         name: Human-friendly name
         script_text: Full script text with shebang
         user_id: User creating the script (None for system scripts)
         description: What the script checks or validates
-    
+
     Returns:
         ExecutionScript instance
     """
     script_hash = hash_script(script_text)
-    
+
     try:
         script = ExecutionScript.get_by_id(script_hash)
         # Update description if provided and different
@@ -30,14 +31,10 @@ def get_or_create_script(name: str, script_text: str, user_id=None, description=
             script.description = description
             script.save()
         return script
-    except:
+    except Exception:
         # Create new script
         script = ExecutionScript.create(
-            script_hash=script_hash,
-            script_text=script_text,
-            name=name,
-            description=description,
-            created_by=user_id
+            script_hash=script_hash, script_text=script_text, name=name, description=description, created_by=user_id
         )
         return script
 
@@ -48,14 +45,14 @@ DEFAULT_SCRIPTS = {
         "text": """#!/bin/bash
 test -f README.md && exit 0 || exit 1
 """,
-        "description": "Verifies that a README.md file exists in the repository root"
+        "description": "Verifies that a README.md file exists in the repository root",
     }
 }
 
 
 def seed_default_scripts():
     """Create default system scripts on app startup.
-    
+
     This is idempotent - calling multiple times is safe.
     """
     for name, config in DEFAULT_SCRIPTS.items():

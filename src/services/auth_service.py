@@ -3,23 +3,25 @@
 import hashlib
 import os
 import secrets
-from repositories import UserRepository
+
 from models.database import User
+from repositories import UserRepository
 
 
 def hash_password(password):
     """Hash password using PBKDF2."""
     salt = secrets.token_hex(32)
-    pwdhash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+    pwdhash = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100000)
     return f"{salt}${pwdhash.hex()}"
 
 
 def verify_password(password, password_hash):
     """Verify password against stored hash."""
     import hmac
+
     try:
-        salt, pwdhash = password_hash.split('$')
-        new_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+        salt, pwdhash = password_hash.split("$")
+        new_hash = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100000)
         # Constant-time comparison to prevent timing attacks
         return hmac.compare_digest(new_hash.hex(), pwdhash)
     except (ValueError, AttributeError):

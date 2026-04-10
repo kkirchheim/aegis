@@ -5,49 +5,49 @@ including CRUD operations, activation/deactivation, and prompt overrides.
 """
 
 from uuid import UUID
-from flask import Blueprint, request, jsonify
-from flask_apispec import doc, use_kwargs, marshal_with
 
-from utils.decorators import require_auth_cookie_or_api_key, get_current_user_id
+from flask import Blueprint
+from flask_apispec import doc, marshal_with, use_kwargs
+
 from schemas.aspect import (
-    AspectCreateSchema, AspectUpdateSchema, ActivateAspectSchema,
-    OverridePromptSchema, UserAspectSchema, AspectListSchema, AspectSchema
+    ActivateAspectSchema,
+    AspectCreateSchema,
+    AspectListSchema,
+    AspectUpdateSchema,
+    OverridePromptSchema,
+    UserAspectSchema,
 )
 from schemas.common import ErrorSchema
 from services.aspect_service import AspectService
-from services.exceptions import (
-    AspectNotFoundError, AspectDeletionError, UserAspectNotFoundError
-)
+from services.exceptions import AspectDeletionError, AspectNotFoundError, UserAspectNotFoundError
+from utils.decorators import get_current_user_id, require_auth_cookie_or_api_key
 
-aspects_bp = Blueprint('aspects', __name__, url_prefix='/api/aspects')
+aspects_bp = Blueprint("aspects", __name__, url_prefix="/api/aspects")
 
 
 def _build_user_aspect_response(aspect_id, user_id):
     """Helper to build a UserAspectSchema response.
-    
+
     Args:
         aspect_id: UUID of the aspect
         user_id: UUID of the user
-        
+
     Returns:
         Dict matching UserAspectSchema or None if not found
     """
     from repositories.aspect_repository import AspectRepository, UserAspectRepository
-    
+
     aspect = AspectRepository.get_aspect(aspect_id)
     if not aspect:
         return None
-    
+
     user_aspect = UserAspectRepository.get_user_aspect(user_id, aspect_id)
     if not user_aspect:
         return None
-    
+
     # Determine which prompt to use
-    prompt_to_use = (
-        user_aspect.custom_prompt if user_aspect.custom_prompt
-        else aspect.prompt
-    )
-    
+    prompt_to_use = user_aspect.custom_prompt if user_aspect.custom_prompt else aspect.prompt
+
     return {
         "id": user_aspect.id,
         "aspect_id": aspect.id,
@@ -70,14 +70,14 @@ def _build_user_aspect_response(aspect_id, user_id):
     description="List all aspects for current user",
     responses={
         200: {"description": "List of user aspects", "schema": AspectListSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()}
-    }
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+    },
 )
 def list_aspects():
     """List all aspects for the authenticated user.
-    
+
     Returns both active and inactive aspects.
-    
+
     Returns:
         - 200: AspectListSchema with all user aspects
         - 401: Unauthorized
@@ -86,14 +86,11 @@ def list_aspects():
         user_id = get_current_user_id()
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
+
         all_aspects = AspectService.get_all_aspects_for_user(user_id)
-        
-        return {
-            "aspects": all_aspects,
-            "total": len(all_aspects)
-        }
-    
+
+        return {"aspects": all_aspects, "total": len(all_aspects)}
+
     except Exception as e:
         return {"error": str(e)}, 500
 
@@ -110,17 +107,17 @@ def list_aspects():
     responses={
         201: {"description": "Aspect created", "schema": UserAspectSchema()},
         400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
-        401: {"description": "Unauthorized", "schema": ErrorSchema()}
-    }
+        401: {"description": "Unauthorized", "schema": ErrorSchema()},
+    },
 )
 def create_aspect(name, description, prompt):
     """Create a new custom aspect for the authenticated user.
-    
+
     Args:
         name: Aspect name (1-255 chars, required)
         description: Aspect description (required)
         prompt: Evaluation prompt (required)
-    
+
     Returns:
         - 201: UserAspectSchema for the created aspect
         - 400: Validation error
@@ -130,21 +127,21 @@ def create_aspect(name, description, prompt):
         user_id = get_current_user_id()
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
+
         result = AspectService.create_custom_aspect(
             user_id=user_id,
             name=name,
             description=description,
             prompt=prompt,
         )
-        
+
         # Fetch full response including computed fields
         response = _build_user_aspect_response(UUID(result["id"]), user_id)
         if not response:
             return {"error": "Failed to retrieve created aspect"}, 500
-        
+
         return response, 201
-    
+
     except Exception as e:
         return {"error": str(e)}, 500
 
@@ -160,15 +157,15 @@ def create_aspect(name, description, prompt):
     responses={
         200: {"description": "Aspect details", "schema": UserAspectSchema()},
         401: {"description": "Unauthorized", "schema": ErrorSchema()},
-        404: {"description": "Aspect not found", "schema": ErrorSchema()}
-    }
+        404: {"description": "Aspect not found", "schema": ErrorSchema()},
+    },
 )
 def get_aspect(aspect_id):
     """Get details of a specific aspect for the authenticated user.
-    
+
     Args:
         aspect_id: UUID of the aspect
-    
+
     Returns:
         - 200: UserAspectSchema with aspect details
         - 401: Unauthorized
@@ -178,18 +175,18 @@ def get_aspect(aspect_id):
         user_id = get_current_user_id()
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
+
         try:
             aspect_uuid = UUID(aspect_id)
         except (ValueError, TypeError):
             return {"error": "Invalid aspect ID format"}, 400
-        
+
         response = _build_user_aspect_response(aspect_uuid, user_id)
         if not response:
             return {"error": "Aspect not found"}, 404
-        
+
         return response
-    
+
     except Exception as e:
         return {"error": str(e)}, 500
 
@@ -210,20 +207,20 @@ def get_aspect(aspect_id):
         400: {"description": "Bad request - validation error or default aspect", "schema": ErrorSchema()},
         401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - cannot update default aspect", "schema": ErrorSchema()},
-        404: {"description": "Aspect not found", "schema": ErrorSchema()}
-    }
+        404: {"description": "Aspect not found", "schema": ErrorSchema()},
+    },
 )
 def update_aspect(aspect_id, name=None, description=None, prompt=None):
     """Update a custom aspect (name, description, or prompt).
-    
+
     Cannot update default system aspects.
-    
+
     Args:
         aspect_id: UUID of the aspect
         name: New aspect name (optional)
         description: New aspect description (optional)
         prompt: New evaluation prompt (optional)
-    
+
     Returns:
         - 200: Updated UserAspectSchema
         - 400: Validation error or trying to update default aspect
@@ -235,21 +232,22 @@ def update_aspect(aspect_id, name=None, description=None, prompt=None):
         user_id = get_current_user_id()
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
+
         try:
             aspect_uuid = UUID(aspect_id)
         except (ValueError, TypeError):
             return {"error": "Invalid aspect ID format"}, 400
-        
+
         # Check if this is a default aspect before updating
         from repositories.aspect_repository import AspectRepository
+
         aspect = AspectRepository.get_aspect(aspect_uuid)
         if not aspect:
             return {"error": "Aspect not found"}, 404
-        
+
         if aspect.is_default:
             return {"error": "Cannot update default aspects"}, 403
-        
+
         AspectService.update_custom_aspect(
             user_id=user_id,
             aspect_id=aspect_uuid,
@@ -257,13 +255,13 @@ def update_aspect(aspect_id, name=None, description=None, prompt=None):
             description=description,
             prompt=prompt,
         )
-        
+
         response = _build_user_aspect_response(aspect_uuid, user_id)
         if not response:
             return {"error": "Failed to retrieve updated aspect"}, 500
-        
+
         return response
-    
+
     except AspectDeletionError as e:
         return {"error": str(e)}, 403
     except UserAspectNotFoundError:
@@ -286,17 +284,17 @@ def update_aspect(aspect_id, name=None, description=None, prompt=None):
         204: {"description": "Aspect deleted"},
         401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - cannot delete default aspect", "schema": ErrorSchema()},
-        404: {"description": "Aspect not found", "schema": ErrorSchema()}
-    }
+        404: {"description": "Aspect not found", "schema": ErrorSchema()},
+    },
 )
 def delete_aspect(aspect_id):
     """Delete a custom aspect.
-    
+
     Cannot delete default system aspects.
-    
+
     Args:
         aspect_id: UUID of the aspect
-    
+
     Returns:
         - 204: No Content (success)
         - 401: Unauthorized
@@ -307,28 +305,29 @@ def delete_aspect(aspect_id):
         user_id = get_current_user_id()
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
+
         try:
             aspect_uuid = UUID(aspect_id)
         except (ValueError, TypeError):
             return {"error": "Invalid aspect ID format"}, 400
-        
+
         # Check if this is a default aspect before deleting
         from repositories.aspect_repository import AspectRepository
+
         aspect = AspectRepository.get_aspect(aspect_uuid)
         if not aspect:
             return {"error": "Aspect not found"}, 404
-        
+
         if aspect.is_default:
             return {"error": "Cannot delete default aspects"}, 403
-        
+
         AspectService.delete_custom_aspect(
             user_id=user_id,
             aspect_id=aspect_uuid,
         )
-        
+
         return "", 204
-    
+
     except AspectDeletionError as e:
         return {"error": str(e)}, 403
     except UserAspectNotFoundError:
@@ -353,16 +352,16 @@ def delete_aspect(aspect_id):
         200: {"description": "Aspect activation updated", "schema": UserAspectSchema()},
         400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
         401: {"description": "Unauthorized", "schema": ErrorSchema()},
-        404: {"description": "Aspect not found or user doesn't have this aspect", "schema": ErrorSchema()}
-    }
+        404: {"description": "Aspect not found or user doesn't have this aspect", "schema": ErrorSchema()},
+    },
 )
 def activate_aspect(aspect_id, is_active):
     """Toggle aspect activation status for the authenticated user.
-    
+
     Args:
         aspect_id: UUID of the aspect
         is_active: Boolean - True to activate, False to deactivate
-    
+
     Returns:
         - 200: Updated UserAspectSchema
         - 400: Validation error
@@ -373,23 +372,23 @@ def activate_aspect(aspect_id, is_active):
         user_id = get_current_user_id()
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
+
         try:
             aspect_uuid = UUID(aspect_id)
         except (ValueError, TypeError):
             return {"error": "Invalid aspect ID format"}, 400
-        
+
         if is_active:
             AspectService.activate_aspect(user_id=user_id, aspect_id=aspect_uuid)
         else:
             AspectService.deactivate_aspect(user_id=user_id, aspect_id=aspect_uuid)
-        
+
         response = _build_user_aspect_response(aspect_uuid, user_id)
         if not response:
             return {"error": "Aspect not found"}, 404
-        
+
         return response
-    
+
     except UserAspectNotFoundError:
         return {"error": "Aspect not found or user doesn't have this aspect"}, 404
     except AspectNotFoundError:
@@ -412,18 +411,18 @@ def activate_aspect(aspect_id, is_active):
         200: {"description": "Prompt override updated", "schema": UserAspectSchema()},
         400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
         401: {"description": "Unauthorized", "schema": ErrorSchema()},
-        404: {"description": "Aspect not found or user doesn't have this aspect", "schema": ErrorSchema()}
-    }
+        404: {"description": "Aspect not found or user doesn't have this aspect", "schema": ErrorSchema()},
+    },
 )
 def override_prompt(aspect_id, custom_prompt=None):
     """Override or revert the prompt for an aspect.
-    
+
     Pass custom_prompt=null to revert to default prompt.
-    
+
     Args:
         aspect_id: UUID of the aspect
         custom_prompt: Custom prompt string, or None/null to revert
-    
+
     Returns:
         - 200: Updated UserAspectSchema
         - 400: Validation error
@@ -434,24 +433,24 @@ def override_prompt(aspect_id, custom_prompt=None):
         user_id = get_current_user_id()
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
+
         try:
             aspect_uuid = UUID(aspect_id)
         except (ValueError, TypeError):
             return {"error": "Invalid aspect ID format"}, 400
-        
+
         AspectService.override_prompt(
             user_id=user_id,
             aspect_id=aspect_uuid,
             custom_prompt=custom_prompt,
         )
-        
+
         response = _build_user_aspect_response(aspect_uuid, user_id)
         if not response:
             return {"error": "Aspect not found"}, 404
-        
+
         return response
-    
+
     except UserAspectNotFoundError:
         return {"error": "Aspect not found or user doesn't have this aspect"}, 404
     except AspectNotFoundError:

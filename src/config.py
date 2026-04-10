@@ -1,10 +1,11 @@
 """Application configuration."""
 
+import logging
 import os
 import secrets
-import logging
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -17,17 +18,17 @@ _logger = logging.getLogger(__name__)
 def _get_or_generate_secret_key():
     """
     Get SECRET_KEY from environment or generate once if missing.
-    
+
     In production, SECRET_KEY should be set explicitly in .env.
     In development, we generate once per process to prevent session loss on reload.
     """
-    secret_key = os.getenv('SECRET_KEY')
-    
+    secret_key = os.getenv("SECRET_KEY")
+
     if secret_key:
         return secret_key
-    
-    env = os.getenv('FLASK_ENV', 'development')
-    if env == 'production':
+
+    env = os.getenv("FLASK_ENV", "development")
+    if env == "production":
         raise RuntimeError(
             "SECRET_KEY is not set! Refusing to start in production without an "
             "explicit SECRET_KEY. Set it in your .env or environment variables."
@@ -43,49 +44,49 @@ def _get_or_generate_secret_key():
 
 class Config:
     """Application configuration."""
-    
+
     # Flask
     SECRET_KEY = _get_or_generate_secret_key()
-    FLASK_ENV = os.getenv('FLASK_ENV', 'development')
-    SESSION_COOKIE_SECURE = FLASK_ENV == 'production'
+    FLASK_ENV = os.getenv("FLASK_ENV", "development")
+    SESSION_COOKIE_SECURE = FLASK_ENV == "production"
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = 'Lax'
-    PERMANENT_SESSION_LIFETIME = timedelta(hours=int(os.getenv('SESSION_TIMEOUT_HOURS', '24')))
-    
+    SESSION_COOKIE_SAMESITE = "Lax"
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=int(os.getenv("SESSION_TIMEOUT_HOURS", "24")))
+
     # Flag to indicate if using auto-generated SECRET_KEY
-    _USING_AUTO_GENERATED_SECRET_KEY = not os.getenv('SECRET_KEY')
-    
+    _USING_AUTO_GENERATED_SECRET_KEY = not os.getenv("SECRET_KEY")
+
     # Data directory (database + uploads)
-    DATA_DIR = Path(os.getenv('DATA_DIR', 'data'))
+    DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
     DATA_DIR.mkdir(exist_ok=True)
 
     # Database
-    DATABASE = os.getenv('DATABASE_PATH', str(DATA_DIR / 'reproducibility.db'))
+    DATABASE = os.getenv("DATABASE_PATH", str(DATA_DIR / "reproducibility.db"))
 
     # File uploads
     UPLOAD_FOLDER = DATA_DIR / "uploads"
     UPLOAD_FOLDER.mkdir(exist_ok=True)
     THUMBNAILS_FOLDER = UPLOAD_FOLDER / "thumbnails"
     THUMBNAILS_FOLDER.mkdir(exist_ok=True)
-    
+
     MAX_PDF_SIZE = 100 * 1024 * 1024  # 100MB
-    
+
     # Backend URL
     BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000")
-    
+
     # Agent configuration
     AGENT_CONTEXT_LIMIT = int(os.getenv("AGENT_CONTEXT_LIMIT", "100000"))
-    
+
     # Caching
-    ENABLE_CACHING = os.getenv('ENABLE_CACHING', 'false').lower() == 'true'
-    
+    ENABLE_CACHING = os.getenv("ENABLE_CACHING", "false").lower() == "true"
+
     # Docker
     DOCKER_AVAILABLE = False  # Will be set in app initialization
     # DOCKER_NETWORK: If empty/not set, Docker uses default bridge network
     # For Traefik: set to 'workspace_traefik' (or your network name)
     # For standalone: leave empty or unset (uses Docker default bridge)
-    DOCKER_NETWORK = os.getenv('DOCKER_NETWORK', '')
-    DOCKER_BACKEND_URL = os.getenv('DOCKER_BACKEND_URL', 'http://localhost:5000')
+    DOCKER_NETWORK = os.getenv("DOCKER_NETWORK", "")
+    DOCKER_BACKEND_URL = os.getenv("DOCKER_BACKEND_URL", "http://localhost:5000")
 
 
 def get_config():

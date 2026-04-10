@@ -6,20 +6,22 @@ generating evidence, and producing structured review assessments.
 """
 
 import os
+
 from flask import Flask, render_template
 from flask_apispec import FlaskApiSpec
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+
+from blueprints.admin import admin_bp
+from blueprints.api import api_bp
+from blueprints.auth import auth_bp
+from blueprints.jobs import jobs_bp
+from blueprints.plugins import plugins_bp
 from config import Config
 from models.database import init_db as init_peewee_db
 from services.auth_service import create_default_admin_user
-from services.llm_service import init_llm_provider
 from services.docker_service import init_docker
-from blueprints.auth import auth_bp
-from blueprints.admin import admin_bp
-from blueprints.jobs import jobs_bp, emit_event
-from blueprints.api import api_bp
-from blueprints.plugins import plugins_bp
+from services.llm_service import init_llm_provider
 
 # Export for backward compatibility with tests and other imports
 DATABASE = Config.DATABASE
@@ -27,11 +29,11 @@ DATABASE = Config.DATABASE
 
 def create_app():
     """Create and configure Flask application."""
-    
+
     app = Flask(
         __name__,
-        template_folder=os.path.join(os.path.dirname(__file__), '..', 'web', 'templates'),
-        static_folder=os.path.join(os.path.dirname(__file__), '..', 'web', 'static'),
+        template_folder=os.path.join(os.path.dirname(__file__), "..", "web", "templates"),
+        static_folder=os.path.join(os.path.dirname(__file__), "..", "web", "static"),
     )
 
     # Load configuration
@@ -45,25 +47,26 @@ def create_app():
         storage_uri="memory://",
     )
     app.limiter = limiter  # Expose for use in blueprints
-    
+
     # Initialize database (Peewee ORM)
     init_peewee_db(app.logger)
     create_default_admin_user(app.logger)
-    
+
     # Seed default execution scripts
     try:
         from utils.check_utils import seed_default_checks
+
         seed_default_checks()
     except Exception as e:
         app.logger.error(f"Failed to seed execution checks: {e}")
-    
+
     # Initialize LLM provider
     try:
-        llm_provider = init_llm_provider(app.logger)
+        init_llm_provider(app.logger)
     except Exception as e:
         app.logger.error(f"Failed to initialize LLM provider: {e}")
         raise
-    
+
     # Initialize Docker
     if init_docker():
         Config.DOCKER_AVAILABLE = True
@@ -71,7 +74,7 @@ def create_app():
     else:
         Config.DOCKER_AVAILABLE = False
         app.logger.warning("✗ Docker not available - agent execution will fail")
-    
+
     # Register blueprints
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
@@ -87,65 +90,73 @@ def create_app():
     # Exempt high-frequency polling endpoints from the global rate limit
     limiter.exempt(app.view_functions.get("api.get_job_full"))
     limiter.exempt(app.view_functions.get("api.get_chat_history_endpoint"))
-    
+
     # Initialize API documentation (FlaskApiSpec)
-    app.config.update({
-        "APISPEC_TITLE": "Artifact Review API",
-        "APISPEC_VERSION": "1.0.0",
-        "OPENAPI_VERSION": "3.0.2",
-        "APISPEC_SWAGGER_URL": "/swagger/",      # Raw OpenAPI JSON spec
-        "APISPEC_SWAGGER_UI_URL": "/docs/",      # Interactive Swagger UI
-        "API_TITLE": "Artifact Review",
-        "API_VERSION": "v1",
-    })
-    
+    app.config.update(
+        {
+            "APISPEC_TITLE": "Artifact Review API",
+            "APISPEC_VERSION": "1.0.0",
+            "OPENAPI_VERSION": "3.0.2",
+            "APISPEC_SWAGGER_URL": "/swagger/",  # Raw OpenAPI JSON spec
+            "APISPEC_SWAGGER_UI_URL": "/docs/",  # Interactive Swagger UI
+            "API_TITLE": "Artifact Review",
+            "API_VERSION": "v1",
+        }
+    )
+
     docs = FlaskApiSpec(app)
     app.logger.info("✓ API documentation initialized: /docs/ and /swagger/")
-    
+
     # PHASE 8: Filter OpenAPI spec - keep only /api/* routes and remove OPTIONS methods
     # Register all routes first, then filter to keep only /api/* endpoints
     docs.register_existing_resources()
-    
+
     # Remove non-API routes and OPTIONS methods from the OpenAPI spec
     try:
-        if hasattr(docs, 'spec') and hasattr(docs.spec, '_paths'):
+        if hasattr(docs, "spec") and hasattr(docs.spec, "_paths"):
             # Remove non-API routes (those NOT starting with /api/)
             all_paths = list(docs.spec._paths.keys())
-            paths_to_remove = [path for path in all_paths if not path.startswith('/api/')]
-            
+            paths_to_remove = [path for path in all_paths if not path.startswith("/api/")]
+
             for path in paths_to_remove:
                 del docs.spec._paths[path]
-            
+
             # Remove OPTIONS methods from all remaining /api/* paths
             # (OPTIONS are CORS preflight requests, not user-facing API operations)
             for path_spec in docs.spec._paths.values():
-                if 'options' in path_spec:
-                    del path_spec['options']
-            
+                if "options" in path_spec:
+                    del path_spec["options"]
+
             api_count = len(docs.spec._paths)
-            app.logger.info(f"✓ Filtered OpenAPI spec: {api_count} /api/* routes documented, OPTIONS methods removed ({len(paths_to_remove)} non-API routes excluded)")
+            app.logger.info(
+                f"✓ Filtered OpenAPI spec: {api_count} /api/* routes documented, OPTIONS methods removed ({len(paths_to_remove)} non-API routes excluded)"
+            )
     except Exception as e:
         app.logger.error(f"Failed to filter OpenAPI spec: {e}")
         import traceback
+
         app.logger.error(traceback.format_exc())
-    
+
     # Configure security schemes for API documentation
-    docs.spec.components.security_scheme("sessionAuth", {
-        "type": "apiKey",
-        "name": "session_id",
-        "in": "cookie",
-        "description": "Session-based authentication via cookies"
-    })
-    
+    docs.spec.components.security_scheme(
+        "sessionAuth",
+        {
+            "type": "apiKey",
+            "name": "session_id",
+            "in": "cookie",
+            "description": "Session-based authentication via cookies",
+        },
+    )
+
     # Error handlers for proper JSON responses
     @app.errorhandler(422)
     def handle_validation_error(err):
         """
         Handle validation errors from @use_kwargs (Marshmallow validation).
-        
+
         flask-apispec returns 422 with HTML by default.
         This handler converts it to JSON format for API clients.
-        
+
         Example error response:
         {
           "error": "Validation failed",
@@ -154,54 +165,51 @@ def create_app():
           }
         }
         """
-        headers = err.data.get('headers', None)
-        messages = err.data.get('messages', {})
-        
+        headers = err.data.get("headers", None)
+        messages = err.data.get("messages", {})
+
         # Flatten nested messages structure if present
         # messages can be: {"json": {"field": [errors]}} or {"field": [errors]}
-        if isinstance(messages, dict) and 'json' in messages:
-            messages = messages['json']
-        
-        response = {
-            "error": "Validation failed",
-            "messages": messages
-        }
-        
+        if isinstance(messages, dict) and "json" in messages:
+            messages = messages["json"]
+
+        response = {"error": "Validation failed", "messages": messages}
+
         if headers:
             return response, 422, headers
         return response, 422
-    
+
     # Security headers and cache control
     @app.after_request
     def set_security_headers(response):
         """Set security headers and cache control."""
         from flask import request
-        
+
         # Static files - disable caching
-        if request.path.startswith('/static/'):
-            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
-        
+        if request.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+
         # Security headers (all responses)
         # Prevent browsers from MIME-sniffing files
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        
+        response.headers["X-Content-Type-Options"] = "nosniff"
+
         # Prevent clickjacking attacks
-        response.headers['X-Frame-Options'] = 'DENY'
-        
+        response.headers["X-Frame-Options"] = "DENY"
+
         # Enable browser XSS protection
-        response.headers['X-XSS-Protection'] = '1; mode=block'
-        
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+
         # Strict transport security (HTTPS only in production)
-        if Config.FLASK_ENV == 'production':
-            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-        
+        if Config.FLASK_ENV == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
         # Referrer policy (don't leak referrer to external sites)
-        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
         # Content Security Policy
-        response.headers['Content-Security-Policy'] = (
+        response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
@@ -210,75 +218,75 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none'"
         )
-        
+
         return response
-    
+
     # Serve thumbnails
     @app.route("/uploads/thumbnails/<filename>")
     def serve_thumbnail(filename):
         """Serve thumbnail image files."""
-        from flask import send_file, abort
         import re
-        from pathlib import Path
-        
+
+        from flask import abort, send_file
+
         # Security: only allow thumbnail filenames
-        if not (filename.endswith('.jpg') or filename.endswith('.png')):
+        if not (filename.endswith(".jpg") or filename.endswith(".png")):
             abort(404)
-        
+
         thumbnail_path = Config.THUMBNAILS_FOLDER / filename
-        
+
         if not thumbnail_path.exists():
             abort(404)
-        
+
         # Verify UUID format
-        if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png)$', filename):
+        if not re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png)$", filename):
             abort(404)
-        
-        mimetype = 'image/png' if filename.endswith('.png') else 'image/jpeg'
+
+        mimetype = "image/png" if filename.endswith(".png") else "image/jpeg"
         return send_file(str(thumbnail_path), mimetype=mimetype)
-    
+
     # Simple public pages
     @app.route("/about")
     def about():
         """About page."""
         return render_template("about.html")
-    
+
     # Error handlers with content negotiation
     @app.errorhandler(404)
     def not_found(error):
         """Handle 404 errors with content negotiation."""
         from flask import jsonify, request
-        
+
         # If request came from API (/api/*) or wants JSON, return JSON
-        if request.path.startswith("/api") or 'application/json' in request.accept_mimetypes:
+        if request.path.startswith("/api") or "application/json" in request.accept_mimetypes:
             return jsonify({"error": "Not found"}), 404
-        
+
         # Otherwise, render HTML error page
         return render_template("404.html"), 404
-    
+
     @app.errorhandler(400)
     def bad_request(error):
         """Handle 400 errors (bad requests, bad JSON) with content negotiation."""
-        from flask import jsonify, request
-        
+        from flask import jsonify
+
         # For now, always return JSON for 400 errors since they typically come from API calls
         # (invalid JSON, missing required fields, type validation errors)
         return jsonify({"error": "Bad request"}), 400
-    
+
     @app.errorhandler(500)
     def server_error(error):
         """Handle 500 errors with content negotiation."""
         from flask import jsonify, request
-        
+
         app.logger.error(f"Server error: {error}")
-        
+
         # If request came from API (/api/*) or wants JSON, return JSON
-        if request.path.startswith("/api") or 'application/json' in request.accept_mimetypes:
+        if request.path.startswith("/api") or "application/json" in request.accept_mimetypes:
             return jsonify({"error": "Internal server error"}), 500
-        
+
         # Otherwise, render HTML error page
         return render_template("500.html"), 500
-    
+
     return app
 
 

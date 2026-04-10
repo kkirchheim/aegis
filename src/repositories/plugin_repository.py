@@ -1,10 +1,9 @@
 """Repository layer for Plugin and UserPlugin models."""
 
-from typing import Optional, List, Union
+from typing import List, Optional, Union
 from uuid import UUID
 
 from models.plugin import Plugin, UserPlugin
-from models.database import User
 
 _UNSET = object()  # Sentinel to distinguish "not provided" from None
 
@@ -32,35 +31,18 @@ class PluginRepository:
     def get_default_plugins() -> List[Plugin]:
         """Get all default plugins."""
         try:
-            return list(
-                Plugin.select()
-                .where(Plugin.is_default == True)
-                .order_by(Plugin.created_at)
-            )
+            return list(Plugin.select().where(Plugin.is_default).order_by(Plugin.created_at))
         except Exception:
             return []
 
     @staticmethod
-    def create_plugin(
-        name: str,
-        description: str,
-        prompt: str,
-        is_default: bool = False
-    ) -> Plugin:
+    def create_plugin(name: str, description: str, prompt: str, is_default: bool = False) -> Plugin:
         """Create a new plugin."""
-        return Plugin.create(
-            name=name,
-            description=description,
-            prompt=prompt,
-            is_default=is_default
-        )
+        return Plugin.create(name=name, description=description, prompt=prompt, is_default=is_default)
 
     @staticmethod
     def update_plugin(
-        plugin_id: UUID,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        prompt: Optional[str] = None
+        plugin_id: UUID, name: Optional[str] = None, description: Optional[str] = None, prompt: Optional[str] = None
     ) -> Optional[Plugin]:
         """Update plugin (name, description, prompt only)."""
         plugin = PluginRepository.get_plugin(plugin_id)
@@ -100,11 +82,7 @@ class UserPluginRepository:
     def get_user_plugins(user_id: Union[int, UUID]) -> List[UserPlugin]:
         """Get all plugins for a user (including deleted)."""
         try:
-            return list(
-                UserPlugin.select()
-                .where(UserPlugin.user_id == user_id)
-                .order_by(UserPlugin.created_at)
-            )
+            return list(UserPlugin.select().where(UserPlugin.user_id == user_id).order_by(UserPlugin.created_at))
         except Exception:
             return []
 
@@ -115,50 +93,30 @@ class UserPluginRepository:
             return list(
                 Plugin.select()
                 .join(UserPlugin)
-                .where(
-                    (UserPlugin.user_id == user_id) &
-                    (UserPlugin.is_active == True) &
-                    (UserPlugin.deleted_at.is_null())
-                )
+                .where((UserPlugin.user_id == user_id) & (UserPlugin.is_active) & (UserPlugin.deleted_at.is_null()))
                 .order_by(Plugin.created_at)
             )
         except Exception:
             return []
 
     @staticmethod
-    def get_user_plugin(
-        user_id: Union[int, UUID],
-        plugin_id: Union[str, UUID]
-    ) -> Optional[UserPlugin]:
+    def get_user_plugin(user_id: Union[int, UUID], plugin_id: Union[str, UUID]) -> Optional[UserPlugin]:
         """Get specific user plugin."""
         try:
-            return UserPlugin.get(
-                (UserPlugin.user_id == user_id) &
-                (UserPlugin.plugin_id == plugin_id)
-            )
+            return UserPlugin.get((UserPlugin.user_id == user_id) & (UserPlugin.plugin_id == plugin_id))
         except UserPlugin.DoesNotExist:
             return None
 
     @staticmethod
     def create_user_plugin(
-        user_id: Union[int, UUID],
-        plugin_id: Union[str, UUID],
-        custom_prompt: Optional[str] = None
+        user_id: Union[int, UUID], plugin_id: Union[str, UUID], custom_prompt: Optional[str] = None
     ) -> UserPlugin:
         """Create user plugin entry."""
-        return UserPlugin.create(
-            user_id=user_id,
-            plugin_id=plugin_id,
-            custom_prompt=custom_prompt,
-            is_active=True
-        )
+        return UserPlugin.create(user_id=user_id, plugin_id=plugin_id, custom_prompt=custom_prompt, is_active=True)
 
     @staticmethod
     def update_user_plugin(
-        user_id: Union[int, UUID],
-        plugin_id: Union[str, UUID],
-        is_active: Optional[bool] = None,
-        custom_prompt=_UNSET
+        user_id: Union[int, UUID], plugin_id: Union[str, UUID], is_active: Optional[bool] = None, custom_prompt=_UNSET
     ) -> Optional[UserPlugin]:
         """Update user plugin (is_active and/or custom_prompt)."""
         user_plugin = UserPluginRepository.get_user_plugin(user_id, plugin_id)

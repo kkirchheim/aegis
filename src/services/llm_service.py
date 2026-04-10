@@ -6,10 +6,10 @@ from llm import get_provider
 def init_llm_provider(app_logger=None):
     """
     Initialize LLM provider.
-    
+
     Returns:
         LLM provider instance
-        
+
     Raises:
         Exception: If provider initialization fails
     """

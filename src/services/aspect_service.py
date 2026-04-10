@@ -1,17 +1,14 @@
 """Aspect service layer - business logic for aspect management."""
 
-from typing import List, Optional, Dict, Any, Union
+from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
 from repositories.aspect_repository import AspectRepository, UserAspectRepository
-from models.aspect import Aspect, UserAspect
 from services.exceptions import (
-    AspectNotFoundError,
     AspectDeletionError,
+    AspectNotFoundError,
     UserAspectNotFoundError,
-    DuplicateAspectError,
 )
-
 
 # Default aspects to seed for new users
 DEFAULT_ASPECTS = [
@@ -38,68 +35,63 @@ DEFAULT_ASPECTS = [
 
 class AspectService:
     """Business logic for aspect management."""
-    
+
     @staticmethod
     def get_or_create_default_aspects(user_id: Union[int, UUID]) -> None:
         """Seed default aspects for a user on first login (idempotent)."""
         for aspect_data in DEFAULT_ASPECTS:
             # Get or create the global default aspect
             default_aspects = AspectRepository.get_default_aspects()
-            aspect_exists = any(
-                a.name == aspect_data["name"] for a in default_aspects
-            )
-            
+            aspect_exists = any(a.name == aspect_data["name"] for a in default_aspects)
+
             if aspect_exists:
-                aspect = next(
-                    a for a in default_aspects if a.name == aspect_data["name"]
-                )
+                aspect = next(a for a in default_aspects if a.name == aspect_data["name"])
             else:
                 aspect = AspectRepository.create_aspect(**aspect_data)
-            
+
             # Create user aspect if it doesn't exist
-            existing = UserAspectRepository.get_user_aspect(
-                user_id, aspect.id
-            )
+            existing = UserAspectRepository.get_user_aspect(user_id, aspect.id)
             if not existing:
-                UserAspectRepository.create_user_aspect(
-                    user_id, aspect.id, custom_prompt=None
-                )
-    
+                UserAspectRepository.create_user_aspect(user_id, aspect.id, custom_prompt=None)
+
     @staticmethod
     def get_all_aspects_for_user(user_id: Union[int, UUID]) -> List[Dict[str, Any]]:
         """Get all aspects for user with their settings.
-        
+
         Returns list of dicts with: {id, name, description, is_default, is_active, custom_prompt}
         """
         import sys
-        
+
         # Ensure default aspects are seeded for this user
         try:
             AspectService.get_or_create_default_aspects(user_id)
         except Exception as e:
             print(f"ERROR seeding default aspects: {e}", file=sys.stderr)
             import traceback
+
             traceback.print_exc()
-        
+
         user_aspects = UserAspectRepository.get_user_aspects(user_id)
         results = []
-        
+
         for user_aspect in user_aspects:
             if user_aspect.deleted_at:
                 continue  # Skip soft-deleted aspects
-            
+
             aspect = user_aspect.aspect_id  # Peewee FK auto-resolves
-            results.append({
-                "id": str(aspect.id),
-                "name": aspect.name,
-                "description": aspect.description,
-                "is_default": aspect.is_default,
-                "is_active": user_aspect.is_active,
-                "custom_prompt": user_aspect.custom_prompt,
-            })
-        
+            results.append(
+                {
+                    "id": str(aspect.id),
+                    "name": aspect.name,
+                    "description": aspect.description,
+                    "is_default": aspect.is_default,
+                    "is_active": user_aspect.is_active,
+                    "custom_prompt": user_aspect.custom_prompt,
+                }
+            )
+
         return sorted(results, key=lambda x: x["name"])
-    
+
     @staticmethod
     def create_custom_aspect(
         user_id: Union[int, UUID],
@@ -108,7 +100,7 @@ class AspectService:
         prompt: str,
     ) -> Dict[str, Any]:
         """Create a custom aspect for a user.
-        
+
         Creates both the global Aspect and UserAspect entry.
         """
         # Create global aspect (not default)
@@ -118,14 +110,14 @@ class AspectService:
             prompt=prompt,
             is_default=False,
         )
-        
+
         # Create user aspect entry
         UserAspectRepository.create_user_aspect(
             user_id=user_id,
             aspect_id=aspect.id,
             custom_prompt=None,
         )
-        
+
         return {
             "id": str(aspect.id),
             "name": aspect.name,
@@ -134,7 +126,7 @@ class AspectService:
             "is_active": True,
             "custom_prompt": None,
         }
-    
+
     @staticmethod
     def update_custom_aspect(
         user_id: Union[int, UUID],
@@ -144,23 +136,21 @@ class AspectService:
         prompt: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update a custom aspect.
-        
+
         Only non-default aspects can be updated.
         """
         aspect = AspectRepository.get_aspect(aspect_id)
         if not aspect:
             raise AspectNotFoundError(f"Aspect {aspect_id} not found")
-        
+
         if aspect.is_default:
             raise AspectDeletionError("Cannot update default aspects")
-        
+
         # Verify user has this aspect
         user_aspect = UserAspectRepository.get_user_aspect(user_id, aspect_id)
         if not user_aspect:
-            raise UserAspectNotFoundError(
-                f"User does not have aspect {aspect_id}"
-            )
-        
+            raise UserAspectNotFoundError(f"User does not have aspect {aspect_id}")
+
         # Update global aspect
         updated_aspect = AspectRepository.update_aspect(
             aspect_id,
@@ -168,7 +158,7 @@ class AspectService:
             description=description,
             prompt=prompt,
         )
-        
+
         return {
             "id": str(updated_aspect.id),
             "name": updated_aspect.name,
@@ -177,56 +167,46 @@ class AspectService:
             "is_active": user_aspect.is_active,
             "custom_prompt": user_aspect.custom_prompt,
         }
-    
+
     @staticmethod
     def delete_custom_aspect(user_id: Union[int, UUID], aspect_id: Union[str, UUID]) -> None:
         """Delete a custom aspect.
-        
+
         Only non-default aspects can be deleted.
         """
         aspect = AspectRepository.get_aspect(aspect_id)
         if not aspect:
             raise AspectNotFoundError(f"Aspect {aspect_id} not found")
-        
+
         if aspect.is_default:
             raise AspectDeletionError("Cannot delete default aspects")
-        
+
         # Verify user has this aspect
         user_aspect = UserAspectRepository.get_user_aspect(user_id, aspect_id)
         if not user_aspect:
-            raise UserAspectNotFoundError(
-                f"User does not have aspect {aspect_id}"
-            )
-        
+            raise UserAspectNotFoundError(f"User does not have aspect {aspect_id}")
+
         # Soft delete user aspect
         UserAspectRepository.delete_user_aspect(user_id, aspect_id)
-    
+
     @staticmethod
     def activate_aspect(user_id: Union[int, UUID], aspect_id: Union[str, UUID]) -> None:
         """Activate an aspect for a user."""
         user_aspect = UserAspectRepository.get_user_aspect(user_id, aspect_id)
         if not user_aspect:
-            raise UserAspectNotFoundError(
-                f"User does not have aspect {aspect_id}"
-            )
-        
-        UserAspectRepository.update_user_aspect(
-            user_id, aspect_id, is_active=True
-        )
-    
+            raise UserAspectNotFoundError(f"User does not have aspect {aspect_id}")
+
+        UserAspectRepository.update_user_aspect(user_id, aspect_id, is_active=True)
+
     @staticmethod
     def deactivate_aspect(user_id: Union[int, UUID], aspect_id: Union[str, UUID]) -> None:
         """Deactivate an aspect for a user."""
         user_aspect = UserAspectRepository.get_user_aspect(user_id, aspect_id)
         if not user_aspect:
-            raise UserAspectNotFoundError(
-                f"User does not have aspect {aspect_id}"
-            )
-        
-        UserAspectRepository.update_user_aspect(
-            user_id, aspect_id, is_active=False
-        )
-    
+            raise UserAspectNotFoundError(f"User does not have aspect {aspect_id}")
+
+        UserAspectRepository.update_user_aspect(user_id, aspect_id, is_active=False)
+
     @staticmethod
     def override_prompt(
         user_id: Union[int, UUID],
@@ -236,14 +216,10 @@ class AspectService:
         """Override the prompt for a user's aspect."""
         user_aspect = UserAspectRepository.get_user_aspect(user_id, aspect_id)
         if not user_aspect:
-            raise UserAspectNotFoundError(
-                f"User does not have aspect {aspect_id}"
-            )
-        
-        UserAspectRepository.update_user_aspect(
-            user_id, aspect_id, custom_prompt=custom_prompt
-        )
-    
+            raise UserAspectNotFoundError(f"User does not have aspect {aspect_id}")
+
+        UserAspectRepository.update_user_aspect(user_id, aspect_id, custom_prompt=custom_prompt)
+
     @staticmethod
     def get_active_aspects_for_evaluation(
         user_id: Union[int, UUID],
@@ -257,25 +233,21 @@ class AspectService:
         AspectService.get_or_create_default_aspects(user_id)
         active_aspects = UserAspectRepository.get_active_aspects(user_id)
         results = []
-        
+
         for aspect in active_aspects:
             # Get the user's aspect settings
-            user_aspect = UserAspectRepository.get_user_aspect(
-                user_id, aspect.id
-            )
-            
+            user_aspect = UserAspectRepository.get_user_aspect(user_id, aspect.id)
+
             # Use custom prompt if set, otherwise use default
-            prompt_to_use = (
-                user_aspect.custom_prompt
-                if user_aspect.custom_prompt
-                else aspect.prompt
+            prompt_to_use = user_aspect.custom_prompt if user_aspect.custom_prompt else aspect.prompt
+
+            results.append(
+                {
+                    "id": str(aspect.id),
+                    "name": aspect.name,
+                    "description": aspect.description,
+                    "prompt_to_use": prompt_to_use,
+                }
             )
-            
-            results.append({
-                "id": str(aspect.id),
-                "name": aspect.name,
-                "description": aspect.description,
-                "prompt_to_use": prompt_to_use,
-            })
-        
+
         return sorted(results, key=lambda x: x["name"])

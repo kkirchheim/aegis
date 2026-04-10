@@ -7,8 +7,9 @@ via the ``mock_upload_externals`` fixture (defined in conftest.py) to
 avoid requiring real LLM/Docker services.
 """
 
-import pytest
 from io import BytesIO
+
+import pytest
 
 pytestmark = [pytest.mark.integration, pytest.mark.slow, pytest.mark.db]
 
@@ -30,8 +31,8 @@ def upload_pdf(authenticated_user, test_pdf_file, mock_upload_externals):
 
 def _advance_job(job_id, status, progress, current_stage, events=None):
     """Helper: update job state and optionally create events."""
-    from services.job_service import update_job_status
     from models.database import Event, Job
+    from services.job_service import update_job_status
 
     update_job_status(job_id, status, progress=progress, current_stage=current_stage)
 
@@ -50,18 +51,36 @@ class TestPipelineStages:
         job_id = upload_pdf
 
         with app.app_context():
-            _advance_job(job_id, "processing", 0.33, "paper_analysis", events=[
-                {"step": "stage_1_starting", "message": "Analyzing paper...", "severity": "info"},
-                {"step": "stage_1_complete", "message": "Paper analysis done", "severity": "info"},
-            ])
-            _advance_job(job_id, "processing", 0.66, "code_execution", events=[
-                {"step": "stage_2_starting", "message": "Executing code...", "severity": "info"},
-                {"step": "stage_2_complete", "message": "Code execution done", "severity": "info"},
-            ])
-            _advance_job(job_id, "completed", 1.0, "completed", events=[
-                {"step": "stage_3_starting", "message": "Evaluating...", "severity": "info"},
-                {"step": "complete", "message": "Analysis complete", "severity": "info"},
-            ])
+            _advance_job(
+                job_id,
+                "processing",
+                0.33,
+                "paper_analysis",
+                events=[
+                    {"step": "stage_1_starting", "message": "Analyzing paper...", "severity": "info"},
+                    {"step": "stage_1_complete", "message": "Paper analysis done", "severity": "info"},
+                ],
+            )
+            _advance_job(
+                job_id,
+                "processing",
+                0.66,
+                "code_execution",
+                events=[
+                    {"step": "stage_2_starting", "message": "Executing code...", "severity": "info"},
+                    {"step": "stage_2_complete", "message": "Code execution done", "severity": "info"},
+                ],
+            )
+            _advance_job(
+                job_id,
+                "completed",
+                1.0,
+                "completed",
+                events=[
+                    {"step": "stage_3_starting", "message": "Evaluating...", "severity": "info"},
+                    {"step": "complete", "message": "Analysis complete", "severity": "info"},
+                ],
+            )
 
         response = authenticated_user.get(f"/api/job/{job_id}/full")
         assert response.status_code == 200
@@ -76,18 +95,36 @@ class TestPipelineStages:
         job_id = upload_pdf
 
         with app.app_context():
-            _advance_job(job_id, "processing", 0.33, "paper_analysis", events=[
-                {"step": "stage_1_starting", "message": "Stage 1", "severity": "info"},
-                {"step": "stage_1_complete", "message": "Stage 1 done", "severity": "info"},
-            ])
-            _advance_job(job_id, "processing", 0.66, "code_execution", events=[
-                {"step": "stage_2_starting", "message": "Stage 2", "severity": "info"},
-                {"step": "stage_2_complete", "message": "Stage 2 done", "severity": "info"},
-            ])
-            _advance_job(job_id, "completed", 1.0, "completed", events=[
-                {"step": "stage_3_starting", "message": "Stage 3", "severity": "info"},
-                {"step": "complete", "message": "Done", "severity": "info"},
-            ])
+            _advance_job(
+                job_id,
+                "processing",
+                0.33,
+                "paper_analysis",
+                events=[
+                    {"step": "stage_1_starting", "message": "Stage 1", "severity": "info"},
+                    {"step": "stage_1_complete", "message": "Stage 1 done", "severity": "info"},
+                ],
+            )
+            _advance_job(
+                job_id,
+                "processing",
+                0.66,
+                "code_execution",
+                events=[
+                    {"step": "stage_2_starting", "message": "Stage 2", "severity": "info"},
+                    {"step": "stage_2_complete", "message": "Stage 2 done", "severity": "info"},
+                ],
+            )
+            _advance_job(
+                job_id,
+                "completed",
+                1.0,
+                "completed",
+                events=[
+                    {"step": "stage_3_starting", "message": "Stage 3", "severity": "info"},
+                    {"step": "complete", "message": "Done", "severity": "info"},
+                ],
+            )
 
         response = authenticated_user.get(f"/api/job/{job_id}/full")
         assert response.status_code == 200
@@ -110,12 +147,18 @@ class TestPipelineEventEmission:
         job_id = upload_pdf
 
         with app.app_context():
-            _advance_job(job_id, "completed", 1.0, "completed", events=[
-                {"step": "stage_1_starting", "message": "Analyzing paper...", "severity": "info"},
-                {"step": "stage_2_starting", "message": "Executing code...", "severity": "info"},
-                {"step": "stage_3_starting", "message": "Evaluating...", "severity": "info"},
-                {"step": "complete", "message": "Analysis complete", "severity": "info"},
-            ])
+            _advance_job(
+                job_id,
+                "completed",
+                1.0,
+                "completed",
+                events=[
+                    {"step": "stage_1_starting", "message": "Analyzing paper...", "severity": "info"},
+                    {"step": "stage_2_starting", "message": "Executing code...", "severity": "info"},
+                    {"step": "stage_3_starting", "message": "Evaluating...", "severity": "info"},
+                    {"step": "complete", "message": "Analysis complete", "severity": "info"},
+                ],
+            )
 
         response = authenticated_user.get(f"/api/job/{job_id}/full")
         assert response.status_code == 200
@@ -168,8 +211,7 @@ class TestPipelineProgress:
             progress_values.append(response.get_json()["progress"])
 
         for i in range(1, len(progress_values)):
-            assert progress_values[i] >= progress_values[i - 1], \
-                f"Progress decreased: {progress_values}"
+            assert progress_values[i] >= progress_values[i - 1], f"Progress decreased: {progress_values}"
 
 
 class TestPipelineErrorHandling:

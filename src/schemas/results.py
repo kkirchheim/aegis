@@ -5,9 +5,10 @@ from marshmallow import Schema, fields
 
 class ArtifactSchema(Schema):
     """Schema for artifact metadata.
-    
+
     Represents artifacts generated during analysis (documents, files, etc.).
     """
+
     id = fields.Str(allow_none=True)
     job_id = fields.Str(allow_none=True)
     url = fields.Str(allow_none=True)
@@ -21,6 +22,7 @@ class PluginEvaluationSchema(Schema):
     Represents the evaluation of a specific plugin of reproducibility
     (e.g., code availability, data availability, methodology clarity).
     """
+
     plugin_id = fields.Str(allow_none=True)
     name = fields.Str(allow_none=True)
     status = fields.Str(allow_none=True)
@@ -32,9 +34,10 @@ class PluginEvaluationSchema(Schema):
 
 class ExecutionResultSchema(Schema):
     """Schema for execution step results.
-    
+
     Represents the result of executing a single step in the analysis pipeline.
     """
+
     step = fields.Str(allow_none=True)
     status = fields.Str(allow_none=True)
     output = fields.Str(allow_none=True)
@@ -43,10 +46,11 @@ class ExecutionResultSchema(Schema):
 
 class PaperAnalysisSchema(Schema):
     """Schema for paper analysis results.
-    
+
     Represents the complete analysis of a research paper, including
     extracted metadata, methodology, dependencies, and citations.
     """
+
     title = fields.Str(allow_none=True)
     abstract = fields.Str(allow_none=True)
     extracted_text = fields.Str(allow_none=True)

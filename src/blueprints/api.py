@@ -1,47 +1,70 @@
 """API blueprint - REST API endpoints."""
 
 import json
-import threading
-import time
 import os
+import threading
 import uuid
 from datetime import datetime
-from flask import Blueprint, request, jsonify, session
-from flask_apispec import doc, marshal_with, use_kwargs
-from marshmallow import ValidationError, fields, validate
-from utils.decorators import require_auth, require_admin
-from services.cache_service import get_cache_stats, clear_cache
-from models.database import User, db, Job, ChatSession, ChatMessage
-from repositories import JobRepository, ChatRepository, EventRepository
-from config import Config
-from services.job_service import (
-    create_job, get_job, get_user_jobs, update_job_status, delete_job,
-    store_artifacts, get_job_artifacts, get_job_events
-)
-from schemas import (
-    JobSchema, JobListSchema, JobDetailSchema, ErrorSchema,
-    ChatMessageSchema, ChatMessageRequestSchema, ChatMessageResponseSchema, ChatHistorySchema,
-    LoginSchema, RegisterSchema, ChangePasswordSchema, SessionSchema, UserSchema,
-    SuccessMessageSchema, EventSchema, HealthResponseSchema, CacheStatsResponseSchema,
-    UploadJobResponseSchema,
-    AgentThinkRequestSchema, AgentLogRequestSchema, AgentExecutionRequestSchema,
-    AgentCompleteRequestSchema, AgentActionSchema, AgentResponseSchema,
-    APIKeyCreateSchema, APIKeySchema, APIKeyGenerateSchema, APIKeyListSchema
-)
 
-api_bp = Blueprint('api', __name__, url_prefix='/api')
+from flask import Blueprint, request, session
+from flask_apispec import doc, marshal_with, use_kwargs
+from marshmallow import fields, validate
+
+from config import Config
+from models.database import ChatSession, Job, User
+from repositories import ChatRepository, EventRepository, JobRepository
+from schemas import (
+    AgentActionSchema,
+    AgentCompleteRequestSchema,
+    AgentExecutionRequestSchema,
+    AgentLogRequestSchema,
+    AgentResponseSchema,
+    AgentThinkRequestSchema,
+    APIKeyCreateSchema,
+    APIKeyGenerateSchema,
+    APIKeyListSchema,
+    CacheStatsResponseSchema,
+    ChangePasswordSchema,
+    ChatHistorySchema,
+    ChatMessageRequestSchema,
+    ErrorSchema,
+    HealthResponseSchema,
+    JobDetailSchema,
+    JobListSchema,
+    JobSchema,
+    LoginSchema,
+    RegisterSchema,
+    SessionSchema,
+    SuccessMessageSchema,
+    UploadJobResponseSchema,
+)
+from services.cache_service import clear_cache, get_cache_stats
+from services.job_service import (
+    create_job,
+    delete_job,
+    get_job,
+    get_job_artifacts,
+    get_job_events,
+    get_user_jobs,
+    update_job_status,
+)
+from utils.decorators import require_admin, require_auth
+
+api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 
 def _get_limiter():
     """Get the rate limiter from the current app."""
     from flask import current_app
-    return getattr(current_app, 'limiter', None)
+
+    return getattr(current_app, "limiter", None)
 
 
 # ============================================================================
 # Authentication API Endpoints (Separated from page routes)
 # ============================================================================
 # OpenAPI Tags: "Authentication"
+
 
 @api_bp.route("/auth/login", methods=["POST"])
 @use_kwargs(LoginSchema, location="json")
@@ -58,17 +81,17 @@ def _get_limiter():
         400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
         401: {"description": "Unauthorized - invalid username or password", "schema": ErrorSchema()},
         403: {"description": "Forbidden - account not activated", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def api_login(username, password):
     """
     REST API endpoint for user login.
-    
+
     Input is validated by LoginSchema (@use_kwargs):
     - username: 3-50 chars, required
     - password: 8-100 chars, required
-    
+
     Returns:
     - 200: {"message": "Login successful", "redirect": "/"}
     - 401: {"error": "Invalid username or password"}
@@ -77,26 +100,27 @@ def api_login(username, password):
     - 500: {"error": "..."}
     """
     from services.auth_service import get_user_by_username, verify_password
-    
+
     try:
         user = get_user_by_username(username)
-        
+
         if not user or not verify_password(password, user.password_hash):
             return {"error": "Invalid username or password"}, 401
-        
+
         # Check if user is active
         if not user.is_active:
             return {"error": "Account not activated yet"}, 403
-        
+
         # Set session
-        session['user_id'] = user.id
-        session['username'] = user.username
-        
+        session["user_id"] = user.id
+        session["username"] = user.username
+
         # Return dict only (no tuple) for 200 - @marshal_with handles it
         return {"message": "Login successful", "redirect": "/"}
-    
-    except Exception as e:
+
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Login error")
         return {"error": "An internal error occurred"}, 500
 
@@ -114,53 +138,51 @@ def api_login(username, password):
         201: {"description": "Account created successfully", "schema": SessionSchema()},
         400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
         409: {"description": "Conflict - username or email already exists", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def api_register(username, email, password, confirm_password):
     """
     REST API endpoint for user registration.
-    
+
     Input validated by RegisterSchema (@use_kwargs):
     - username: 3-50 chars, required
     - email: valid email, required
     - password: 8-100 chars, required
     - confirm_password: must match password, required
-    
+
     Returns:
     - 201: {"message": "Account created...", "redirect": "/login"}
     - 400: {"error": "..."}
     - 409: {"error": "Username or email already exists"}
     - 500: {"error": "Failed to create account"}
     """
-    from services.auth_service import user_exists, create_user
-    
+    from services.auth_service import create_user, user_exists
+
     try:
         # @use_kwargs already validated all inputs
         # Check if user exists
         if user_exists(username, email):
             return {"error": "Username or email already exists"}, 409
-        
+
         # Check password confirmation (Marshmallow validates format, we check match)
         if password != confirm_password:
             return {"error": "Passwords do not match"}, 400
-        
+
         # Create user
         user_id = create_user(username, email, password)
         if not user_id:
             return {"error": "Failed to create account"}, 500
-        
+
         # Return dict only (no tuple) for 201 - @marshal_with with code=201 handles it
         return (
-            {
-                "message": "Account created. Awaiting activation by admin.",
-                "redirect": "/login"
-            },
-            201  # Explicitly set 201 status
+            {"message": "Account created. Awaiting activation by admin.", "redirect": "/login"},
+            201,  # Explicitly set 201 status
         )
 
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Registration error")
         return {"error": "Failed to create account"}, 500
 
@@ -181,18 +203,18 @@ def api_register(username, email, password, confirm_password):
         400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
         401: {"description": "Unauthorized - current password incorrect", "schema": ErrorSchema()},
         404: {"description": "User not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def api_change_password(old_password, new_password, confirm_password):
     """
     REST API endpoint for changing user password.
-    
+
     Input validated by ChangePasswordSchema (@use_kwargs):
     - old_password: required
     - new_password: 8-100 chars, required
     - confirm_password: must match new_password, required
-    
+
     Returns:
     - 204: No Content (success)
     - 400: {"error": "..."}
@@ -200,31 +222,32 @@ def api_change_password(old_password, new_password, confirm_password):
     - 404: {"error": "User not found"}
     - 500: {"error": "Failed to update password"}
     """
-    from services.auth_service import get_user_by_id, verify_password, update_password
-    
+    from services.auth_service import get_user_by_id, update_password, verify_password
+
     try:
-        user_id = session.get('user_id')
-        
+        user_id = session.get("user_id")
+
         # @use_kwargs already validated inputs
         # Check password confirmation (Marshmallow validates format, we check match)
         if new_password != confirm_password:
             return {"error": "New passwords don't match"}, 400
-        
+
         # Get user and verify old password
         user = get_user_by_id(user_id)
         if not user:
             return {"error": "User not found"}, 404
-        
+
         if not verify_password(old_password, user.password_hash):
             return {"error": "Current password is incorrect"}, 401
-        
+
         # Update password
         if not update_password(user_id, new_password):
             return {"error": "Failed to update password"}, 500
-        
+
         return "", 204
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -233,6 +256,7 @@ def api_change_password(old_password, new_password, confirm_password):
 # API Key Management Endpoints
 # ============================================================================
 # OpenAPI Tags: "API Keys"
+
 
 @api_bp.route("/keys", methods=["GET"])
 @require_auth
@@ -244,26 +268,26 @@ def api_change_password(old_password, new_password, confirm_password):
     security=[{"sessionAuth": []}],
     responses={
         200: {"description": "List of API keys retrieved", "schema": APIKeyListSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def list_api_keys():
     """
     List all API keys for current user.
-    
+
     Only shows key prefix (first 8 characters) and metadata.
     Full key cannot be retrieved after generation (save it securely).
-    
+
     Returns:
     - 200: {"keys": [...], "total": N}
     - 500: {"error": "..."}
     """
     from models.api_key import APIKey
-    
+
     try:
-        user_id = session.get('user_id')
+        user_id = session.get("user_id")
         keys = APIKey.select().where(APIKey.user_id == user_id).order_by(APIKey.created_at.desc())
-        
+
         return {
             "keys": [
                 {
@@ -272,14 +296,15 @@ def list_api_keys():
                     "key_prefix": k.key_prefix,
                     "created_at": k.created_at,
                     "last_used_at": k.last_used_at,
-                    "is_active": k.is_active
+                    "is_active": k.is_active,
                 }
                 for k in keys
             ],
-            "total": len(keys)
+            "total": len(keys),
         }
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -297,56 +322,52 @@ def list_api_keys():
     responses={
         201: {"description": "API key generated successfully", "schema": APIKeyGenerateSchema()},
         400: {"description": "Bad request - validation error", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def create_api_key(name):
     """
     Generate a new API key for current user.
-    
+
     Input validated by APIKeyCreateSchema (@use_kwargs):
     - name: str (1-100 chars), required
-    
+
     ⚠️ IMPORTANT: The full key is shown ONLY ONCE.
     After this response, the key cannot be retrieved.
-    
+
     Returns:
     - 201: {"key": "prc_sk_...", "id": "...", ...}
     - 400: {"error": "..."}
     - 500: {"error": "..."}
     """
+
     from models.api_key import APIKey
     from utils.api_key_utils import generate_api_key, hash_api_key
-    from datetime import datetime
-    
+
     try:
-        user_id = session.get('user_id')
-        
+        user_id = session.get("user_id")
+
         # Generate API key
         api_key = generate_api_key()
         key_hash, _ = hash_api_key(api_key)
         key_prefix = api_key[:8]
-        
+
         # Store in database
-        db_key = APIKey.create(
-            user_id=user_id,
-            name=name,
-            key_hash=key_hash,
-            key_prefix=key_prefix
-        )
-        
+        db_key = APIKey.create(user_id=user_id, name=name, key_hash=key_hash, key_prefix=key_prefix)
+
         return (
             {
                 "id": str(db_key.id),
                 "name": name,
                 "key": api_key,  # ⚠️ Full key shown only once!
                 "key_prefix": key_prefix,
-                "created_at": db_key.created_at
+                "created_at": db_key.created_at,
             },
-            201
+            201,
         )
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -363,43 +384,44 @@ def create_api_key(name):
     responses={
         204: {"description": "API key revoked successfully"},
         404: {"description": "API key not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def revoke_api_key(key_id):
     """
     Revoke (delete) an API key.
-    
+
     Once revoked, the key cannot be used for authentication.
-    
+
     Returns:
     - 204: No content (success)
     - 404: {"error": "API key not found"}
     - 500: {"error": "..."}
     """
     from models.api_key import APIKey
-    
+
     try:
-        user_id = session.get('user_id')
+        user_id = session.get("user_id")
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
+
         # Ensure user owns this key
         key = APIKey.get_or_none(APIKey.id == key_id)
         if not key:
             return {"error": "API key not found"}, 404
-        
+
         # Compare user IDs (get the raw int ID from the ForeignKey)
-        key_user_id = key.user_id_id if hasattr(key, 'user_id_id') else key.user_id.id
+        key_user_id = key.user_id_id if hasattr(key, "user_id_id") else key.user_id.id
         if key_user_id != int(user_id):
             return {"error": "API key not found"}, 404
-        
+
         # Delete the key
         key.delete_instance()
-        
+
         return "", 204
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -409,36 +431,37 @@ def revoke_api_key(key_id):
 # ============================================================================
 # OpenAPI Tags: "System"
 
+
 @api_bp.route("/health", methods=["GET"])
 @doc(
     tags=["System"],
     description="Health check endpoint - returns system status",
     responses={
         200: {"description": "System is healthy", "schema": HealthResponseSchema()},
-        503: {"description": "Service unavailable", "schema": HealthResponseSchema()}
-    }
+        503: {"description": "Service unavailable", "schema": HealthResponseSchema()},
+    },
 )
 @marshal_with(HealthResponseSchema, code=200)
 def health_check():
     """
     Health check endpoint.
-    
+
     Returns 200 if all critical services are healthy, 503 otherwise.
-    
+
     Security: This endpoint is intentionally public and does NOT expose:
     - Detailed error messages or connection strings
     - System paths or configuration details
     - Internal service information that could aid attackers
-    
+
     Returns minimal information: only the status code and overall health.
     """
     from services.docker_service import is_docker_available
     from services.llm_service import init_llm_provider
-    
+
     # Internal checks (not exposed to client)
     database_healthy = False
     llm_healthy = False
-    
+
     # Check database connection
     try:
         # Simple query to verify database works
@@ -447,36 +470,34 @@ def health_check():
     except Exception as e:
         # Log error internally but don't expose to client
         import logging
+
         logging.error(f"Health check: Database connection failed: {str(e)}")
         database_healthy = False
-    
+
     # Check LLM provider (optional)
     try:
-        llm_provider = init_llm_provider()
+        init_llm_provider()
         llm_healthy = True
-    except Exception as e:
+    except Exception:
         # LLM provider is optional - not required for health
         llm_healthy = False
-    
+
     # Determine overall health status
     # Critical services: flask and database only
     is_healthy = database_healthy
-    
+
     # For production, return minimal information
-    response = {
-        "status": "healthy" if is_healthy else "unhealthy",
-        "timestamp": datetime.utcnow().isoformat() + "Z"
-    }
-    
+    response = {"status": "healthy" if is_healthy else "unhealthy", "timestamp": datetime.utcnow().isoformat() + "Z"}
+
     # In development/non-production, we can include more details
     # This helps with debugging but should be removed in production
-    if Config.FLASK_ENV != 'production':
+    if Config.FLASK_ENV != "production":
         response["checks"] = {
             "database": database_healthy,
             "docker": is_docker_available(),
-            "llm_provider": llm_healthy
+            "llm_provider": llm_healthy,
         }
-    
+
     status_code = 200 if is_healthy else 503
     return (response), status_code
 
@@ -484,6 +505,7 @@ def health_check():
 # ============================================================================
 # Cache Management API
 # ============================================================================
+
 
 @api_bp.route("/cache/stats", methods=["GET"])
 @require_admin
@@ -495,14 +517,14 @@ def health_check():
         200: {"description": "Cache statistics retrieved", "schema": CacheStatsResponseSchema()},
         401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - admin access required", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 @marshal_with(CacheStatsResponseSchema, code=200)
 def cache_stats():
     """Get cache statistics."""
     stats = get_cache_stats()
-    return (stats)
+    return stats
 
 
 @api_bp.route("/cache/clear", methods=["DELETE"])
@@ -515,8 +537,8 @@ def cache_stats():
         200: {"description": "Cache cleared successfully", "schema": SuccessMessageSchema()},
         401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - admin access required", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 @marshal_with(SuccessMessageSchema, code=200)
 def cache_clear():
@@ -524,14 +546,12 @@ def cache_clear():
     try:
         success, deleted_count = clear_cache()
         if success:
-            return ({
-                "ok": True,
-                "message": f"Cache cleared - deleted {deleted_count} PDF files"
-            })
+            return {"ok": True, "message": f"Cache cleared - deleted {deleted_count} PDF files"}
         else:
             return ({"error": "Failed to clear cache"}), 500
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -541,13 +561,14 @@ def cache_clear():
 # ============================================================================
 # OpenAPI Tags: "Chat"
 
+
 def get_or_create_chat_session(job_id):
     """Get or create chat session."""
     try:
         session_id = ChatRepository.get_or_create_session(job_id)
         if session_id:
             return {"id": session_id, "job_id": job_id}
-    except Exception as e:
+    except Exception:
         raise
 
 
@@ -555,7 +576,7 @@ def store_chat_message(session_id, role, content):
     """Store chat message."""
     try:
         ChatRepository.save_message(session_id, role, content)
-    except Exception as e:
+    except Exception:
         pass
 
 
@@ -567,11 +588,11 @@ def get_chat_history(session_id, limit=20):
             {
                 "role": msg.role,
                 "content": msg.content,
-                "created_at": msg.created_at.isoformat() if msg.created_at else None
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
             }
             for msg in messages
         ]
-    except Exception as e:
+    except Exception:
         return []
 
 
@@ -595,15 +616,15 @@ def get_chat_history(session_id, limit=20):
         422: {"description": "Unprocessable Entity - validation error", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def chat_with_paper(job_id, message):
     """Chat with paper analysis.
-    
+
     Input validated by ChatMessageRequestSchema (@use_kwargs):
     - message: 1-5000 chars, required
-    
+
     Returns:
     - 200: {"ok": True}
     - 400: {"error": "Job analysis not complete"}
@@ -611,66 +632,68 @@ def chat_with_paper(job_id, message):
     - 404: {"error": "Job not found"}
     - 500: {"error": "..."}
     """
-    from services.llm_service import init_llm_provider
     from blueprints.jobs import emit_event
-    from repositories import PaperAnalysisRepository, ExecutionDetailsRepository, PluginEvaluationRepository
-    
-    user_id = session.get('user_id')
+    from repositories import ExecutionDetailsRepository, PaperAnalysisRepository, PluginEvaluationRepository
+    from services.llm_service import init_llm_provider
+
+    user_id = session.get("user_id")
     user_message = message.strip()
-    
+
     try:
         # Verify job exists and user owns it
         job = JobRepository.get(job_id)
-        
+
         if not job:
             return {"error": "Job not found"}, 404
-        
+
         if job.user_id != user_id:
             return {"error": "Access denied"}, 403
-        
+
         if job.status not in ["completed", "processing"]:
             return {"error": "Job analysis not complete"}, 400
-        
+
         # FETCH PAPER AND ANALYSIS DATA
         paper_analysis = PaperAnalysisRepository.get(job_id)
         execution_details = ExecutionDetailsRepository.get(job_id)
         plugin_evaluations = PluginEvaluationRepository.list_by_job(job_id)
-        
+
         # Get or create session
         session_obj = get_or_create_chat_session(job_id)
         store_chat_message(session_obj["id"], "user", user_message)
-        
+
         # Build context
         history = get_chat_history(session_obj["id"], limit=10)
         messages = [{"role": msg["role"], "content": msg["content"]} for msg in history]
-        
+
         # Start response thread with paper context
         try:
             llm_provider = init_llm_provider()
             thread = threading.Thread(
                 target=_generate_chat_response,
                 args=(
-                    job_id, 
-                    session_obj["id"], 
-                    messages, 
-                    llm_provider, 
+                    job_id,
+                    session_obj["id"],
+                    messages,
+                    llm_provider,
                     emit_event,
                     paper_analysis,
                     execution_details,
-                    plugin_evaluations
+                    plugin_evaluations,
                 ),
-                daemon=True
+                daemon=True,
             )
             thread.start()
-        except Exception as e:
+        except Exception:
             from flask import current_app
+
             current_app.logger.exception("Internal error")
             return {"error": "An internal error occurred"}, 500
-        
+
         return {"ok": True}
-    
-    except Exception as e:
+
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -678,7 +701,7 @@ def chat_with_paper(job_id, message):
 def _build_chat_system_prompt(paper_analysis, execution_details, plugin_evaluations):
     """Build system prompt with paper analysis and reproducibility context."""
     import json
-    
+
     # Extract paper metadata
     paper_info = ""
     if paper_analysis:
@@ -694,7 +717,7 @@ Dependencies/Libraries Mentioned: {paper_analysis.dependencies or "None mentione
 
 Dataset: {paper_analysis.dataset_description or "Not described"}
 """
-    
+
     # Extract execution results
     execution_info = ""
     if execution_details:
@@ -703,16 +726,16 @@ Dataset: {paper_analysis.dataset_description or "Not described"}
         if execution_details.actual_results:
             try:
                 actual_results = json.loads(execution_details.actual_results)
-            except:
+            except Exception:
                 pass
-        
+
         discovered_files = []
         if execution_details.discovered_files:
             try:
                 discovered_files = json.loads(execution_details.discovered_files)
-            except:
+            except Exception:
                 discovered_files = []
-        
+
         execution_info = f"""
 EXECUTION RESULTS:
 ═════════════════════════════════════════
@@ -723,7 +746,7 @@ Commands Run: {(execution_details.commands_run[:500] if execution_details.comman
 Output (last 800 chars): {(execution_details.stdout_combined[-800:] if execution_details.stdout_combined else "No output")}
 
 Files Discovered: {len(discovered_files)} files
-Top files: {', '.join(discovered_files[:10])}
+Top files: {", ".join(discovered_files[:10])}
 
 Actual Results: {(json.dumps(actual_results, indent=2) if actual_results else "No results recorded")}
 
@@ -731,7 +754,7 @@ Dependencies Used: {execution_details.dependencies_used or "Not logged"}
 
 Errors Encountered: {execution_details.errors_summary or "No errors"}
 """
-    
+
     # Extract reproducibility evaluations
     evaluations_info = ""
     if plugin_evaluations:
@@ -743,13 +766,13 @@ Errors Encountered: {execution_details.errors_summary or "No errors"}
                 f"  Evidence: {(eval_item.evidence[:200] if eval_item.evidence else 'N/A')}\n"
                 f"  Paper supports: {eval_item.paper_supports}, Code supports: {eval_item.code_supports}"
             )
-        
+
         evaluations_info = f"""
 REPRODUCIBILITY ASSESSMENT:
 ═════════════════════════════════════════
 {chr(10).join(eval_summary)}
 """
-    
+
     # Build complete system prompt
     system_prompt = f"""You are an AI assistant specialized in analyzing scientific papers and their reproducibility.
 
@@ -778,56 +801,45 @@ INSTRUCTIONS:
 - Suggest improvements or troubleshooting when appropriate
 - IMPORTANT: Use PLAIN TEXT ONLY. Do NOT use markdown formatting (no bold, no italic, no headers, no code blocks, no bullet lists). Write responses as simple readable paragraphs with line breaks where appropriate.
 """
-    
+
     return system_prompt
 
 
-def _generate_chat_response(job_id, session_id, messages, llm_provider, emit_event, paper_analysis=None, execution_details=None, plugin_evaluations=None):
+def _generate_chat_response(
+    job_id,
+    session_id,
+    messages,
+    llm_provider,
+    emit_event,
+    paper_analysis=None,
+    execution_details=None,
+    plugin_evaluations=None,
+):
     """Generate chat response in background with paper context."""
     try:
         # BUILD SYSTEM PROMPT WITH PAPER CONTEXT
-        system_prompt = _build_chat_system_prompt(
-            paper_analysis,
-            execution_details,
-            plugin_evaluations
-        )
-        
+        system_prompt = _build_chat_system_prompt(paper_analysis, execution_details, plugin_evaluations)
+
         full_response = ""
-        for chunk in llm_provider.stream(
-            messages=messages,
-            system=system_prompt,
-            max_tokens=2048,
-            temperature=0.7
-        ):
+        for chunk in llm_provider.stream(messages=messages, system=system_prompt, max_tokens=2048, temperature=0.7):
             if not chunk:
                 continue
             full_response += chunk
-            emit_event(job_id, {
-                "step": "chat_response",
-                "content": chunk
-            })
-        
+            emit_event(job_id, {"step": "chat_response", "content": chunk})
+
         if not full_response:
-            emit_event(job_id, {
-                "step": "chat_error",
-                "message": "Error: Empty response from LLM"
-            })
+            emit_event(job_id, {"step": "chat_error", "message": "Error: Empty response from LLM"})
             return
-        
+
         store_chat_message(session_id, "assistant", full_response)
-        
-        emit_event(job_id, {
-            "step": "chat_complete",
-            "message": "Response complete"
-        })
-    
-    except Exception as e:
+
+        emit_event(job_id, {"step": "chat_complete", "message": "Response complete"})
+
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception(f"[{job_id}] Chat error")
-        emit_event(job_id, {
-            "step": "chat_error",
-            "message": "An error occurred processing your message"
-        })
+        emit_event(job_id, {"step": "chat_error", "message": "An error occurred processing your message"})
 
 
 @api_bp.route("/job/<job_id>/chat/history", methods=["GET"])
@@ -845,38 +857,33 @@ def _generate_chat_response(job_id, session_id, messages, llm_provider, emit_eve
         200: {"description": "Chat history retrieved", "schema": ChatHistorySchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def get_chat_history_endpoint(job_id):
     """Get chat history."""
-    user_id = session.get('user_id')
-    
+    user_id = session.get("user_id")
+
     try:
         job = JobRepository.get(job_id)
-        
+
         # Check if job exists first (404) before checking permissions (403)
         if not job:
             return {"error": "Job not found"}, 404
-        
+
         if job.user_id != user_id:
             return {"error": "Access denied"}, 403
-        
+
         try:
             chat_session = ChatSession.get(ChatSession.job == job_id)
             history = get_chat_history(chat_session.id, limit=100)
-            return {
-                "messages": history if history else [],
-                "total": len(history) if history else 0
-            }
+            return {"messages": history if history else [], "total": len(history) if history else 0}
         except ChatSession.DoesNotExist:
-            return {
-                "messages": [],
-                "total": 0
-            }
-    
-    except Exception as e:
+            return {"messages": [], "total": 0}
+
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -895,34 +902,35 @@ def get_chat_history_endpoint(job_id):
         204: {"description": "Chat history deleted successfully"},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def delete_chat_history_endpoint(job_id):
     """Delete chat history."""
-    user_id = session.get('user_id')
-    
+    user_id = session.get("user_id")
+
     try:
         job = JobRepository.get(job_id)
-        
+
         # Check if job exists first (404) before checking permissions (403)
         if not job:
             return {"error": "Job not found"}, 404
-        
+
         if job.user_id != user_id:
             return {"error": "Access denied"}, 403
-        
+
         try:
             chat_session = ChatSession.get(ChatSession.job == job_id)
             ChatRepository.clear_history(chat_session.id)
         except ChatSession.DoesNotExist:
             pass
-        
+
         # Return 204 No Content for successful deletion
         return "", 204
-    
-    except Exception as e:
+
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -931,6 +939,7 @@ def delete_chat_history_endpoint(job_id):
 # Agent API - Backend provides reasoning to Docker agent
 # ============================================================================
 # OpenAPI Tags: "Internal"
+
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/think", methods=["POST"])
@@ -943,38 +952,40 @@ def delete_chat_history_endpoint(job_id):
 def agent_think(job_id, repo_state=None):
     """
     Agent calls this to ask for next action.
-    
+
     Input validated by AgentThinkRequestSchema (@use_kwargs):
     - job_id: UUID string, required
     - repo_state: dict with discovered_files, combined_output, executed_commands, errors
     - Extra fields are ignored
-    
+
     Security: Validates job_id exists before processing.
     Job must exist in database - agents cannot invent job IDs.
-    
+
     Returns:
     - 200: {"action": "...", "target": "...", "reasoning": "..."}
     - 400: {"error": "..."}
     - 404: {"error": "Invalid job_id"}
     - 500: {"error": "..."}
     """
-    from services.llm_service import init_llm_provider
     from config import Config
-    
+    from services.llm_service import init_llm_provider
+
     repo_state = repo_state or {}
-    
+
     # SECURITY: Validate that job_id actually exists in database
     # This prevents agents from making up job IDs or accessing arbitrary jobs
     try:
         from models.database import Job
+
         job = Job.get_by_id(job_id)
         if not job:
             return {"error": "Invalid job_id"}, 404
     except Exception as e:
         from flask import current_app
+
         current_app.logger.error(f"[{job_id}] Job validation failed: {str(e)}")
         return {"error": "Failed to validate job"}, 500
-    
+
     try:
         # Build prompt for Claude
         files_list = (repo_state.get("discovered_files") or [])[:15]
@@ -985,28 +996,28 @@ def agent_think(job_id, repo_state=None):
             output_summary = combined_output
         else:
             # Keep the tail (most recent output is most relevant for decisions)
-            output_summary = "... (earlier output truncated) ...\n" + combined_output[-Config.AGENT_CONTEXT_LIMIT:]
+            output_summary = "... (earlier output truncated) ...\n" + combined_output[-Config.AGENT_CONTEXT_LIMIT :]
         executed_commands = repo_state.get("executed_commands", [])
         errors = repo_state.get("errors") or []
-        
+
         if executed_commands:
             commands_summary = "Command history:\n" + "\n".join(
-                f"  {i+1}. {cmd[:100]}" for i, cmd in enumerate(executed_commands)
+                f"  {i + 1}. {cmd[:100]}" for i, cmd in enumerate(executed_commands)
             )
         else:
             commands_summary = "No commands executed yet"
-        
+
         error_section = "- No errors yet"
         if errors:
             error_lines = []
             for e in errors[-2:]:
-                cmd = e.get('command', 'unknown')
-                stderr = e.get('stderr', 'unknown')[:100]
+                cmd = e.get("command", "unknown")
+                stderr = e.get("stderr", "unknown")[:100]
                 error_lines.append(f"  - {cmd}: {stderr}")
             error_section = "Recent errors:\n" + "\n".join(error_lines)
-        
-        iteration = repo_state.get('iteration', 0)
-        max_iter = repo_state.get('max_iterations', 15)
+
+        iteration = repo_state.get("iteration", 0)
+        max_iter = repo_state.get("max_iterations", 15)
 
         # Budget hints
         remaining = max_iter - iteration
@@ -1018,13 +1029,12 @@ def agent_think(job_id, repo_state=None):
             urgency = ""
 
         # Container environment info and custom instructions
-        container_info = repo_state.get('container_info', '')
+        container_info = repo_state.get("container_info", "")
         container_section = f"- Container: {container_info}" if container_info else ""
 
-        agent_instructions = repo_state.get('agent_instructions', '')
+        agent_instructions = repo_state.get("agent_instructions", "")
         instructions_section = (
-            f"\nCUSTOM INSTRUCTIONS (from user — follow these):\n{agent_instructions}"
-            if agent_instructions else ""
+            f"\nCUSTOM INSTRUCTIONS (from user — follow these):\n{agent_instructions}" if agent_instructions else ""
         )
 
         prompt = f"""You are an agent inside a Docker container attempting to reproduce code from a scientific paper.
@@ -1037,7 +1047,7 @@ ENVIRONMENT:
 {container_section}
 
 CURRENT STATE:
-- Repository: {repo_state.get('repo_url', 'unknown')}
+- Repository: {repo_state.get("repo_url", "unknown")}
 - Files in repo root: {files_list}
 - Iteration: {iteration}/{max_iter} ({remaining} remaining)
 
@@ -1088,13 +1098,10 @@ RESPONSE FORMAT (JSON only, no markdown):
   "reasoning": "brief explanation"
 }}
 """
-        
+
         llm_provider = init_llm_provider()
-        response_text = llm_provider.complete(
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=500
-        )
-        
+        response_text = llm_provider.complete(messages=[{"role": "user", "content": prompt}], max_tokens=500)
+
         # Parse JSON
         try:
             action = json.loads(response_text)
@@ -1107,11 +1114,12 @@ RESPONSE FORMAT (JSON only, no markdown):
                 action = json.loads(json_str)
             else:
                 action = {"action": "done", "reasoning": "Could not parse response"}
-        
+
         return action
-    
+
     except Exception as e:
         from flask import current_app
+
         current_app.logger.exception(f"[{job_id}] Agent decision failed: {str(e)}")
         return {"error": "Agent decision failed", "action": "done"}, 500
 
@@ -1126,13 +1134,13 @@ RESPONSE FORMAT (JSON only, no markdown):
 @marshal_with(ErrorSchema, code=500)
 def agent_log(job_id, message=None):
     """Agent logs progress.
-    
+
     Input validated by AgentLogRequestSchema (@use_kwargs):
     - job_id: UUID string, required
     - message: progress message, optional (extra fields are ignored)
-    
+
     Security: Validates job_id exists before accepting logs.
-    
+
     Returns:
     - 200: {"ok": True}
     - 400: {"error": "..."}
@@ -1141,22 +1149,19 @@ def agent_log(job_id, message=None):
     - 500: {"error": "..."}
     """
     from blueprints.jobs import emit_event
-    
+
     message = message or ""
-    
+
     # SECURITY: Validate that job_id actually exists
     try:
         job = JobRepository.get(job_id)
         if not job:
             return {"error": "Invalid job_id"}, 404
-    except Exception as e:
+    except Exception:
         return {"error": "Failed to validate job"}, 500
-    
-    emit_event(job_id, {
-        "step": "agent_progress",
-        "message": message
-    })
-    
+
+    emit_event(job_id, {"step": "agent_progress", "message": message})
+
     return {"ok": True}
 
 
@@ -1168,19 +1173,27 @@ def agent_log(job_id, message=None):
 @marshal_with(ErrorSchema, code=404)
 @marshal_with(ErrorSchema, code=422)
 @marshal_with(ErrorSchema, code=500)
-def agent_execution(job_id, commands_run=None, stdout_combined=None, actual_results=None,
-                   dependencies_used=None, errors_summary=None, discovered_files=None,
-                   test_info=None, randomness_info=None):
+def agent_execution(
+    job_id,
+    commands_run=None,
+    stdout_combined=None,
+    actual_results=None,
+    dependencies_used=None,
+    errors_summary=None,
+    discovered_files=None,
+    test_info=None,
+    randomness_info=None,
+):
     """
     Agent stores execution details.
-    
+
     Input validated by AgentExecutionRequestSchema (@use_kwargs):
     - job_id: UUID string, required
     - commands_run, stdout_combined, actual_results, dependencies_used, etc.: optional fields
     - Extra fields are ignored
-    
+
     Security: Validates job_id exists before storing execution details.
-    
+
     Returns:
     - 200: {"ok": True}
     - 400: {"error": "..."}
@@ -1188,15 +1201,15 @@ def agent_execution(job_id, commands_run=None, stdout_combined=None, actual_resu
     - 500: {"error": "..."}
     """
     from models.database import ExecutionDetails
-    
+
     # SECURITY: Validate that job_id actually exists
     try:
         job = JobRepository.get(job_id)
         if not job:
             return {"error": "Invalid job_id"}, 404
-    except Exception as e:
+    except Exception:
         return {"error": "Failed to validate job"}, 500
-    
+
     try:
         ExecutionDetails.create(
             job_id=job_id,
@@ -1207,13 +1220,14 @@ def agent_execution(job_id, commands_run=None, stdout_combined=None, actual_resu
             errors_summary=errors_summary or "",
             discovered_files=json.dumps(discovered_files or []),
             test_info=test_info or "",
-            randomness_info=randomness_info or ""
+            randomness_info=randomness_info or "",
         )
-        
+
         return {"ok": True}
-    
-    except Exception as e:
+
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -1229,18 +1243,18 @@ def agent_execution(job_id, commands_run=None, stdout_combined=None, actual_resu
 def agent_complete(job_id, success=None, message=None):
     """
     Agent reports completion.
-    
+
     Input validated by AgentCompleteRequestSchema (@use_kwargs):
     - job_id: UUID string, required
     - success: bool, whether analysis succeeded, optional
     - message: completion message, optional
     - Extra fields are ignored
-    
+
     NOTE: Agent does NOT control job status. Only emits event.
     Pipeline orchestrator manages job lifecycle (pending -> processing -> completed).
-    
+
     Security: Validates job_id exists before accepting completion.
-    
+
     Returns:
     - 200: {"ok": True}
     - 400: {"error": "..."}
@@ -1248,45 +1262,47 @@ def agent_complete(job_id, success=None, message=None):
     - 500: {"error": "..."}
     """
     from blueprints.jobs import emit_event
-    
+
     success = success or False
     message = message or "Analysis complete"
-    
+
     # SECURITY: Validate that job_id actually exists
     try:
         job = JobRepository.get(job_id)
         if not job:
             return {"error": "Invalid job_id"}, 404
-    except Exception as e:
+    except Exception:
         return {"error": "Failed to validate job"}, 500
-    
+
     try:
         # Just emit event - don't update job status (pipeline orchestrator handles that)
         status_label = "success" if success else "failed"
-        emit_event(job_id, {
-            "step": "agent_finished",
-            "message": f"Agent finished: {message}",
-            "agent_status": status_label
-        })
-        
+        emit_event(
+            job_id, {"step": "agent_finished", "message": f"Agent finished: {message}", "agent_status": status_label}
+        )
+
         return {"ok": True}
-    
-    except Exception as e:
+
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
 
 # INTERNAL: Called by agent container, not documented in OpenAPI
 @api_bp.route("/agent/check_result", methods=["POST"])
-@use_kwargs({
-    "job_id": fields.Str(required=True),
-    "script_hash": fields.Str(required=True),
-    "exit_code": fields.Int(required=True),
-    "stdout": fields.Str(required=False, missing=""),
-    "stderr": fields.Str(required=False, missing=""),
-    "duration_ms": fields.Int(required=False, missing=0),
-}, location="json")
+@use_kwargs(
+    {
+        "job_id": fields.Str(required=True),
+        "script_hash": fields.Str(required=True),
+        "exit_code": fields.Int(required=True),
+        "stdout": fields.Str(required=False, missing=""),
+        "stderr": fields.Str(required=False, missing=""),
+        "duration_ms": fields.Int(required=False, missing=0),
+    },
+    location="json",
+)
 @marshal_with(AgentResponseSchema, code=200)
 @marshal_with(ErrorSchema, code=400)
 @marshal_with(ErrorSchema, code=404)
@@ -1298,51 +1314,53 @@ def agent_check_result(job_id, script_hash, exit_code, stdout, stderr, duration_
     Input: job_id, script_hash, exit_code, stdout, stderr, duration_ms
     Returns: {"ok": True}
     """
-    from models.database import Job
-    from models.check import Check, CheckResult
     from blueprints.jobs import emit_event
-    import uuid
+    from models.check import Check, CheckResult
 
     # Validate job exists
     try:
         job = Job.get_by_id(job_id)
-    except:
+    except Exception:
         return {"error": "Invalid job_id"}, 404
 
     # Validate check exists
     try:
         check = Check.get_by_id(script_hash)
-    except:
+    except Exception:
         return {"error": "Invalid script_hash"}, 404
 
     try:
         # Store result
-        result = CheckResult.create(
+        CheckResult.create(
             id=uuid.uuid4(),
             job=job,
             script_hash=script_hash,
             exit_code=exit_code,
             stdout=stdout[:5000] if stdout else "",  # Limit output size
             stderr=stderr[:5000] if stderr else "",
-            duration_ms=duration_ms
+            duration_ms=duration_ms,
         )
 
         # Emit event for live display
-        emit_event(job_id, {
-            'step': 'check_executed',
-            'message': f"✓ {check.name} (exit {exit_code})",
-            'check_name': check.name,
-            'script_hash': script_hash,
-            'exit_code': exit_code,
-            'stdout': stdout[:500] if stdout else '',
-            'stderr': stderr[:200] if stderr else '',
-            'duration_ms': duration_ms
-        })
+        emit_event(
+            job_id,
+            {
+                "step": "check_executed",
+                "message": f"✓ {check.name} (exit {exit_code})",
+                "check_name": check.name,
+                "script_hash": script_hash,
+                "exit_code": exit_code,
+                "stdout": stdout[:500] if stdout else "",
+                "stderr": stderr[:200] if stderr else "",
+                "duration_ms": duration_ms,
+            },
+        )
 
         return {"ok": True}
 
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -1351,6 +1369,7 @@ def agent_check_result(job_id, script_hash, exit_code, stdout, stderr, duration_
 # Job Management API
 # ============================================================================
 # OpenAPI Tags: "Jobs"
+
 
 @api_bp.route("/job/upload", methods=["POST"])
 @marshal_with(UploadJobResponseSchema, code=202)
@@ -1365,33 +1384,34 @@ def agent_check_result(job_id, script_hash, exit_code, stdout, stderr, duration_
         202: {"description": "PDF uploaded successfully, analysis starting", "schema": UploadJobResponseSchema()},
         400: {"description": "Bad request - no file or invalid file", "schema": ErrorSchema()},
         413: {"description": "Payload too large - PDF exceeds max size", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def upload_pdf():
     """Upload PDF for analysis."""
-    from services.llm_service import init_llm_provider
-    from blueprints.jobs import analyze_paper_background, emit_event
-    from utils.decorators import get_current_user_id
-    from utils.api_key_utils import verify_api_key, InvalidAPIKeyError
-    import os
-    import uuid
     from urllib.parse import urlparse
+
     from flask import current_app
-    
+
+    from blueprints.jobs import analyze_paper_background
+    from services.llm_service import init_llm_provider
+    from utils.api_key_utils import InvalidAPIKeyError, verify_api_key
+
     # Manual auth check - support both session cookie and API key
     user_id = None
-    
+
     # Try session cookie first
-    if 'user_id' in session:
-        user_id = session['user_id']
+    if "user_id" in session:
+        user_id = session["user_id"]
         current_app.logger.info(f"[upload_pdf] Authenticated via session: user_id={user_id}")
     else:
         # Try API key from Authorization header
-        auth_header = request.headers.get('Authorization', '')
-        current_app.logger.info(f"[upload_pdf] No session, checking header: {auth_header[:20] if auth_header else 'empty'}...")
-        
-        if auth_header.startswith('ApiKey '):
+        auth_header = request.headers.get("Authorization", "")
+        current_app.logger.info(
+            f"[upload_pdf] No session, checking header: {auth_header[:20] if auth_header else 'empty'}..."
+        )
+
+        if auth_header.startswith("ApiKey "):
             api_key = auth_header[7:]  # Remove "ApiKey " prefix
             current_app.logger.info(f"[upload_pdf] Found ApiKey header: {api_key[:20]}...")
             try:
@@ -1401,46 +1421,47 @@ def upload_pdf():
                 current_app.logger.error(f"[upload_pdf] API key verification failed: {str(e)}")
                 pass  # Invalid key, treat as unauthorized
         else:
-            current_app.logger.info(f"[upload_pdf] No ApiKey header found")
-    
+            current_app.logger.info("[upload_pdf] No ApiKey header found")
+
     if not user_id:
         current_app.logger.warning("[upload_pdf] Authentication failed - returning 401")
         return {"error": "Unauthorized"}, 401
-    
+
     # Validate file
     if "pdf" not in request.files:
         return {"error": "No PDF file provided"}, 400
-    
+
     file = request.files["pdf"]
     if file.filename == "":
         return {"error": "No file selected"}, 400
-    
+
     if not file.filename.lower().endswith(".pdf"):
         return {"error": "File must be a PDF"}, 400
-    
+
     # Check file size
     file.seek(0, os.SEEK_END)
     file_size = file.tell()
     file.seek(0)
-    
+
     if file_size > Config.MAX_PDF_SIZE:
         return {"error": "PDF too large (max 100MB)"}, 413
-    
+
     # Create job
     job_id = str(uuid.uuid4())
     pdf_filename = f"{job_id}.pdf"
     pdf_path = Config.UPLOAD_FOLDER / pdf_filename
-    
+
     file.save(pdf_path)
-    
+
     # Extract page count and generate thumbnail
     from utils.pdf_utils import extract_page_count, generate_pdf_thumbnail
+
     num_pages = extract_page_count(str(pdf_path))
     thumbnail_path = generate_pdf_thumbnail(str(pdf_path), job_id, Config.THUMBNAILS_FOLDER)
-    
+
     # Create job in database
     create_job(job_id, str(pdf_path), file.filename, user_id, thumbnail_path, num_pages)
-    
+
     # Get configuration
     def _parse_manual_artifact_urls(raw_value):
         manual_artifacts = []
@@ -1464,18 +1485,14 @@ def upload_pdf():
             seen_urls.add(normalized_url)
             hostname = (parsed.netloc or "").lower()
             artifact_type = "github_repo" if "github.com" in hostname else "other"
-            manual_artifacts.append({
-                "url": normalized_url,
-                "type": artifact_type,
-                "description": "Manually provided artifact URL"
-            })
+            manual_artifacts.append(
+                {"url": normalized_url, "type": artifact_type, "description": "Manually provided artifact URL"}
+            )
 
         return manual_artifacts
 
     try:
-        manual_artifacts = _parse_manual_artifact_urls(
-            request.form.get("manual_artifact_urls", "")
-        )
+        manual_artifacts = _parse_manual_artifact_urls(request.form.get("manual_artifact_urls", ""))
     except ValueError as exc:
         return {"error": str(exc)}, 400
 
@@ -1490,26 +1507,22 @@ def upload_pdf():
         "storage_limit": int(request.form.get("storage_limit", 10)),
         "agent_instructions": request.form.get("agent_instructions", ""),
     }
-    
+
     # Start analysis thread
     try:
         llm_provider = init_llm_provider()
         thread = threading.Thread(
             target=analyze_paper_background,
             args=(job_id, str(pdf_path), config, llm_provider, manual_artifacts),
-            daemon=True
+            daemon=True,
         )
         thread.start()
     except Exception as e:
         update_job_status(job_id, "error", str(e))
-    
+
     return (
-        {
-            "job_id": job_id,
-            "status": "pending",
-            "message": "Paper uploaded successfully. Analysis starting..."
-        },
-        202
+        {"job_id": job_id, "status": "pending", "message": "Paper uploaded successfully. Analysis starting..."},
+        202,
     )  # Tuple required for 202 status code
 
 
@@ -1523,25 +1536,23 @@ def upload_pdf():
     security=[{"sessionAuth": []}],
     responses={
         200: {"description": "List of jobs retrieved successfully", "schema": JobListSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def list_jobs_api():
     """List all jobs for current user.
-    
+
     Returns:
     - 200: {"jobs": [...], "total": N}
     - 500: {"error": "..."}
     """
     try:
-        user_id = session.get('user_id')
+        user_id = session.get("user_id")
         jobs = get_user_jobs(user_id)
-        return {
-            "jobs": jobs if jobs else [],
-            "total": len(jobs) if jobs else 0
-        }
-    except Exception as e:
+        return {"jobs": jobs if jobs else [], "total": len(jobs) if jobs else 0}
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -1561,22 +1572,22 @@ def list_jobs_api():
         200: {"description": "Job details retrieved successfully", "schema": JobSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def get_job_detail(job_id):
     """Get job status and report."""
     try:
-        user_id = session.get('user_id')
-        
+        user_id = session.get("user_id")
+
         job = get_job(job_id)
-        
+
         if not job:
             return {"error": "Job not found"}, 404
-        
+
         if job.user_id != user_id:
             return {"error": "Access denied"}, 403
-        
+
         response = {
             "id": job.id,
             "status": job.status,
@@ -1585,18 +1596,19 @@ def get_job_detail(job_id):
             "pdf_filename": job.pdf_filename,
             "thumbnail_path": job.thumbnail_path,
             "created_at": job.created_at,
-            "completed_at": job.completed_at
+            "completed_at": job.completed_at,
         }
-        
+
         if job.report:
             response["report"] = json.loads(job.report) if isinstance(job.report, str) else job.report
-        
+
         if job.error_message:
             response["error"] = job.error_message
-        
+
         return response
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -1615,29 +1627,30 @@ def get_job_detail(job_id):
         204: {"description": "Job deleted successfully"},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def delete_job_route(job_id):
     """Delete a job."""
     try:
-        user_id = session.get('user_id')
-        
+        user_id = session.get("user_id")
+
         job = get_job(job_id)
-        
+
         if not job:
             return {"error": "Job not found"}, 404
-        
+
         if job.user_id != user_id:
             return {"error": "Access denied"}, 403
-        
+
         if delete_job(job_id):
             return "", 204
         else:
             return {"error": "Failed to delete job"}, 500
-    
-    except Exception as e:
+
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -1658,102 +1671,106 @@ def delete_job_route(job_id):
         401: {"description": "Unauthorized - invalid API key or missing session", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def get_job_full(job_id):
     """Get full job data including all details."""
-    from utils.api_key_utils import verify_api_key, InvalidAPIKeyError
     from flask import current_app
-    
+
+    from utils.api_key_utils import InvalidAPIKeyError, verify_api_key
+
     try:
         # Manual auth check - support both session cookie and API key
         user_id = None
-        
+
         # Try session cookie first
-        if 'user_id' in session:
-            user_id = session['user_id']
+        if "user_id" in session:
+            user_id = session["user_id"]
         else:
             # Try API key from Authorization header
-            auth_header = request.headers.get('Authorization', '')
-            if auth_header.startswith('ApiKey '):
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("ApiKey "):
                 api_key = auth_header[7:]  # Remove "ApiKey " prefix
                 try:
                     user_id = verify_api_key(api_key)
                 except (InvalidAPIKeyError, Exception):
                     pass
-        
+
         if not user_id:
             return {"error": "Unauthorized"}, 401
-        
+
         job = get_job(job_id)
-        
+
         if not job:
             return {"error": "Job not found"}, 404
-        
+
         if job.user_id != user_id:
             return {"error": "Access denied"}, 403
-        
+
         # Fetch related data
         events_list = get_job_events(job_id)
         artifacts = get_job_artifacts(job_id)
-        
+
         # Fetch paper analysis
         from services.analysis_service import get_paper_analysis
+
         paper_analysis = get_paper_analysis(job_id) or {}
-        
+
         # Get current_stage, default to pending if not set
         current_stage = job.current_stage or "pending"
-        
+
         # Enrich evidence with plugin metadata
         evidence = job.get_evidence()
         if evidence:
             from services.plugin_service import PluginService
+
             # Get all plugins for this user (to look up names/descriptions)
             all_plugins = PluginService.get_all_plugins_for_user(job.user_id)
-            plugin_lookup = {str(a['id']): a for a in all_plugins}
+            plugin_lookup = {str(a["id"]): a for a in all_plugins}
 
             # Merge plugin metadata into results
             for plugin_id, result in evidence.items():
                 plugin_info = plugin_lookup.get(plugin_id)
                 if plugin_info:
                     # Add name and description if not already present
-                    if 'plugin_name' not in result:
-                        result['plugin_name'] = plugin_info.get('name', 'Plugin')
-                    if 'plugin_description' not in result:
-                        result['plugin_description'] = plugin_info.get('prompt_to_use', '') or plugin_info.get('prompt', '')
+                    if "plugin_name" not in result:
+                        result["plugin_name"] = plugin_info.get("name", "Plugin")
+                    if "plugin_description" not in result:
+                        result["plugin_description"] = plugin_info.get("prompt_to_use", "") or plugin_info.get(
+                            "prompt", ""
+                        )
 
         # Fetch and enrich check results
         check_results_data = []
         try:
             from models.check import Check, CheckResult
 
-            check_results = (
-                CheckResult
-                .select()
-                .where(CheckResult.job == job_id)
-                .order_by(CheckResult.created_at.asc())
-            )
+            check_results = CheckResult.select().where(CheckResult.job == job_id).order_by(CheckResult.created_at.asc())
 
             for r in check_results:
                 try:
                     check = Check.get_by_id(r.script_hash)
                     check_name = check.name
                     check_description = check.description or ""
-                except:
+                except Exception:
                     check_name = "Unknown"
                     check_description = ""
 
-                check_results_data.append({
-                    "check_name": check_name,
-                    "check_description": check_description,
-                    "script_hash": r.script_hash,
-                    "exit_code": r.exit_code,
-                    "stdout": r.stdout or '',
-                    "stderr": r.stderr or '',
-                    "duration_ms": r.duration_ms,
-                    "created_at": r.created_at.isoformat() if hasattr(r.created_at, 'isoformat') else str(r.created_at)
-                })
+                check_results_data.append(
+                    {
+                        "check_name": check_name,
+                        "check_description": check_description,
+                        "script_hash": r.script_hash,
+                        "exit_code": r.exit_code,
+                        "stdout": r.stdout or "",
+                        "stderr": r.stderr or "",
+                        "duration_ms": r.duration_ms,
+                        "created_at": r.created_at.isoformat()
+                        if hasattr(r.created_at, "isoformat")
+                        else str(r.created_at),
+                    }
+                )
         except Exception as e:
             current_app.logger.error(f"Failed to fetch check results: {e}")
 
@@ -1772,12 +1789,13 @@ def get_job_full(job_id):
             "artifacts": artifacts,
             "paper_analysis": paper_analysis,
             "evidence": evidence,  # Enriched with plugin metadata
-            "check_results": check_results_data  # Check results with names
+            "check_results": check_results_data,  # Check results with names
         }
-        
+
         return response
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -1790,77 +1808,87 @@ def get_job_full(job_id):
     security=[{"sessionAuth": []}],
     params={
         "job_id": {"description": "Job ID", "in": "path"},
-        "since": {"description": "ISO format timestamp to get events after this time (optional)", "in": "query"}
+        "since": {"description": "ISO format timestamp to get events after this time (optional)", "in": "query"},
     },
     responses={
-        200: {"description": "Job events retrieved successfully", "schema": {"type": "object", "properties": {"events": {"type": "array"}, "completed": {"type": "boolean"}, "job_status": {"type": "string"}}}},
+        200: {
+            "description": "Job events retrieved successfully",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "events": {"type": "array"},
+                    "completed": {"type": "boolean"},
+                    "job_status": {"type": "string"},
+                },
+            },
+        },
         400: {"description": "Bad request - invalid timestamp format", "schema": ErrorSchema()},
         401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def get_job_events_polling(job_id):
     """Get events for a job with optional timestamp filtering.
-    
+
     Query parameters:
     - since: ISO format timestamp to get events after this time (optional)
-    
+
     Returns JSON with:
     - events: List of events (max 500)
     - completed: Boolean indicating if job is completed
     - job_status: Current job status string
     """
     from datetime import timezone
-    
+
     try:
-        user_id = session.get('user_id')
-        
+        user_id = session.get("user_id")
+
         job = get_job(job_id)
-        
+
         if not job:
             return {"error": "Job not found"}, 404
-        
+
         if job.user_id != user_id:
             return {"error": "Access denied"}, 403
-        
+
         # Get all events for the job
         all_events = EventRepository.list_by_job(job_id)
-        
+
         # Handle 'since' parameter for filtering
-        since_param = request.args.get('since')
+        since_param = request.args.get("since")
         filtered_events = []
-        
+
         if since_param:
             try:
                 # Parse ISO format timestamp (e.g., "2024-01-01T12:00:00Z")
-                if since_param.endswith('Z'):
-                    since_param = since_param[:-1] + '+00:00'
+                if since_param.endswith("Z"):
+                    since_param = since_param[:-1] + "+00:00"
                 since_time = datetime.fromisoformat(since_param)
-                
+
                 # Ensure since_time is timezone-aware (UTC)
                 if since_time.tzinfo is None:
                     since_time = since_time.replace(tzinfo=timezone.utc)
-                
+
                 # Filter events by timestamp
                 for event in all_events:
                     event_time = event.timestamp
-                    
+
                     # Ensure event_time is timezone-aware (UTC) for comparison
                     if event_time.tzinfo is None:
                         event_time = event_time.replace(tzinfo=timezone.utc)
-                    
+
                     if event_time > since_time:
                         filtered_events.append(event)
             except (ValueError, TypeError) as e:
                 return {"error": f"Invalid timestamp format: {str(e)}"}, 400
         else:
             filtered_events = all_events
-        
+
         # Enforce 500 event limit for safety
         filtered_events = filtered_events[:500]
-        
+
         # Convert events to dictionary format
         events_data = []
         for event in filtered_events:
@@ -1870,23 +1898,22 @@ def get_job_events_polling(job_id):
                 "step": event.step,
                 "message": event.message,
                 "severity": event.severity,
-                "timestamp": event.timestamp.isoformat() + 'Z' if hasattr(event.timestamp, 'isoformat') else str(event.timestamp),
-                "stage_duration_ms": event.stage_duration_ms
+                "timestamp": event.timestamp.isoformat() + "Z"
+                if hasattr(event.timestamp, "isoformat")
+                else str(event.timestamp),
+                "stage_duration_ms": event.stage_duration_ms,
             }
             events_data.append(event_dict)
-        
+
         # Determine if job is completed
         completed = job.status in ["completed", "failed", "cancelled"]
-        
-        response = {
-            "events": events_data,
-            "completed": completed,
-            "job_status": job.status
-        }
-        
+
+        response = {"events": events_data, "completed": completed, "job_status": job.status}
+
         return response
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -1903,16 +1930,15 @@ def get_job_events_polling(job_id):
         401: {"description": "Unauthorized", "schema": ErrorSchema()},
         403: {"description": "Forbidden - access denied", "schema": ErrorSchema()},
         404: {"description": "Job not found", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def get_check_results(job_id):
     """Get all check execution results for a job."""
-    from models.database import Job
     from models.check import Check, CheckResult
 
     try:
-        user_id = session.get('user_id')
+        user_id = session.get("user_id")
 
         # Validate job access
         job = get_job(job_id)
@@ -1923,38 +1949,33 @@ def get_check_results(job_id):
             return {"error": "Access denied"}, 403
 
         # Get all check results for this job
-        results = (
-            CheckResult
-            .select()
-            .where(CheckResult.job == job_id)
-            .order_by(CheckResult.created_at.asc())
-        )
+        results = CheckResult.select().where(CheckResult.job == job_id).order_by(CheckResult.created_at.asc())
 
         results_data = []
         for r in results:
             try:
                 check = Check.get_by_id(r.script_hash)
                 check_name = check.name
-            except:
+            except Exception:
                 check_name = "Unknown"
 
-            results_data.append({
-                "check_name": check_name,
-                "script_hash": r.script_hash,
-                "exit_code": r.exit_code,
-                "stdout": r.stdout or '',
-                "stderr": r.stderr or '',
-                "duration_ms": r.duration_ms,
-                "created_at": r.created_at.isoformat() if hasattr(r.created_at, 'isoformat') else str(r.created_at)
-            })
+            results_data.append(
+                {
+                    "check_name": check_name,
+                    "script_hash": r.script_hash,
+                    "exit_code": r.exit_code,
+                    "stdout": r.stdout or "",
+                    "stderr": r.stderr or "",
+                    "duration_ms": r.duration_ms,
+                    "created_at": r.created_at.isoformat() if hasattr(r.created_at, "isoformat") else str(r.created_at),
+                }
+            )
 
-        return {
-            "results": results_data,
-            "total": len(results_data)
-        }
+        return {"results": results_data, "total": len(results_data)}
 
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -1964,6 +1985,7 @@ def get_check_results(job_id):
 # ============================================================================
 # OpenAPI Tags: "Checks"
 
+
 @api_bp.route("/user/checks", methods=["GET"])
 @require_auth
 @doc(
@@ -1971,39 +1993,43 @@ def get_check_results(job_id):
     description="List all available checks (default + user's own)",
     security=[{"sessionAuth": []}],
     responses={
-        200: {"description": "Checks retrieved successfully", "schema": {"type": "object", "properties": {"checks": {"type": "array"}}}},
+        200: {
+            "description": "Checks retrieved successfully",
+            "schema": {"type": "object", "properties": {"checks": {"type": "array"}}},
+        },
         401: {"description": "Unauthorized", "schema": ErrorSchema()},
-        500: {"description": "Internal server error", "schema": ErrorSchema()}
-    }
+        500: {"description": "Internal server error", "schema": ErrorSchema()},
+    },
 )
 def list_user_checks():
     """Get all available checks for the user (default + their own)."""
     from services.check_service import CheckService
 
     try:
-        user_id = session.get('user_id')
+        user_id = session.get("user_id")
         if not user_id:
             return {"error": "Unauthorized"}, 401
 
         checks = CheckService.get_all_available_checks(user_id)
 
-        return {
-            "checks": checks,
-            "total": len(checks)
-        }
-    except Exception as e:
+        return {"checks": checks, "total": len(checks)}
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
 
 @api_bp.route("/user/checks", methods=["POST"])
 @require_auth
-@use_kwargs({
-    "name": fields.Str(required=True, validate=validate.Length(min=1, max=255)),
-    "script_text": fields.Str(required=True, validate=validate.Length(min=1)),
-    "description": fields.Str(required=False, missing="")
-}, location="json")
+@use_kwargs(
+    {
+        "name": fields.Str(required=True, validate=validate.Length(min=1, max=255)),
+        "script_text": fields.Str(required=True, validate=validate.Length(min=1)),
+        "description": fields.Str(required=False, missing=""),
+    },
+    location="json",
+)
 @marshal_with(ErrorSchema, code=400)
 @marshal_with(ErrorSchema, code=401)
 @marshal_with(ErrorSchema, code=500)
@@ -2015,15 +2041,15 @@ def list_user_checks():
         201: {"description": "Check created successfully"},
         400: {"description": "Invalid input"},
         401: {"description": "Unauthorized"},
-        500: {"description": "Internal server error"}
-    }
+        500: {"description": "Internal server error"},
+    },
 )
 def create_user_check(name, script_text, description=""):
     """Create a new user check."""
     from services.check_service import CheckService
 
     try:
-        user_id = session.get('user_id')
+        user_id = session.get("user_id")
         if not user_id:
             return {"error": "Unauthorized"}, 401
 
@@ -2034,8 +2060,9 @@ def create_user_check(name, script_text, description=""):
 
         return result, 201
 
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -2046,22 +2073,20 @@ def create_user_check(name, script_text, description=""):
     tags=["Checks"],
     description="Activate a check for the user",
     security=[{"sessionAuth": []}],
-    params={
-        "script_hash": {"description": "Script hash", "in": "path"}
-    },
+    params={"script_hash": {"description": "Script hash", "in": "path"}},
     responses={
         200: {"description": "Check activated"},
         401: {"description": "Unauthorized"},
         404: {"description": "Check not found"},
-        500: {"description": "Internal server error"}
-    }
+        500: {"description": "Internal server error"},
+    },
 )
 def activate_user_check(script_hash):
     """Activate a check for the user."""
     from services.check_service import CheckService
 
     try:
-        user_id = session.get('user_id')
+        user_id = session.get("user_id")
         if not user_id:
             return {"error": "Unauthorized"}, 401
 
@@ -2072,8 +2097,9 @@ def activate_user_check(script_hash):
 
         return {"ok": True}
 
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -2084,22 +2110,20 @@ def activate_user_check(script_hash):
     tags=["Checks"],
     description="Deactivate a check for the user",
     security=[{"sessionAuth": []}],
-    params={
-        "script_hash": {"description": "Script hash", "in": "path"}
-    },
+    params={"script_hash": {"description": "Script hash", "in": "path"}},
     responses={
         200: {"description": "Check deactivated"},
         401: {"description": "Unauthorized"},
         404: {"description": "Check not found"},
-        500: {"description": "Internal server error"}
-    }
+        500: {"description": "Internal server error"},
+    },
 )
 def deactivate_user_check(script_hash):
     """Deactivate a check for the user."""
     from services.check_service import CheckService
 
     try:
-        user_id = session.get('user_id')
+        user_id = session.get("user_id")
         if not user_id:
             return {"error": "Unauthorized"}, 401
 
@@ -2110,43 +2134,43 @@ def deactivate_user_check(script_hash):
 
         return {"ok": True}
 
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
 
 @api_bp.route("/user/checks/<script_hash>", methods=["PATCH"])
 @require_auth
-@use_kwargs({
-    "name": fields.Str(required=False),
-    "description": fields.Str(required=False),
-    "script_text": fields.Str(required=False)
-}, location="json")
+@use_kwargs(
+    {
+        "name": fields.Str(required=False),
+        "description": fields.Str(required=False),
+        "script_text": fields.Str(required=False),
+    },
+    location="json",
+)
 @doc(
     tags=["Checks"],
     description="Update a user check (must be owner)",
     security=[{"sessionAuth": []}],
-    params={
-        "script_hash": {"description": "Script hash", "in": "path"}
-    },
+    params={"script_hash": {"description": "Script hash", "in": "path"}},
     responses={
         200: {"description": "Check updated"},
         400: {"description": "Invalid input"},
         401: {"description": "Unauthorized"},
         403: {"description": "Forbidden - not the check owner"},
         404: {"description": "Check not found"},
-        500: {"description": "Internal server error"}
-    }
+        500: {"description": "Internal server error"},
+    },
 )
 def update_user_check(script_hash, name=None, description=None, script_text=None):
     """Update a user check (only if user created it)."""
-    from services.check_service import CheckService
     from models.check import Check
-    import uuid
 
     try:
-        user_id = session.get('user_id')
+        user_id = session.get("user_id")
         if not user_id:
             return {"error": "Unauthorized"}, 401
 
@@ -2155,7 +2179,7 @@ def update_user_check(script_hash, name=None, description=None, script_text=None
             check = Check.get_by_id(script_hash)
             if check.created_by_id != user_id:
                 return {"error": "Access denied"}, 403
-        except:
+        except Exception:
             return {"error": "Check not found"}, 404
 
         # Update fields if provided
@@ -2168,15 +2192,11 @@ def update_user_check(script_hash, name=None, description=None, script_text=None
 
         check.save()
 
-        return {
-            "script_hash": check.script_hash,
-            "name": check.name,
-            "description": check.description,
-            "updated": True
-        }
+        return {"script_hash": check.script_hash, "name": check.name, "description": check.description, "updated": True}
 
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500
 
@@ -2187,23 +2207,21 @@ def update_user_check(script_hash, name=None, description=None, script_text=None
     tags=["Checks"],
     description="Delete a user check (must be owner)",
     security=[{"sessionAuth": []}],
-    params={
-        "script_hash": {"description": "Script hash", "in": "path"}
-    },
+    params={"script_hash": {"description": "Script hash", "in": "path"}},
     responses={
         204: {"description": "Check deleted"},
         401: {"description": "Unauthorized"},
         403: {"description": "Forbidden - not the check owner"},
         404: {"description": "Check not found"},
-        500: {"description": "Internal server error"}
-    }
+        500: {"description": "Internal server error"},
+    },
 )
 def delete_user_check(script_hash):
     """Delete a user check (only if user created it)."""
     from services.check_service import CheckService
 
     try:
-        user_id = session.get('user_id')
+        user_id = session.get("user_id")
         if not user_id:
             return {"error": "Unauthorized"}, 401
 
@@ -2214,7 +2232,8 @@ def delete_user_check(script_hash):
 
         return "", 204
 
-    except Exception as e:
+    except Exception:
         from flask import current_app
+
         current_app.logger.exception("Internal error")
         return {"error": "An internal error occurred"}, 500

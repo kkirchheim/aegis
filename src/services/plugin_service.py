@@ -1,17 +1,14 @@
 """Plugin service layer - business logic for plugin management."""
 
-from typing import List, Optional, Dict, Any, Union
+from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
 from repositories.plugin_repository import PluginRepository, UserPluginRepository
-from models.plugin import Plugin, UserPlugin
 from services.exceptions import (
-    PluginNotFoundError,
     PluginDeletionError,
+    PluginNotFoundError,
     UserPluginNotFoundError,
-    DuplicatePluginError,
 )
-
 
 # Default plugins to seed for new users — based on the Reproducibility Maturity Model (RMM)
 DEFAULT_PLUGINS = [
@@ -127,25 +124,17 @@ class PluginService:
         for plugin_data in DEFAULT_PLUGINS:
             # Get or create the global default plugin
             default_plugins = PluginRepository.get_default_plugins()
-            plugin_exists = any(
-                a.name == plugin_data["name"] for a in default_plugins
-            )
+            plugin_exists = any(a.name == plugin_data["name"] for a in default_plugins)
 
             if plugin_exists:
-                plugin = next(
-                    a for a in default_plugins if a.name == plugin_data["name"]
-                )
+                plugin = next(a for a in default_plugins if a.name == plugin_data["name"])
             else:
                 plugin = PluginRepository.create_plugin(**plugin_data)
 
             # Create user plugin if it doesn't exist
-            existing = UserPluginRepository.get_user_plugin(
-                user_id, plugin.id
-            )
+            existing = UserPluginRepository.get_user_plugin(user_id, plugin.id)
             if not existing:
-                UserPluginRepository.create_user_plugin(
-                    user_id, plugin.id, custom_prompt=None
-                )
+                UserPluginRepository.create_user_plugin(user_id, plugin.id, custom_prompt=None)
 
     @staticmethod
     def get_all_plugins_for_user(user_id: Union[int, UUID]) -> List[Dict[str, Any]]:
@@ -161,6 +150,7 @@ class PluginService:
         except Exception as e:
             print(f"ERROR seeding default plugins: {e}", file=sys.stderr)
             import traceback
+
             traceback.print_exc()
 
         user_plugins = UserPluginRepository.get_user_plugins(user_id)
@@ -171,14 +161,16 @@ class PluginService:
                 continue  # Skip soft-deleted plugins
 
             plugin = user_plugin.plugin_id  # Peewee FK auto-resolves
-            results.append({
-                "id": str(plugin.id),
-                "name": plugin.name,
-                "description": plugin.description,
-                "is_default": plugin.is_default,
-                "is_active": user_plugin.is_active,
-                "custom_prompt": user_plugin.custom_prompt,
-            })
+            results.append(
+                {
+                    "id": str(plugin.id),
+                    "name": plugin.name,
+                    "description": plugin.description,
+                    "is_default": plugin.is_default,
+                    "is_active": user_plugin.is_active,
+                    "custom_prompt": user_plugin.custom_prompt,
+                }
+            )
 
         return sorted(results, key=lambda x: x["name"])
 
@@ -239,9 +231,7 @@ class PluginService:
         # Verify user has this plugin
         user_plugin = UserPluginRepository.get_user_plugin(user_id, plugin_id)
         if not user_plugin:
-            raise UserPluginNotFoundError(
-                f"User does not have plugin {plugin_id}"
-            )
+            raise UserPluginNotFoundError(f"User does not have plugin {plugin_id}")
 
         # Update global plugin
         updated_plugin = PluginRepository.update_plugin(
@@ -276,9 +266,7 @@ class PluginService:
         # Verify user has this plugin
         user_plugin = UserPluginRepository.get_user_plugin(user_id, plugin_id)
         if not user_plugin:
-            raise UserPluginNotFoundError(
-                f"User does not have plugin {plugin_id}"
-            )
+            raise UserPluginNotFoundError(f"User does not have plugin {plugin_id}")
 
         # Soft delete user plugin
         UserPluginRepository.delete_user_plugin(user_id, plugin_id)
@@ -288,26 +276,18 @@ class PluginService:
         """Activate a plugin for a user."""
         user_plugin = UserPluginRepository.get_user_plugin(user_id, plugin_id)
         if not user_plugin:
-            raise UserPluginNotFoundError(
-                f"User does not have plugin {plugin_id}"
-            )
+            raise UserPluginNotFoundError(f"User does not have plugin {plugin_id}")
 
-        UserPluginRepository.update_user_plugin(
-            user_id, plugin_id, is_active=True
-        )
+        UserPluginRepository.update_user_plugin(user_id, plugin_id, is_active=True)
 
     @staticmethod
     def deactivate_plugin(user_id: Union[int, UUID], plugin_id: Union[str, UUID]) -> None:
         """Deactivate a plugin for a user."""
         user_plugin = UserPluginRepository.get_user_plugin(user_id, plugin_id)
         if not user_plugin:
-            raise UserPluginNotFoundError(
-                f"User does not have plugin {plugin_id}"
-            )
+            raise UserPluginNotFoundError(f"User does not have plugin {plugin_id}")
 
-        UserPluginRepository.update_user_plugin(
-            user_id, plugin_id, is_active=False
-        )
+        UserPluginRepository.update_user_plugin(user_id, plugin_id, is_active=False)
 
     @staticmethod
     def override_prompt(
@@ -318,13 +298,9 @@ class PluginService:
         """Override the prompt for a user's plugin."""
         user_plugin = UserPluginRepository.get_user_plugin(user_id, plugin_id)
         if not user_plugin:
-            raise UserPluginNotFoundError(
-                f"User does not have plugin {plugin_id}"
-            )
+            raise UserPluginNotFoundError(f"User does not have plugin {plugin_id}")
 
-        UserPluginRepository.update_user_plugin(
-            user_id, plugin_id, custom_prompt=custom_prompt
-        )
+        UserPluginRepository.update_user_plugin(user_id, plugin_id, custom_prompt=custom_prompt)
 
     @staticmethod
     def get_active_plugins_for_evaluation(
@@ -342,22 +318,18 @@ class PluginService:
 
         for plugin in active_plugins:
             # Get the user's plugin settings
-            user_plugin = UserPluginRepository.get_user_plugin(
-                user_id, plugin.id
-            )
+            user_plugin = UserPluginRepository.get_user_plugin(user_id, plugin.id)
 
             # Use custom prompt if set, otherwise use default
-            prompt_to_use = (
-                user_plugin.custom_prompt
-                if user_plugin.custom_prompt
-                else plugin.prompt
-            )
+            prompt_to_use = user_plugin.custom_prompt if user_plugin.custom_prompt else plugin.prompt
 
-            results.append({
-                "id": str(plugin.id),
-                "name": plugin.name,
-                "description": plugin.description,
-                "prompt_to_use": prompt_to_use,
-            })
+            results.append(
+                {
+                    "id": str(plugin.id),
+                    "name": plugin.name,
+                    "description": plugin.description,
+                    "prompt_to_use": prompt_to_use,
+                }
+            )
 
         return sorted(results, key=lambda x: x["name"])

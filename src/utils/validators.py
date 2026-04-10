@@ -32,10 +32,10 @@ def validate_passwords_match(password, confirm_password):
 def validate_storage_limit(storage_limit):
     """
     Validate and normalize storage limit.
-    
+
     Args:
         storage_limit: Storage limit value (int or string)
-        
+
     Returns:
         Tuple of (is_valid, normalized_value, error_message)
     """

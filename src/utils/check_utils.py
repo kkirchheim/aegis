@@ -1,6 +1,7 @@
 """Utilities for execution checks."""
 
 import hashlib
+
 from models.check import Check
 
 
@@ -30,14 +31,10 @@ def get_or_create_check(name: str, script_text: str, user_id=None, description=N
             check.description = description
             check.save()
         return check
-    except:
+    except Exception:
         # Create new check
         check = Check.create(
-            script_hash=script_hash,
-            script_text=script_text,
-            name=name,
-            description=description,
-            created_by=user_id
+            script_hash=script_hash, script_text=script_text, name=name, description=description, created_by=user_id
         )
         return check
 
@@ -48,7 +45,7 @@ DEFAULT_CHECKS = {
         "text": """#!/bin/bash
 test -f README.md && exit 0 || exit 1
 """,
-        "description": "Verifies that a README.md file exists in the repository root"
+        "description": "Verifies that a README.md file exists in the repository root",
     }
 }
 

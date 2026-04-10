@@ -1,10 +1,8 @@
 """Service for managing user checks and activations."""
 
-import json
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from models.check import Check, UserCheck
-from models.database import User
-import uuid
 
 
 class CheckService:
@@ -26,26 +24,29 @@ class CheckService:
 
             # Check if user has activated this check
             try:
-                user_check = UserCheck.get(
-                    UserCheck.user_id == user_id,
-                    UserCheck.script_hash == check.script_hash
-                )
+                user_check = UserCheck.get(UserCheck.user_id == user_id, UserCheck.script_hash == check.script_hash)
                 is_active = user_check.is_active
-            except:
+            except Exception:
                 # Default checks are inactive by default; user checks are active
                 is_active = is_owned  # Active if user created it, inactive if default
 
-            checks.append({
-                'script_hash': check.script_hash,
-                'name': check.name,
-                'description': check.description or '',
-                'script_text_preview': check.script_text[:200] if len(check.script_text) > 200 else check.script_text,
-                'created_by': check.created_by.username if check.created_by else 'System',
-                'is_active': is_active,
-                'is_default': is_default,
-                'is_owned': is_owned,
-                'created_at': check.created_at.isoformat() if hasattr(check.created_at, 'isoformat') else str(check.created_at)
-            })
+            checks.append(
+                {
+                    "script_hash": check.script_hash,
+                    "name": check.name,
+                    "description": check.description or "",
+                    "script_text_preview": check.script_text[:200]
+                    if len(check.script_text) > 200
+                    else check.script_text,
+                    "created_by": check.created_by.username if check.created_by else "System",
+                    "is_active": is_active,
+                    "is_default": is_default,
+                    "is_owned": is_owned,
+                    "created_at": check.created_at.isoformat()
+                    if hasattr(check.created_at, "isoformat")
+                    else str(check.created_at),
+                }
+            )
 
         return checks
 
@@ -58,18 +59,18 @@ class CheckService:
         """
         active_checks = []
 
-        for user_check in (UserCheck
-                            .select()
-                            .where(UserCheck.user_id == user_id, UserCheck.is_active == True)):
+        for user_check in UserCheck.select().where(UserCheck.user_id == user_id, UserCheck.is_active):
             try:
                 check = Check.get_by_id(user_check.script_hash)
-                active_checks.append({
-                    'script_hash': check.script_hash,
-                    'name': check.name,
-                    'description': check.description or '',
-                    'script_text': check.script_text
-                })
-            except:
+                active_checks.append(
+                    {
+                        "script_hash": check.script_hash,
+                        "name": check.name,
+                        "description": check.description or "",
+                        "script_text": check.script_text,
+                    }
+                )
+            except Exception:
                 pass  # Skip if check not found
 
         return active_checks
@@ -82,15 +83,13 @@ class CheckService:
         """
         # Verify check exists
         try:
-            check = Check.get_by_id(script_hash)
-        except:
+            Check.get_by_id(script_hash)
+        except Exception:
             return False
 
         # Create or update UserCheck
         user_check, created = UserCheck.get_or_create(
-            user_id=user_id,
-            script_hash=script_hash,
-            defaults={'is_active': True}
+            user_id=user_id, script_hash=script_hash, defaults={"is_active": True}
         )
 
         if not created and not user_check.is_active:
@@ -103,21 +102,19 @@ class CheckService:
     def deactivate_check(user_id: int, script_hash: str) -> bool:
         """Deactivate a check for a user."""
         try:
-            user_check = UserCheck.get(
-                UserCheck.user_id == user_id,
-                UserCheck.script_hash == script_hash
-            )
+            user_check = UserCheck.get(UserCheck.user_id == user_id, UserCheck.script_hash == script_hash)
             user_check.is_active = False
             user_check.save()
             return True
-        except:
+        except Exception:
             return False
 
     @staticmethod
-    def create_user_check(user_id: int, name: str, script_text: str,
-                          description: str = None) -> Optional[Dict[str, Any]]:
+    def create_user_check(
+        user_id: int, name: str, script_text: str, description: str = None
+    ) -> Optional[Dict[str, Any]]:
         """Create a new user check."""
-        from utils.check_utils import hash_script, get_or_create_check
+        from utils.check_utils import get_or_create_check
 
         try:
             check = get_or_create_check(name, script_text, user_id=user_id, description=description)
@@ -126,12 +123,14 @@ class CheckService:
             CheckService.activate_check(user_id, check.script_hash)
 
             return {
-                'script_hash': check.script_hash,
-                'name': check.name,
-                'description': check.description,
-                'created_by': 'You',
-                'is_active': True,
-                'created_at': check.created_at.isoformat() if hasattr(check.created_at, 'isoformat') else str(check.created_at)
+                "script_hash": check.script_hash,
+                "name": check.name,
+                "description": check.description,
+                "created_by": "You",
+                "is_active": True,
+                "created_at": check.created_at.isoformat()
+                if hasattr(check.created_at, "isoformat")
+                else str(check.created_at),
             }
         except Exception as e:
             print(f"Failed to create check: {e}")
@@ -145,7 +144,7 @@ class CheckService:
             check.description = description
             check.save()
             return True
-        except:
+        except Exception:
             return False
 
     @staticmethod
@@ -161,5 +160,5 @@ class CheckService:
             UserCheck.delete().where(UserCheck.script_hash == script_hash).execute()
             check.delete_instance()
             return True
-        except:
+        except Exception:
             return False

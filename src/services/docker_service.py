@@ -1,16 +1,15 @@
 """Docker service - Docker agent spawning and container management."""
 
-import os
-import re
-import hashlib
-import docker
 import json
-from models.database import Job, ExecutionDetails
-from repositories import JobRepository, ExecutionDetailsRepository
+import re
+
+import docker
 from config import Config
+from models.database import ExecutionDetails, Job
+from repositories import ExecutionDetailsRepository
 
 # Regex to strip ANSI escape sequences from container output
-ANSI_ESCAPE_RE = re.compile(r'\x1b\[[0-9;]*m')
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
 DOCKER_CLIENT = None
@@ -55,7 +54,7 @@ def init_docker():
         DOCKER_CLIENT = docker.from_env()
         DOCKER_AVAILABLE = True
         return True
-    except Exception as e:
+    except Exception:
         DOCKER_AVAILABLE = False
         return False
 
@@ -73,16 +72,16 @@ def get_docker_client():
 def validate_network(network_name, app_logger=None):
     """
     Validate that a Docker network exists.
-    
+
     Returns: (exists: bool, error_message: str)
     """
     if not DOCKER_AVAILABLE:
         return False, "Docker not available"
-    
+
     try:
         networks = DOCKER_CLIENT.networks.list()
         network_names = [n.name for n in networks]
-        
+
         if network_name in network_names:
             return True, None
         else:
@@ -121,10 +120,7 @@ def build_agent_image(image_type="standard", app_logger=None):
             app_logger.info(f"Building agent Docker image ({image_type})...")
 
         DOCKER_CLIENT.images.build(
-            path=".",
-            dockerfile=image_config["dockerfile"],
-            tag=image_config["tag"],
-            quiet=False
+            path=".", dockerfile=image_config["dockerfile"], tag=image_config["tag"], quiet=False
         )
 
         if app_logger:
@@ -140,7 +136,7 @@ def build_agent_image(image_type="standard", app_logger=None):
 def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_event=None):
     """
     Spawn Docker container to run agent on repository.
-    
+
     Args:
         job_id: Unique job identifier
         repo_url: Repository URL to analyze
@@ -152,30 +148,20 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
         if app_logger:
             app_logger.error("Docker not available")
         if emit_event:
-            emit_event(job_id, {
-                "step": "error",
-                "message": "Docker not available for agent execution"
-            })
+            emit_event(job_id, {"step": "error", "message": "Docker not available for agent execution"})
         return False
-    
+
     # Use defaults if config not provided
     if config is None:
-        config = {
-            "storage_limit": 10,
-            "memory_limit": 4096,
-            "cpu_limit": 2,
-            "max_iterations": 15
-        }
-    
+        config = {"storage_limit": 10, "memory_limit": 4096, "cpu_limit": 2, "max_iterations": 15}
+
     # Check cache: if we've analyzed this repo before, reuse results
     # ONLY if caching is enabled
     if Config.ENABLE_CACHING:
         try:
             # Find previous jobs with artifacts matching this repo URL
-            jobs_with_repo = list(
-                Job.select().where(Job.report.contains(repo_url))
-            )
-            
+            jobs_with_repo = list(Job.select().where(Job.report.contains(repo_url)))
+
             if jobs_with_repo:
                 # Find first job with execution details
                 cached_details = None
@@ -184,18 +170,15 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
                         cached_details = ExecutionDetailsRepository.get(prev_job.id)
                         if cached_details:
                             break
-                    except:
+                    except Exception:
                         continue
-                
+
                 if cached_details:
                     if app_logger:
                         app_logger.info(f"[{job_id}] Cache hit for {repo_url} - reusing execution results")
                     if emit_event:
-                        emit_event(job_id, {
-                            "step": "cache_hit",
-                            "message": f"Using cached results for {repo_url}"
-                        })
-                    
+                        emit_event(job_id, {"step": "cache_hit", "message": f"Using cached results for {repo_url}"})
+
                     # Copy cached results to new job
                     ExecutionDetails.create(
                         job_id=job_id,
@@ -206,39 +189,33 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
                         errors_summary=cached_details.errors_summary,
                         discovered_files=cached_details.discovered_files,
                         test_info=cached_details.test_info,
-                        randomness_info=cached_details.randomness_info
+                        randomness_info=cached_details.randomness_info,
                     )
-                    
+
                     if emit_event:
-                        emit_event(job_id, {
-                            "step": "agent_completed",
-                            "message": "Cached agent results applied"
-                        })
-                    
+                        emit_event(job_id, {"step": "agent_completed", "message": "Cached agent results applied"})
+
                     return True
-        except:
+        except Exception:
             pass  # Continue with normal flow if cache lookup fails
-    
+
     try:
         container_name = f"agent-{job_id[:8]}"
-        
+
         if app_logger:
             app_logger.info(f"[{job_id}] === Agent Container Spawn ===")
             app_logger.info(f"[{job_id}] Repository: {repo_url}")
-        
+
         # Backend URL for agent
         backend_url = Config.DOCKER_BACKEND_URL
-        
+
         if app_logger:
             app_logger.info(f"[{job_id}] Backend URL for agent: {backend_url}")
             app_logger.info(f"[{job_id}] Container name: {container_name}")
-        
+
         if emit_event:
-            emit_event(job_id, {
-                "step": "spawning_agent",
-                "message": f"Spawning agent container for: {repo_url}"
-            })
-        
+            emit_event(job_id, {"step": "spawning_agent", "message": f"Spawning agent container for: {repo_url}"})
+
         # Determine which agent image to use
         image_type = config.get("docker_image", "standard")
         if image_type not in AGENT_IMAGES:
@@ -259,7 +236,7 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
             if app_logger:
                 app_logger.warning(f"[{job_id}] Agent image not found, attempting build: {e}")
             build_agent_image(image_type, app_logger)
-        
+
         # Validate storage limit
         storage_limit = config.get("storage_limit", 10)
         try:
@@ -272,23 +249,21 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
             if app_logger:
                 app_logger.warning(f"[{job_id}] Invalid storage limit, using default 10GB")
             storage_limit = 10
-        
+
         storage_limit_str = f"{storage_limit}g"
-        
+
         # Get active execution checks for this user
         try:
             job = Job.get_by_id(job_id)
             user_id = job.user_id
 
             from services.check_service import CheckService
+
             active_checks = CheckService.get_active_checks_for_user(user_id)
 
             checks_data = {}
             for check in active_checks:
-                checks_data[check['script_hash']] = {
-                    "name": check['name'],
-                    "script_text": check['script_text']
-                }
+                checks_data[check["script_hash"]] = {"name": check["name"], "script_text": check["script_text"]}
 
             if app_logger:
                 app_logger.info(f"[{job_id}] Found {len(checks_data)} active checks for user")
@@ -298,21 +273,21 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
 
             # Fallback: use all checks if lookup fails
             from models.check import Check
+
             checks_list = list(Check.select())
             checks_data = {}
             for check in checks_list:
-                checks_data[check.script_hash] = {
-                    "name": check.name,
-                    "script_text": check.script_text
-                }
-        
+                checks_data[check.script_hash] = {"name": check.name, "script_text": check.script_text}
+
         # Memory and CPU limits from config
         memory_limit_mb = config.get("memory_limit", 2048)
         try:
             memory_limit_mb = int(memory_limit_mb)
             if memory_limit_mb < 512 or memory_limit_mb > 32768:
                 if app_logger:
-                    app_logger.warning(f"[{job_id}] Memory limit {memory_limit_mb}MB out of range, using default 2048MB")
+                    app_logger.warning(
+                        f"[{job_id}] Memory limit {memory_limit_mb}MB out of range, using default 2048MB"
+                    )
                 memory_limit_mb = 2048
         except (ValueError, TypeError):
             memory_limit_mb = 2048
@@ -346,9 +321,9 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
             "tmpfs": {"/tmp": f"size={storage_limit_str}"},
             "remove": False,
             "stdout": True,
-            "stderr": True
+            "stderr": True,
         }
-        
+
         # Only validate and use custom network if specified
         if Config.DOCKER_NETWORK:
             network_valid, network_error = validate_network(Config.DOCKER_NETWORK, app_logger)
@@ -356,10 +331,9 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
                 if app_logger:
                     app_logger.error(f"[{job_id}] {network_error}")
                 if emit_event:
-                    emit_event(job_id, {
-                        "step": "error",
-                        "message": f"Docker network validation failed: {network_error}"
-                    })
+                    emit_event(
+                        job_id, {"step": "error", "message": f"Docker network validation failed: {network_error}"}
+                    )
                 return False
             container_kwargs["network"] = Config.DOCKER_NETWORK
             if app_logger:
@@ -367,55 +341,46 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
         else:
             if app_logger:
                 app_logger.info(f"[{job_id}] Using Docker default bridge network")
-        
+
         if app_logger:
             app_logger.info(f"[{job_id}] Starting container with storage limit: {storage_limit}GB")
-        
+
         # Run agent container
-        container = DOCKER_CLIENT.containers.run(
-            image_tag,
-            **container_kwargs
-        )
-        
+        container = DOCKER_CLIENT.containers.run(image_tag, **container_kwargs)
+
         if app_logger:
             app_logger.info(f"[{job_id}] Container created and started: {container.id[:12]}")
-        
+
         try:
             # Wait for container to complete and stream logs
             if app_logger:
                 app_logger.info(f"[{job_id}] Waiting for container to complete...")
-            
+
             line_count = 0
             for line in container.logs(stream=True, follow=True):
-                message = line.decode('utf-8').strip()
+                message = line.decode("utf-8").strip()
                 if message:
                     # Strip ANSI color codes from container output
-                    message = ANSI_ESCAPE_RE.sub('', message)
+                    message = ANSI_ESCAPE_RE.sub("", message)
                     line_count += 1
                     if app_logger:
                         app_logger.info(f"[{job_id}] [Agent] {message}")
                     if emit_event:
-                        emit_event(job_id, {
-                            "step": "agent_output",
-                            "message": message
-                        })
-            
+                        emit_event(job_id, {"step": "agent_output", "message": message})
+
             # Wait for container to exit
             result = container.wait(timeout=30)
             exit_code = result.get("StatusCode", -1)
-            
+
             if app_logger:
                 app_logger.info(f"[{job_id}] Container exited with code: {exit_code}")
                 app_logger.info(f"[{job_id}] === Agent Container Success ===")
-            
+
             if emit_event:
-                emit_event(job_id, {
-                    "step": "agent_completed",
-                    "message": "Agent completed analysis"
-                })
-            
+                emit_event(job_id, {"step": "agent_completed", "message": "Agent completed analysis"})
+
             return True
-        
+
         finally:
             # Clean up
             try:
@@ -432,16 +397,13 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
             except Exception as e:
                 if app_logger:
                     app_logger.warning(f"[{job_id}] Container cleanup warning: {e}")
-    
+
     except Exception as e:
         if app_logger:
             app_logger.error(f"[{job_id}] === Agent Container Failed ===")
             app_logger.error(f"[{job_id}] Exception: {type(e).__name__}: {str(e)}")
-        
+
         if emit_event:
-            emit_event(job_id, {
-                "step": "error",
-                "message": f"Agent execution failed: {str(e)}"
-            })
-        
+            emit_event(job_id, {"step": "error", "message": f"Agent execution failed: {str(e)}"})
+
         return False

@@ -1,19 +1,20 @@
 """Evaluation service - reproducibility evaluation and plugin checking."""
 
+import hashlib
 import json
 import re
 import time
-import hashlib
-from typing import List, Dict, Optional, Any
-from config import Config
-from models.database import PaperAnalysis, ExecutionDetails, Artifact, Job, PluginEvaluation
-from repositories import PaperAnalysisRepository, ExecutionDetailsRepository, PluginEvaluationRepository, JobRepository
-from services.cache_service import get_cached_evaluation, store_evaluation_cache
+from typing import Dict, List, Optional
 
+from config import Config
+from models.database import Artifact, Job, PaperAnalysis, PluginEvaluation
+from repositories import ExecutionDetailsRepository, PaperAnalysisRepository
+from services.cache_service import get_cached_evaluation, store_evaluation_cache
 
 # ============================================================================
 # Logger Utility - Handle both functions and logger objects
 # ============================================================================
+
 
 def _log(logger, level: str, message: str):
     """
@@ -23,7 +24,7 @@ def _log(logger, level: str, message: str):
     """
     if not logger:
         return
-    
+
     if callable(logger) and not hasattr(logger, level):
         # It's a function, not a logger object
         logger(f"[{level.upper()}] {message}")
@@ -82,6 +83,7 @@ PLUGIN_TEMPLATE = """{plugin_name}: {plugin_prompt}
 # Phase 4: Unified Evaluation Pipeline Functions
 # ============================================================================
 
+
 def render_evaluation_prompt(
     plugins: List[Dict[str, str]],
     paper_content: str,
@@ -106,18 +108,15 @@ def render_evaluation_prompt(
     # Build plugins section (simple list format for JSON response)
     plugins_text = ""
     for plugin in plugins:
-        prompt_to_use = plugin.get('prompt_to_use', plugin.get('prompt', ''))
-        plugins_text += PLUGIN_TEMPLATE.format(
-            plugin_name=plugin['name'],
-            plugin_prompt=prompt_to_use
-        )
+        prompt_to_use = plugin.get("prompt_to_use", plugin.get("prompt", ""))
+        plugins_text += PLUGIN_TEMPLATE.format(plugin_name=plugin["name"], plugin_prompt=prompt_to_use)
 
     # Render full prompt with context (truncate to reasonable sizes)
     full_prompt = PLUGIN_EVAL_TEMPLATE.format(
         paper_content=paper_content[:20000] if paper_content else "",
         code_output=code_output[:10000] if code_output else "",
         execution_log=execution_log[:5000] if execution_log else "",
-        plugins_list=plugins_text
+        plugins_list=plugins_text,
     )
 
     return full_prompt
@@ -149,16 +148,16 @@ def parse_evaluation_response(
     results = {}
 
     # Create lookup map: plugin name -> plugin id
-    plugin_lookup = {plugin['name']: str(plugin['id']) for plugin in plugins}
+    plugin_lookup = {plugin["name"]: str(plugin["id"]) for plugin in plugins}
 
     try:
         # Extract JSON from response (handle wrapped ```json blocks)
         json_text = response_text.strip()
 
-        if '```json' in json_text:
-            json_text = json_text.split('```json')[1].split('```')[0].strip()
-        elif '```' in json_text:
-            json_text = json_text.split('```')[1].split('```')[0].strip()
+        if "```json" in json_text:
+            json_text = json_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in json_text:
+            json_text = json_text.split("```")[1].split("```")[0].strip()
 
         # Parse JSON
         parsed = json.loads(json_text)
@@ -170,18 +169,18 @@ def parse_evaluation_response(
             items = parsed
         else:
             if logger:
-                _log(logger, "error", f"[PARSE] Invalid JSON structure: expected array or object with 'evaluations' key")
+                _log(logger, "error", "[PARSE] Invalid JSON structure: expected array or object with 'evaluations' key")
             return results
 
         # Process each evaluation item
         for item in items:
-            plugin_name = item.get('plugin') or item.get('name')
-            status = (item.get('status') or 'UNCLEAR').upper()
-            reasoning = item.get('reasoning', '')
+            plugin_name = item.get("plugin") or item.get("name")
+            status = (item.get("status") or "UNCLEAR").upper()
+            reasoning = item.get("reasoning", "")
 
             # Validate status
-            if status not in ['PASS', 'FAIL', 'UNCLEAR']:
-                status = 'UNCLEAR'
+            if status not in ["PASS", "FAIL", "UNCLEAR"]:
+                status = "UNCLEAR"
 
             # Find plugin ID by name
             plugin_id = plugin_lookup.get(plugin_name)
@@ -192,20 +191,20 @@ def parse_evaluation_response(
                 continue
 
             # Find full plugin info (name, description, etc.)
-            plugin_info = next((p for p in plugins if str(p['id']) == plugin_id), None)
-            plugin_display_name = plugin_info.get('name', plugin_name) if plugin_info else plugin_name
-            plugin_description = plugin_info.get('description', '') if plugin_info else ''
+            plugin_info = next((p for p in plugins if str(p["id"]) == plugin_id), None)
+            plugin_display_name = plugin_info.get("name", plugin_name) if plugin_info else plugin_name
+            plugin_description = plugin_info.get("description", "") if plugin_info else ""
 
             # Clean up markdown formatting from reasoning (if any)
-            reasoning = reasoning.lstrip('* ')
-            reasoning = re.sub(r'\s*-+\s*$', '', reasoning)
+            reasoning = reasoning.lstrip("* ")
+            reasoning = re.sub(r"\s*-+\s*$", "", reasoning)
             reasoning = reasoning[:500]  # Max 500 chars
 
             results[plugin_id] = {
                 "plugin_name": plugin_display_name,
                 "plugin_description": plugin_description,
                 "status": status,
-                "reasoning": reasoning
+                "reasoning": reasoning,
             }
 
             # Log result
@@ -280,21 +279,15 @@ def evaluate_paper(
         if app_logger:
             app_logger.info(f"[Job {job_id}] Calling LLM for evaluation ({len(plugins)} plugins)")
 
-        response = llm_provider.complete(
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }],
-            max_tokens=3000
-        )
+        response = llm_provider.complete(messages=[{"role": "user", "content": prompt}], max_tokens=3000)
 
         # Parse response with detailed logging
         evidence = parse_evaluation_response(response, plugins, logger=app_logger)
 
         # Log summary
-        passed = sum(1 for r in evidence.values() if r.get('status') == 'PASS')
-        failed = sum(1 for r in evidence.values() if r.get('status') == 'FAIL')
-        unclear = sum(1 for r in evidence.values() if r.get('status') == 'UNCLEAR')
+        passed = sum(1 for r in evidence.values() if r.get("status") == "PASS")
+        failed = sum(1 for r in evidence.values() if r.get("status") == "FAIL")
+        unclear = sum(1 for r in evidence.values() if r.get("status") == "UNCLEAR")
         if app_logger:
             app_logger.info(f"[Job {job_id}] Parsed evaluation results: {len(evidence)} plugins")
             app_logger.info(f"[Job {job_id}] Evaluation summary: {passed} PASS, {failed} FAIL, {unclear} UNCLEAR")
@@ -302,10 +295,14 @@ def evaluate_paper(
 
             # Log failed plugins with reasoning
             for plugin_id, result in evidence.items():
-                if result.get('status') == 'FAIL':
-                    plugin_info = next((p for p in plugins if str(p['id']) == plugin_id), None)
-                    plugin_name = plugin_info.get('name', plugin_id) if plugin_info else plugin_id
-                    _log(app_logger, "warning", f"[Job {job_id}] FAILED: {plugin_name} - {result.get('reasoning', 'No reasoning')[:150]}")
+                if result.get("status") == "FAIL":
+                    plugin_info = next((p for p in plugins if str(p["id"]) == plugin_id), None)
+                    plugin_name = plugin_info.get("name", plugin_id) if plugin_info else plugin_id
+                    _log(
+                        app_logger,
+                        "warning",
+                        f"[Job {job_id}] FAILED: {plugin_name} - {result.get('reasoning', 'No reasoning')[:150]}",
+                    )
 
         # NOTE: Do NOT save the job here - let the orchestrator handle all job saves
         return evidence
@@ -322,42 +319,34 @@ def evaluate_reproducibility_plugins(job_id, llm_provider, app_logger=None, emit
     Runs after agent completes successfully.
     """
     stage3_start = time.time()
-    
+
     try:
         if app_logger:
             app_logger.info(f"[{job_id}] === STAGE 3: Plugin Evaluation Starting ===")
-        
+
         # Fetch all data using Peewee ORM
         paper_analysis_model = PaperAnalysisRepository.get(job_id)
         execution_details_model = ExecutionDetailsRepository.get(job_id)
-        
+
         # Fetch artifacts
         artifacts_models = list(Artifact.select().where(Artifact.job == job_id))
         artifacts = [
-            {
-                "url": a.url,
-                "artifact_type": a.artifact_type,
-                "description": a.description
-            }
-            for a in artifacts_models
+            {"url": a.url, "artifact_type": a.artifact_type, "description": a.description} for a in artifacts_models
         ]
-        
+
         if not paper_analysis_model or not execution_details_model:
             missing = []
             if not paper_analysis_model:
                 missing.append("paper_analysis")
             if not execution_details_model:
                 missing.append("execution_details")
-            
+
             if app_logger:
                 app_logger.warning(f"[{job_id}] Missing data for evaluation: {', '.join(missing)}")
             if emit_event:
-                emit_event(job_id, {
-                    "step": "evaluation_skipped",
-                    "message": f"Skipped: Missing {', '.join(missing)}"
-                })
+                emit_event(job_id, {"step": "evaluation_skipped", "message": f"Skipped: Missing {', '.join(missing)}"})
             return False
-        
+
         # Convert models to dicts for prompt building
         paper_analysis = {
             "pdf_hash": paper_analysis_model.pdf_hash,
@@ -367,9 +356,11 @@ def evaluate_reproducibility_plugins(job_id, llm_provider, app_logger=None, emit
             "methodology": paper_analysis_model.methodology,
             "dependencies": paper_analysis_model.dependencies,
             "dataset_description": paper_analysis_model.dataset_description,
-            "claimed_results": paper_analysis_model.get_claimed_results() if hasattr(paper_analysis_model, 'get_claimed_results') else json.loads(paper_analysis_model.claimed_results or "{}")
+            "claimed_results": paper_analysis_model.get_claimed_results()
+            if hasattr(paper_analysis_model, "get_claimed_results")
+            else json.loads(paper_analysis_model.claimed_results or "{}"),
         }
-        
+
         execution_details = {
             "stdout_combined": execution_details_model.stdout_combined,
             "commands_run": execution_details_model.commands_run,
@@ -377,44 +368,47 @@ def evaluate_reproducibility_plugins(job_id, llm_provider, app_logger=None, emit
             "errors_summary": execution_details_model.errors_summary,
             "test_info": execution_details_model.test_info,
             "randomness_info": execution_details_model.randomness_info,
-            "discovered_files": execution_details_model.get_discovered_files() if hasattr(execution_details_model, 'get_discovered_files') else json.loads(execution_details_model.discovered_files or "[]"),
-            "actual_results": execution_details_model.get_actual_results() if hasattr(execution_details_model, 'get_actual_results') else json.loads(execution_details_model.actual_results or "{}")
+            "discovered_files": execution_details_model.get_discovered_files()
+            if hasattr(execution_details_model, "get_discovered_files")
+            else json.loads(execution_details_model.discovered_files or "[]"),
+            "actual_results": execution_details_model.get_actual_results()
+            if hasattr(execution_details_model, "get_actual_results")
+            else json.loads(execution_details_model.actual_results or "{}"),
         }
-        
+
         # Build evaluation prompt
         prompt = _build_evaluation_prompt(paper_analysis, execution_details, artifacts)
-        
+
         # Check evaluation cache
-        paper_hash = paper_analysis.get("pdf_hash") or hashlib.md5(paper_analysis.get("extracted_text", "").encode()).hexdigest()
+        paper_hash = (
+            paper_analysis.get("pdf_hash") or hashlib.md5(paper_analysis.get("extracted_text", "").encode()).hexdigest()
+        )
         code_hash = hashlib.md5(execution_details.get("stdout_combined", "").encode()).hexdigest()
-        
+
         # Check cache only if caching is enabled
         cached_evaluation = None
         if Config.ENABLE_CACHING:
             cached_evaluation = get_cached_evaluation(paper_hash, code_hash)
-        
+
         if cached_evaluation:
             if app_logger:
                 app_logger.info(f"[{job_id}] Cache hit for evaluation")
             if emit_event:
-                emit_event(job_id, {
-                    "step": "cache_hit_evaluation",
-                    "message": "Using cached evaluation results"
-                    # NOTE: Do NOT emit progress here - orchestrator controls all progress
-                })
+                emit_event(
+                    job_id,
+                    {
+                        "step": "cache_hit_evaluation",
+                        "message": "Using cached evaluation results",
+                        # NOTE: Do NOT emit progress here - orchestrator controls all progress
+                    },
+                )
             evaluation_results = cached_evaluation
         else:
             if app_logger:
                 app_logger.info(f"[{job_id}] Calling {llm_provider.get_name()} for plugin evaluation...")
-            
-            response_text = llm_provider.complete(
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }],
-                max_tokens=3000
-            )
-            
+
+            response_text = llm_provider.complete(messages=[{"role": "user", "content": prompt}], max_tokens=3000)
+
             # Parse response
             try:
                 evaluation_results = json.loads(response_text)
@@ -427,11 +421,11 @@ def evaluate_reproducibility_plugins(job_id, llm_provider, app_logger=None, emit
                     evaluation_results = json.loads(json_str)
                 else:
                     raise ValueError("Could not parse evaluation response")
-            
+
             # Cache the results only if caching is enabled
             if Config.ENABLE_CACHING:
                 store_evaluation_cache(paper_hash, code_hash, evaluation_results)
-        
+
         # Store evaluation results using Peewee ORM
         for eval_item in evaluation_results.get("evaluations", []):
             PluginEvaluation.create(
@@ -442,9 +436,9 @@ def evaluate_reproducibility_plugins(job_id, llm_provider, app_logger=None, emit
                 evidence=eval_item.get("evidence"),
                 paper_supports=eval_item.get("paper_supports"),
                 code_supports=eval_item.get("code_supports"),
-                conclusion=eval_item.get("conclusion")
+                conclusion=eval_item.get("conclusion"),
             )
-        
+
         # Update job report
         try:
             job = Job.get_by_id(job_id)
@@ -453,31 +447,31 @@ def evaluate_reproducibility_plugins(job_id, llm_provider, app_logger=None, emit
                 report["plugin_evaluations"] = evaluation_results.get("evaluations", [])
                 job.set_report(report)
                 job.save()
-        except:
+        except Exception:
             pass
-        
+
         # Emit completion (without progress - orchestrator controls progress)
         stage3_duration = int((time.time() - stage3_start) * 1000)
         if emit_event:
-            emit_event(job_id, {
-                "step": "evaluation_complete",
-                "message": f"Evaluated {len(evaluation_results.get('evaluations', []))} plugins",
-                "stage_duration_ms": stage3_duration
-            })
-        
+            emit_event(
+                job_id,
+                {
+                    "step": "evaluation_complete",
+                    "message": f"Evaluated {len(evaluation_results.get('evaluations', []))} plugins",
+                    "stage_duration_ms": stage3_duration,
+                },
+            )
+
         if app_logger:
             app_logger.info(f"[{job_id}] === PLUGIN EVALUATION COMPLETE in {stage3_duration}ms ===")
-        
+
         return True
-    
+
     except Exception as e:
         if app_logger:
             app_logger.error(f"[{job_id}] Error in plugin evaluation: {e}", exc_info=True)
         if emit_event:
-            emit_event(job_id, {
-                "step": "error",
-                "message": f"Plugin evaluation failed: {str(e)}"
-            })
+            emit_event(job_id, {"step": "error", "message": f"Plugin evaluation failed: {str(e)}"})
         return False
 
 
