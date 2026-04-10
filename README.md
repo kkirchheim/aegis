@@ -12,8 +12,8 @@ Prototype implementation for *"Towards Supporting Software Artefact Review via L
 
 ### Setup
 ```bash
-git clone https://github.com/kkirchheim/paper-reproducibility.git
-cd paper-reproducibility
+git clone https://github.com/kkirchheim/artifact-review.git
+cd artifact-review
 
 cp .env.example .env
 # Edit .env and set your ANTHROPIC_API_KEY
