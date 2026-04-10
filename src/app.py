@@ -28,7 +28,11 @@ DATABASE = Config.DATABASE
 def create_app():
     """Create and configure Flask application."""
     
-    app = Flask(__name__)
+    app = Flask(
+        __name__,
+        template_folder=os.path.join(os.path.dirname(__file__), '..', 'web', 'templates'),
+        static_folder=os.path.join(os.path.dirname(__file__), '..', 'web', 'static'),
+    )
 
     # Load configuration
     app.config.from_object(Config)

@@ -2,13 +2,8 @@ FROM python:3.11
 
 WORKDIR /app
 
-# Install system dependencies for reproducible code execution
-# - git: Clone repositories
-# - build-essential: Compile Python packages with C extensions (numpy, scipy, etc.)
-# - python3-dev: Python development headers for packages needing compilation
-# - curl: Fetch remote resources
-# - git-lfs: Handle large files in repos
-# - ca-certificates: SSL/TLS support for package downloads
+# Install system dependencies + GNU Octave (MATLAB-compatible)
+# Octave provides near-complete MATLAB compatibility for .m scripts
 RUN apt-get update && apt-get install -y \
     git \
     git-lfs \
@@ -16,44 +11,49 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     python3-dev \
     ca-certificates \
+    octave \
+    octave-signal \
+    octave-statistics \
+    octave-image \
+    octave-io \
+    octave-optim \
+    octave-control \
+    octave-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
-# Running as root causes permission issues and is a security risk
 RUN groupadd -r agent && useradd -r -g agent -m agent
 
 # Create app directory with correct ownership
 RUN mkdir -p /app && chown -R agent:agent /app
 
 # Copy agent script
-COPY --chown=agent:agent agent.py .
+COPY --chown=agent:agent agent/agent.py .
 
 # Create workspace directory for repo analysis
-# This persists across containers
 RUN mkdir -p /workspace/repo && chown -R agent:agent /workspace
 
 # Switch to non-root user
 USER agent
 
 # Create Python virtual environment in user's home
-# This isolates dependencies and prevents global conflicts
 ENV VENV=/home/agent/venv
 RUN python -m venv $VENV
 ENV PATH="$VENV/bin:$PATH"
 
-# Install agent dependencies in virtual environment
-# Upgrade pip first to ensure compatibility
+# Install agent dependencies + scientific Python stack
+# (many MATLAB repos also include Python helper scripts)
 RUN pip install --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir requests
+    pip install --no-cache-dir \
+    requests \
+    numpy \
+    scipy \
+    matplotlib \
+    oct2py
 
 # Set working directory for code execution
 WORKDIR /workspace
 
-# Run agent (receives REPO_URL, JOB_ID, BACKEND_URL via environment)
-# The agent will:
-# 1. Clone repository to /workspace/repo
-# 2. Execute commands in isolated environment
-# 3. Report back to backend via API
 # PYTHONUNBUFFERED ensures print() output is immediately visible in container logs
 ENV PYTHONUNBUFFERED=1
 ENTRYPOINT ["python", "/app/agent.py"]

@@ -21,10 +21,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create directories
-RUN mkdir -p uploads logs
+RUN mkdir -p data/uploads logs
+
+# Application source is in src/
+ENV PYTHONPATH=/app/src
 
 # Expose port
 EXPOSE 5000
 
 # Run Flask app
-CMD ["python", "app.py"]
+CMD ["python", "src/app.py"]

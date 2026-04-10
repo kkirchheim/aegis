@@ -6,6 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Artifact Review — a Flask web app that analyzes academic papers for reproducibility. It runs a three-stage pipeline: (1) extract artifacts from PDF, (2) generate evidence by executing code in sandboxed Docker containers, (3) assess results via LLM evaluation across multiple dimensions. The agent containers communicate back to the Flask backend via HTTP (never direct DB access).
 
+## Directory Structure
+
+```
+src/           # Application source (blueprints, services, models, repositories, schemas, llm, utils, app.py, config.py)
+agent/         # Agent code + agent Dockerfiles (standalone, no imports from src/)
+web/           # Frontend assets (static/, templates/)
+tests/         # Test suite
+docker/        # Main app Dockerfile
+scripts/       # CLI tools
+docs/          # Documentation
+```
+
+All imports use bare module names (e.g., `from models.database import X`). The `src/` directory is added to Python's module search path via `PYTHONPATH` (Docker) or `sys.path` (tests/scripts).
+
 ## Commands
 
 ### Run the app (Docker)
@@ -16,7 +30,7 @@ docker-compose logs -f        # view logs
 
 ### Run the app (local Python)
 ```bash
-python app.py                 # requires ANTHROPIC_API_KEY in env
+PYTHONPATH=src python src/app.py   # requires ANTHROPIC_API_KEY in env
 ```
 
 ### Tests
@@ -26,34 +40,35 @@ pytest tests/test_api.py -v   # single file
 pytest tests/test_api.py::TestClassName::test_name -v  # single test
 pytest -m unit                # only unit tests
 pytest -m integration         # only integration tests
-pytest tests/ --cov=.         # with coverage
+pytest tests/ --cov=src       # with coverage
 ```
 
 Tests use a temp SQLite database per test (no real API key needed — conftest.py sets a dummy). No Docker or external services required for the test suite.
 
 ### Lint & format
 ```bash
-black app.py agent.py tests/ --line-length=120
-flake8 app.py agent.py tests/ --max-line-length=120
-mypy app.py --ignore-missing-imports
+black src/ agent/ tests/ --line-length=120
+flake8 src/ agent/ tests/ --max-line-length=120
+mypy src/app.py --ignore-missing-imports
 ```
 
 ### Build agent containers
 ```bash
-docker build -t paper-reproducibility-agent:latest -f docker/Dockerfile.agent .
-docker build -t paper-reproducibility-agent-ml:latest -f docker/Dockerfile.agent-ml .
+docker build -t paper-reproducibility-agent:latest -f agent/Dockerfile .
+docker build -t paper-reproducibility-agent-ml:latest -f agent/Dockerfile.ml .
+docker build -t paper-reproducibility-agent-matlab:latest -f agent/Dockerfile.matlab .
 ```
 
 ## Architecture
 
-- **Flask app** (`app.py`): Entry point, creates app via `create_app()` factory pattern
-- **Blueprints** (`blueprints/`): Route handlers — `api.py` (agent communication), `jobs.py` (job CRUD + upload), `auth.py`, `admin.py`, `plugins.py`
-- **Services** (`services/`): Business logic layer. `PipelineOrchestrator` is the main entry point that coordinates the three stages through `AnalysisService` → `DockerService` → `EvaluationService`. `EventDispatcher` is the central event hub persisting progress to the DB
-- **Models** (`models/database.py`): Peewee ORM models — `User`, `Job`, `Event`, `PaperAnalysis`, `ExecutionDetails`, `Artifact`, `ChatSession`, `ChatMessage`, plus cache models
-- **Repositories** (`repositories/`): Data access layer wrapping Peewee queries
-- **LLM** (`llm/`): Provider abstraction with `factory.py` selecting between `AnthropicProvider` and `OllamaProvider` based on config
-- **Agent** (`agent.py`): Runs inside Docker containers, communicates with backend via `/api/agent/*` endpoints
-- **Schemas** (`schemas/`): Request/response validation schemas
+- **Flask app** (`src/app.py`): Entry point, creates app via `create_app()` factory pattern
+- **Blueprints** (`src/blueprints/`): Route handlers — `api.py` (agent communication), `jobs.py` (job CRUD + upload), `auth.py`, `admin.py`, `plugins.py`
+- **Services** (`src/services/`): Business logic layer. `PipelineOrchestrator` is the main entry point that coordinates the three stages through `AnalysisService` → `DockerService` → `EvaluationService`. `EventDispatcher` is the central event hub persisting progress to the DB
+- **Models** (`src/models/database.py`): Peewee ORM models — `User`, `Job`, `Event`, `PaperAnalysis`, `ExecutionDetails`, `Artifact`, `ChatSession`, `ChatMessage`, plus cache models
+- **Repositories** (`src/repositories/`): Data access layer wrapping Peewee queries
+- **LLM** (`src/llm/`): Provider abstraction with `factory.py` selecting between `AnthropicProvider` and `OllamaProvider` based on config
+- **Agent** (`agent/agent.py`): Runs inside Docker containers, communicates with backend via `/api/agent/*` endpoints
+- **Schemas** (`src/schemas/`): Request/response validation schemas
 
 ## Key Patterns
 

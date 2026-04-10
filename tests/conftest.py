@@ -37,7 +37,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "event: mark test as event/streaming test")
 
 # Add parent directory to path so 'app' module can be imported
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
 from config import Config
 from models.database import init_db

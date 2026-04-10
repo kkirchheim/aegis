@@ -26,7 +26,7 @@ RUN groupadd -r agent && useradd -r -g agent -m agent
 RUN mkdir -p /app && chown -R agent:agent /app
 
 # Copy agent script
-COPY --chown=agent:agent agent.py .
+COPY --chown=agent:agent agent/agent.py .
 
 # Create workspace directory for repo analysis
 # This persists across containers

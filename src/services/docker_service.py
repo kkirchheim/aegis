@@ -20,7 +20,7 @@ DOCKER_AVAILABLE = False
 AGENT_IMAGES = {
     "standard": {
         "tag": "paper-reproducibility-agent:latest",
-        "dockerfile": "docker/Dockerfile.agent",
+        "dockerfile": "agent/Dockerfile",
         "environment_info": (
             "Python 3.11 container with pip, git, curl, and build-essential. "
             "Use pip to install any Python dependencies."
@@ -28,7 +28,7 @@ AGENT_IMAGES = {
     },
     "ml": {
         "tag": "paper-reproducibility-agent-ml:latest",
-        "dockerfile": "docker/Dockerfile.agent-ml",
+        "dockerfile": "agent/Dockerfile.ml",
         "environment_info": (
             "Python 3.11 ML container. Pre-installed: PyTorch, scikit-learn, scipy, "
             "numpy, pandas, matplotlib. Use pip to install additional Python packages."
@@ -36,7 +36,7 @@ AGENT_IMAGES = {
     },
     "matlab": {
         "tag": "paper-reproducibility-agent-matlab:latest",
-        "dockerfile": "docker/Dockerfile.agent-matlab",
+        "dockerfile": "agent/Dockerfile.matlab",
         "environment_info": (
             "Python 3.11 + GNU Octave container (MATLAB-compatible). "
             "Pre-installed: octave, octave-signal, octave-statistics, octave-image, "

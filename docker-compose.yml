@@ -32,6 +32,9 @@ services:
 
       # Caching Configuration
       - ENABLE_CACHING=false
+
+      # Python path (application source is in src/)
+      - PYTHONPATH=/app/src
     
     volumes:
       # Docker-in-Docker: allow container to spawn other containers
@@ -39,7 +42,7 @@ services:
       # Persist database and uploads
       - ./data:/app/data
       # Live code reload for development
-      # - .:/app
+      - .:/app
     
     networks:
       - repro-network
