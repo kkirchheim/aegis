@@ -55,11 +55,15 @@ class Config:
     # Flag to indicate if using auto-generated SECRET_KEY
     _USING_AUTO_GENERATED_SECRET_KEY = not os.getenv('SECRET_KEY')
     
+    # Data directory (database + uploads)
+    DATA_DIR = Path(os.getenv('DATA_DIR', 'data'))
+    DATA_DIR.mkdir(exist_ok=True)
+
     # Database
-    DATABASE = os.getenv('DATABASE_PATH', 'reproducibility.db')
-    
+    DATABASE = os.getenv('DATABASE_PATH', str(DATA_DIR / 'reproducibility.db'))
+
     # File uploads
-    UPLOAD_FOLDER = Path("uploads")
+    UPLOAD_FOLDER = DATA_DIR / "uploads"
     UPLOAD_FOLDER.mkdir(exist_ok=True)
     THUMBNAILS_FOLDER = UPLOAD_FOLDER / "thumbnails"
     THUMBNAILS_FOLDER.mkdir(exist_ok=True)

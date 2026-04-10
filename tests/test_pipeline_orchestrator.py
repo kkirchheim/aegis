@@ -58,7 +58,8 @@ class TestPipelineOrchestrator:
                 "job123",
                 "/path/to/pdf.pdf",
                 Mock(),  # config
-                Mock()   # llm_provider
+                Mock(),  # llm_provider
+                manual_artifacts=[]
             )
 
             assert result is True
@@ -83,7 +84,8 @@ class TestPipelineOrchestrator:
                 "job123",
                 "/path/to/pdf.pdf",
                 Mock(),  # config
-                Mock()   # llm_provider
+                Mock(),  # llm_provider
+                manual_artifacts=[]
             )
             
             assert result is False
@@ -108,7 +110,8 @@ class TestPipelineOrchestrator:
                 "job123",
                 "/path/to/pdf.pdf",
                 Mock(),  # config
-                Mock()   # llm_provider
+                Mock(),  # llm_provider
+                manual_artifacts=[]
             )
 
             assert result is False
@@ -132,6 +135,37 @@ class TestPipelineOrchestrator:
             assert result is True
             mock_extract.assert_called_once()
             mock_store.assert_called_once_with("job123", artifacts)
+
+    def test_run_stage_1_merges_manual_artifacts(self):
+        """Test stage 1 merges extracted and manual artifacts without duplicates."""
+        orchestrator = PipelineOrchestrator(logger=lambda msg: None)
+
+        with patch('services.pipeline_orchestrator.extract_and_analyze_pdf') as mock_extract, \
+             patch('services.pipeline_orchestrator.store_artifacts') as mock_store:
+
+            extracted_artifacts = [
+                {"type": "dataset", "url": "https://example.com/data", "description": "Dataset"},
+                {"type": "github_repo", "url": "https://github.com/user/repo", "description": "Extracted repo"},
+            ]
+            manual_artifacts = [
+                {"type": "github_repo", "url": "https://github.com/user/repo", "description": "Manual repo"},
+                {"url": "https://github.com/user/extra-repo", "description": "Manual extra repo"},
+            ]
+            mock_extract.return_value = ("text", {"artifacts": extracted_artifacts})
+
+            result = orchestrator._run_stage_1(
+                "job123",
+                "/path/to/pdf.pdf",
+                Mock(),
+                manual_artifacts=manual_artifacts
+            )
+
+            assert result is True
+            mock_store.assert_called_once_with("job123", [
+                {"type": "dataset", "url": "https://example.com/data", "description": "Dataset"},
+                {"type": "github_repo", "url": "https://github.com/user/repo", "description": "Extracted repo"},
+                {"type": "github_repo", "url": "https://github.com/user/extra-repo", "description": "Manual extra repo"},
+            ])
     
     def test_run_stage_2_executes_github_artifacts(self):
         """Test stage 2: execute code from GitHub artifacts."""
@@ -147,6 +181,21 @@ class TestPipelineOrchestrator:
             assert result is True
             # Should spawn agent for each artifact
             assert mock_spawn.call_count == 2
+
+    def test_run_stage_2_executes_manually_provided_github_artifact(self):
+        """Test stage 2 executes a manually supplied GitHub artifact URL."""
+        orchestrator = PipelineOrchestrator(logger=lambda msg: None)
+        orchestrator._artifacts = [
+            {"type": "github_repo", "url": "https://github.com/user/manual-repo"},
+            {"type": "other", "url": "https://example.com/not-executed"},
+        ]
+
+        with patch('services.pipeline_orchestrator.spawn_agent_container') as mock_spawn:
+            result = orchestrator._run_stage_2("job123", Mock())
+
+            assert result is True
+            mock_spawn.assert_called_once()
+            assert mock_spawn.call_args[0][1] == "https://github.com/user/manual-repo"
     
     def test_run_stage_2_handles_agent_failure(self):
         """Test stage 2: handles agent failure gracefully."""

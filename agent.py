@@ -22,6 +22,8 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://host.docker.internal:5000")
 MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "15"))
 COMMAND_TIMEOUT = 300  # 5 minutes per command
 REPO_PATH = "/workspace/repo"
+CONTAINER_INFO = os.getenv("CONTAINER_INFO", "")
+AGENT_INSTRUCTIONS = os.getenv("AGENT_INSTRUCTIONS", "")
 
 # Color codes for terminal output
 class Color:
@@ -669,7 +671,9 @@ def main():
         "iteration": 0,
         "max_iterations": MAX_ITERATIONS,
         "executed_commands": [],  # Track all commands
-        "combined_output": ""     # Accumulate all output
+        "combined_output": "",    # Accumulate all output
+        "container_info": CONTAINER_INFO,
+        "agent_instructions": AGENT_INSTRUCTIONS,
     }
     
     # Step 3: List files in repo

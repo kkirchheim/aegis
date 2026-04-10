@@ -79,6 +79,10 @@ def create_app():
     limiter.limit("5 per minute")(app.view_functions.get("api.api_login"))
     limiter.limit("3 per minute")(app.view_functions.get("api.api_register"))
     limiter.limit("10 per minute")(app.view_functions.get("api.upload_pdf"))
+
+    # Exempt high-frequency polling endpoints from the global rate limit
+    limiter.exempt(app.view_functions.get("api.get_job_full"))
+    limiter.exempt(app.view_functions.get("api.get_chat_history_endpoint"))
     
     # Initialize API documentation (FlaskApiSpec)
     app.config.update({

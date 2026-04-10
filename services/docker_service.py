@@ -21,10 +21,29 @@ AGENT_IMAGES = {
     "standard": {
         "tag": "paper-reproducibility-agent:latest",
         "dockerfile": "docker/Dockerfile.agent",
+        "environment_info": (
+            "Python 3.11 container with pip, git, curl, and build-essential. "
+            "Use pip to install any Python dependencies."
+        ),
     },
     "ml": {
         "tag": "paper-reproducibility-agent-ml:latest",
         "dockerfile": "docker/Dockerfile.agent-ml",
+        "environment_info": (
+            "Python 3.11 ML container. Pre-installed: PyTorch, scikit-learn, scipy, "
+            "numpy, pandas, matplotlib. Use pip to install additional Python packages."
+        ),
+    },
+    "matlab": {
+        "tag": "paper-reproducibility-agent-matlab:latest",
+        "dockerfile": "docker/Dockerfile.agent-matlab",
+        "environment_info": (
+            "Python 3.11 + GNU Octave container (MATLAB-compatible). "
+            "Pre-installed: octave, octave-signal, octave-statistics, octave-image, "
+            "octave-io, octave-optim, octave-control. Also: numpy, scipy, matplotlib, oct2py. "
+            "Run .m scripts with: octave --no-gui --eval \"run('script.m')\" "
+            "Do NOT attempt to install MATLAB or Octave — Octave is already installed."
+        ),
     },
 }
 
@@ -302,6 +321,10 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
         max_iterations = config.get("max_iterations", 15)
         cpu_limit = config.get("cpu_limit", 2)
 
+        # Container environment info for the agent prompt
+        environment_info = AGENT_IMAGES.get(image_type, {}).get("environment_info", "")
+        agent_instructions = config.get("agent_instructions", "")
+
         # Prepare network configuration
         # If DOCKER_NETWORK is empty, Docker uses default bridge network
         container_kwargs = {
@@ -313,7 +336,9 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
                 "BACKEND_URL": backend_url,
                 "STORAGE_LIMIT": storage_limit_str,
                 "MAX_ITERATIONS": str(max_iterations),
-                "CHECKS": json.dumps(checks_data)
+                "CHECKS": json.dumps(checks_data),
+                "CONTAINER_INFO": environment_info,
+                "AGENT_INSTRUCTIONS": agent_instructions,
             },
             "mem_limit": memory_limit_str,
             "memswap_limit": memory_limit_str,

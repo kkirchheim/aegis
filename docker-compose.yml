@@ -14,9 +14,6 @@ services:
       - FLASK_ENV=development
       - FLASK_DEBUG=1
       
-      # Database Configuration
-      - DATABASE_PATH=reproducibility.db
-      
       # Docker Configuration
       - DOCKER_NETWORK=repro-network
       - DOCKER_BACKEND_URL=http://paper-reproducibility:5000
@@ -28,26 +25,30 @@ services:
       # Agent Configuration
       - AGENT_CONTEXT_LIMIT=100000
       
+      # Admin Credentials (optional — random password generated if unset)
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=changeme
+      - ADMIN_EMAIL=admin@example.com
+
       # Caching Configuration
       - ENABLE_CACHING=false
     
     volumes:
       # Docker-in-Docker: allow container to spawn other containers
       - /var/run/docker.sock:/var/run/docker.sock
-      # Persist uploads and logs
-      - ./uploads:/app/uploads
-      # - ./logs:/app/logs
+      # Persist database and uploads
+      - ./data:/app/data
       # Live code reload for development
-      - .:/app
+      # - .:/app
     
     networks:
       - repro-network
 
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.repro.rule=Host(`repro.selene.local`)"
-      - "traefik.http.routers.repro.entrypoints=web"
-      - "traefik.http.services.repro.loadbalancer.server.port=5000"
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.repro.rule=Host(`repro.selene.local`)"
+    #   - "traefik.http.routers.repro.entrypoints=web"
+    #   - "traefik.http.services.repro.loadbalancer.server.port=5000"
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]

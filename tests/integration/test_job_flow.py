@@ -26,6 +26,32 @@ class TestJobUpload:
         assert data["status"] == "pending"
         job_id = data["job_id"]
         assert len(job_id) > 0
+
+    def test_upload_pdf_with_manual_artifact_urls(self, authenticated_user, test_pdf_file, mock_upload_externals):
+        """Test uploading PDF with manual artifact URL overrides."""
+        response = authenticated_user.post('/api/job/upload',
+            data={
+                'pdf': (test_pdf_file, 'test.pdf'),
+                'manual_artifact_urls': 'https://github.com/example/repo\nhttps://example.com/artifact'
+            }
+        )
+
+        assert response.status_code == 202
+        data = response.get_json()
+        assert data["status"] == "pending"
+
+    def test_upload_pdf_rejects_invalid_manual_artifact_url(self, authenticated_user, test_pdf_file, mock_upload_externals):
+        """Test upload validation rejects malformed manual artifact URLs."""
+        response = authenticated_user.post('/api/job/upload',
+            data={
+                'pdf': (test_pdf_file, 'test.pdf'),
+                'manual_artifact_urls': 'not-a-url'
+            }
+        )
+
+        assert response.status_code == 400
+        data = response.get_json()
+        assert "Invalid artifact URL" in data["error"]
     
     def test_upload_pdf_unauthenticated(self, client, test_pdf_file):
         """Test upload requires authentication"""

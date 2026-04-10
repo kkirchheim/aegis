@@ -96,7 +96,37 @@
                     <!-- Configuration Options -->
                     <div class="divider my-4"></div>
                     <h3 class="font-semibold mb-3">Analysis Configuration</h3>
-                    
+
+                    <div class="mb-4">
+                        <label class="label" for="manualArtifactUrls">
+                            <span class="label-text">Artifact URL Override</span>
+                        </label>
+                        <textarea
+                            id="manualArtifactUrls"
+                            class="textarea textarea-bordered w-full"
+                            rows="3"
+                            placeholder="Optional: provide one or more artifact URLs, one per line"
+                        ></textarea>
+                        <label class="label">
+                            <span class="label-text-alt">These URLs will be added to any artifacts extracted from the paper.</span>
+                        </label>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="label" for="agentInstructions">
+                            <span class="label-text">Agent Instructions</span>
+                        </label>
+                        <textarea
+                            id="agentInstructions"
+                            class="textarea textarea-bordered w-full"
+                            rows="3"
+                            placeholder="Optional: custom instructions for the agent (e.g. 'Run only the experiments in Table 2', 'Skip the training step')"
+                        ></textarea>
+                        <label class="label">
+                            <span class="label-text-alt">These instructions will be passed to the agent alongside its default workflow.</span>
+                        </label>
+                    </div>
+
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <!-- Container Selection -->
                         <div>
@@ -106,6 +136,7 @@
                             <select id="dockerImageSelect" class="select select-bordered w-full">
                                 <option value="standard">Python (Default)</option>
                                 <option value="ml">Python ML (PyTorch, scikit-learn, scipy)</option>
+                                <option value="matlab">MATLAB/Octave (GNU Octave, signal, statistics)</option>
                             </select>
                         </div>
 

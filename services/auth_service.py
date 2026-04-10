@@ -1,6 +1,7 @@
 """Authentication service - password hashing, user queries, session logic."""
 
 import hashlib
+import os
 import secrets
 from repositories import UserRepository
 from models.database import User
@@ -54,39 +55,56 @@ def update_password(user_id, new_password):
 
 def create_default_admin_user(app_logger=None):
     """
-    Create default admin user if it doesn't exist.
-    
-    SECURITY: Default admin password is randomly generated on first run
-    and should be changed immediately after initial login.
+    Create or update admin user on startup.
+
+    Credentials can be configured via environment variables:
+        ADMIN_USERNAME  (default: "admin")
+        ADMIN_PASSWORD  (default: randomly generated)
+        ADMIN_EMAIL     (default: "admin@example.com")
+
+    When ADMIN_PASSWORD is set, the password is re-applied on every startup
+    so that container restarts converge to the configured state.
     """
+    admin_username = os.environ.get("ADMIN_USERNAME", "admin")
+    admin_password = os.environ.get("ADMIN_PASSWORD")
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com")
+
     try:
-        # Check if admin user exists
-        admin_user = UserRepository.get_by_username("admin")
-        
+        admin_user = UserRepository.get_by_username(admin_username)
+
         if admin_user:
-            if app_logger:
-                app_logger.info("✓ Admin user already exists")
+            if admin_password:
+                # Re-apply configured password so container restarts stay in sync
+                UserRepository.update_password(admin_user.id, hash_password(admin_password))
+                if app_logger:
+                    app_logger.info(f"✓ Admin user '{admin_username}' exists — password synced from environment")
+            else:
+                if app_logger:
+                    app_logger.info(f"✓ Admin user '{admin_username}' already exists")
         else:
-            # Generate random password for admin user
-            admin_password = secrets.token_urlsafe(16)
-            
-            # Create admin user
+            password_from_env = admin_password is not None
+            if not admin_password:
+                admin_password = secrets.token_urlsafe(16)
+
             User.create(
-                username="admin",
-                email="admin@example.com",
+                username=admin_username,
+                email=admin_email,
                 password_hash=hash_password(admin_password),
-                is_active=True
+                is_active=True,
             )
-            
+
             if app_logger:
-                app_logger.warning("=" * 70)
-                app_logger.warning("⚠️  DEFAULT ADMIN USER CREATED")
-                app_logger.warning("=" * 70)
-                app_logger.warning(f"Username: admin")
-                app_logger.warning(f"Password: {admin_password}")
-                app_logger.warning("⚠️  PLEASE CHANGE THIS PASSWORD IMMEDIATELY!")
-                app_logger.warning("=" * 70)
-    
+                if password_from_env:
+                    app_logger.info(f"✓ Admin user '{admin_username}' created from environment config")
+                else:
+                    app_logger.warning("=" * 70)
+                    app_logger.warning("⚠️  DEFAULT ADMIN USER CREATED")
+                    app_logger.warning("=" * 70)
+                    app_logger.warning(f"Username: {admin_username}")
+                    app_logger.warning(f"Password: {admin_password}")
+                    app_logger.warning("⚠️  PLEASE CHANGE THIS PASSWORD IMMEDIATELY!")
+                    app_logger.warning("=" * 70)
+
     except Exception as e:
         if app_logger:
             app_logger.error(f"Failed to create default admin user: {e}")

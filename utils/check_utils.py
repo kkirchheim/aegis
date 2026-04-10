@@ -44,7 +44,7 @@ def get_or_create_check(name: str, script_text: str, user_id=None, description=N
 
 # Default system checks (Phase 1 MVP)
 DEFAULT_CHECKS = {
-    "check_readme": {
+    "README Exists": {
         "text": """#!/bin/bash
 test -f README.md && exit 0 || exit 1
 """,

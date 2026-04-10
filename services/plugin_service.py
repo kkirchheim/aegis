@@ -13,24 +13,106 @@ from services.exceptions import (
 )
 
 
-# Default plugins to seed for new users
+# Default plugins to seed for new users — based on the Reproducibility Maturity Model (RMM)
 DEFAULT_PLUGINS = [
+    # RMM Level 0: Barriers to reproduction
     {
-        "name": "Code Availability",
-        "description": "Whether the code is publicly available and accessible.",
-        "prompt": "Is the code for this paper publicly available? Check for GitHub repos, supplementary materials, or data repositories.",
+        "name": "RMM-0-1",
+        "description": "Are any artifacts inaccessible or missing?",
+        "prompt": "Are any artifacts inaccessible or missing?",
         "is_default": True,
     },
     {
-        "name": "Dependency Documentation",
-        "description": "Whether all dependencies are clearly documented.",
-        "prompt": "Are all software dependencies and versions clearly documented? Check for requirements.txt, setup.py, or environment files.",
+        "name": "RMM-0-2",
+        "description": "Are the environmental details insufficient to recreate the setup?",
+        "prompt": "Are the environmental details insufficient to recreate the setup?",
         "is_default": True,
     },
     {
-        "name": "Reproducibility",
-        "description": "Whether the results can be reproduced with the provided materials.",
-        "prompt": "Can the results be reproduced using the provided code and data? Are there sufficient details to understand the workflow?",
+        "name": "RMM-0-3",
+        "description": "Are versions unspecified or floating?",
+        "prompt": "Are versions unspecified or floating?",
+        "is_default": True,
+    },
+    {
+        "name": "RMM-0-4",
+        "description": "Does legal ambiguity prevent reuse?",
+        "prompt": "Does legal ambiguity prevent reuse?",
+        "is_default": True,
+    },
+    # RMM Level 1: Partial reproducibility
+    {
+        "name": "RMM-1-1",
+        "description": "Are installation steps documented but potentially brittle?",
+        "prompt": "Are installation steps documented but potentially brittle?",
+        "is_default": True,
+    },
+    {
+        "name": "RMM-1-2",
+        "description": "Are versions given but not pinned at all hierarchy levels?",
+        "prompt": "Are versions given but not pinned at all hierarchy levels?",
+        "is_default": True,
+    },
+    {
+        "name": "RMM-1-3",
+        "description": "Are pipelines runnable but not fully automated?",
+        "prompt": "Are pipelines runnable but not fully automated?",
+        "is_default": True,
+    },
+    {
+        "name": "RMM-1-4",
+        "description": "Are licenses present but incomplete or unclear?",
+        "prompt": "Are licenses present but incomplete or unclear?",
+        "is_default": True,
+    },
+    # RMM Level 2: Reproducibility infrastructure
+    {
+        "name": "RMM-2-1",
+        "description": "Is a containerized or automated pipeline provided?",
+        "prompt": "Is a containerized or automated pipeline provided?",
+        "is_default": True,
+    },
+    {
+        "name": "RMM-2-2",
+        "description": "Are all dependencies pinned, including OS, libraries, and models?",
+        "prompt": "Are all dependencies pinned, including OS, libraries, and models?",
+        "is_default": True,
+    },
+    {
+        "name": "RMM-2-3",
+        "description": "Are datasets and models persistently hosted with stable identifiers?",
+        "prompt": "Are datasets and models persistently hosted with stable identifiers?",
+        "is_default": True,
+    },
+    {
+        "name": "RMM-2-4",
+        "description": "Are all components licensed for reuse?",
+        "prompt": "Are all components licensed for reuse?",
+        "is_default": True,
+    },
+    # RMM Level 3: Full independent reproduction
+    {
+        "name": "RMM-3-1",
+        "description": "Can the results be reproduced exactly using only the provided artifacts and instructions?",
+        "prompt": "Can the results be reproduced exactly using only the provided artifacts and instructions?",
+        "is_default": True,
+    },
+    {
+        "name": "RMM-3-2",
+        "description": "Was the reproduction performed independently, without author intervention?",
+        "prompt": "Was the reproduction performed independently, without author intervention?",
+        "is_default": True,
+    },
+    {
+        "name": "RMM-3-3",
+        "description": "Are all outputs (tables, figures, metrics) consistent with those reported in the paper?",
+        "prompt": "Are all outputs (tables, figures, metrics) consistent with those reported in the paper?",
+        "is_default": True,
+    },
+    {
+        "name": "RMM-3-4",
+        "description": "Does the reproduction process complete successfully in a clean environment?",
+        "prompt": "Does the reproduction process complete successfully in a clean environment?",
         "is_default": True,
     },
 ]

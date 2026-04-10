@@ -16,6 +16,8 @@ const analyzeBtn = document.getElementById("analyzeBtn");
 const uploadArea = document.querySelector(".upload-area");
 const uploadSection = document.getElementById("uploadSection");
 const jobsList = document.getElementById("jobsList");
+const manualArtifactUrls = document.getElementById("manualArtifactUrls");
+const agentInstructions = document.getElementById("agentInstructions");
 
 // ============================================================================
 // Upload Handling
@@ -86,6 +88,12 @@ async function handleAnalyzeClick() {
     formData.append("runtime_limit", document.getElementById("runtimeLimit").value);
     formData.append("max_iterations", document.getElementById("maxIterations").value);
     formData.append("storage_limit", document.getElementById("storageLimit").value);
+    if (manualArtifactUrls && manualArtifactUrls.value.trim()) {
+        formData.append("manual_artifact_urls", manualArtifactUrls.value.trim());
+    }
+    if (agentInstructions && agentInstructions.value.trim()) {
+        formData.append("agent_instructions", agentInstructions.value.trim());
+    }
     
     try {
         analyzeBtn.disabled = true;

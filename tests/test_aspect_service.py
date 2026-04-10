@@ -31,8 +31,8 @@ class TestPluginService:
             
             plugins = PluginService.get_all_plugins_for_user(user.id)
             
-            # Should have 3 default plugins
-            assert len(plugins) == 3
+            # Should have 16 default plugins (RMM criteria)
+            assert len(plugins) == len(DEFAULT_PLUGINS)
             assert all(a["is_default"] is True for a in plugins)
     
     def test_seed_defaults_idempotent(self, app):
@@ -48,9 +48,9 @@ class TestPluginService:
             PluginService.get_or_create_default_plugins(user.id)
             PluginService.get_or_create_default_plugins(user.id)
             
-            # Should still have 3 (not 6)
+            # Should still have same count (not doubled)
             plugins = PluginService.get_all_plugins_for_user(user.id)
-            assert len(plugins) == 3
+            assert len(plugins) == len(DEFAULT_PLUGINS)
     
     def test_get_all_plugins_for_user(self, app):
         """Test getting all plugins for a user."""
@@ -74,8 +74,8 @@ class TestPluginService:
             
             all_plugins = PluginService.get_all_plugins_for_user(user.id)
             
-            # Should have 4 (3 default + 1 custom)
-            assert len(all_plugins) == 4
+            # Should have default + 1 custom
+            assert len(all_plugins) == len(DEFAULT_PLUGINS) + 1
             assert any(a["name"] == "Custom Plugin" for a in all_plugins)
             assert all(
                 set(a.keys()) == {"id", "name", "description", "is_default", "is_active", "custom_prompt"}
@@ -294,8 +294,8 @@ class TestPluginService:
             
             active = PluginService.get_active_plugins_for_evaluation(user.id)
             
-            # Should have 3 active default plugins
-            assert len(active) == 3
+            # Should have all default plugins active
+            assert len(active) == len(DEFAULT_PLUGINS)
             assert all(
                 set(a.keys()) == {"id", "name", "description", "prompt_to_use"}
                 for a in active
@@ -379,8 +379,8 @@ class TestPluginService:
             
             active = PluginService.get_active_plugins_for_evaluation(user.id)
             
-            # Should have 2 (one deactivated)
-            assert len(active) == 2
+            # Should have one fewer (one deactivated)
+            assert len(active) == len(DEFAULT_PLUGINS) - 1
             assert not any(a["id"] == first_plugin["id"] for a in active)
 
 
@@ -402,8 +402,8 @@ class TestPluginServiceIntegration:
             PluginService.get_or_create_default_plugins(user.id)
             
             all_plugins = PluginService.get_all_plugins_for_user(user.id)
-            assert len(all_plugins) == 3
-            
+            assert len(all_plugins) == len(DEFAULT_PLUGINS)
+
             # 3. Create custom plugin
             custom = PluginService.create_custom_plugin(
                 user_id=user.id,
@@ -413,8 +413,8 @@ class TestPluginServiceIntegration:
             )
             
             all_plugins = PluginService.get_all_plugins_for_user(user.id)
-            assert len(all_plugins) == 4
-            
+            assert len(all_plugins) == len(DEFAULT_PLUGINS) + 1
+
             # 4. Override prompt
             plugin_id = UUID(custom["id"])
             PluginService.override_prompt(
@@ -459,8 +459,8 @@ class TestPluginServiceIntegration:
             user1_plugins = PluginService.get_all_plugins_for_user(user1.id)
             user2_plugins = PluginService.get_all_plugins_for_user(user2.id)
             
-            assert len(user1_plugins) == 4  # 3 default + 1 custom
-            assert len(user2_plugins) == 3  # 3 default only
+            assert len(user1_plugins) == len(DEFAULT_PLUGINS) + 1  # default + 1 custom
+            assert len(user2_plugins) == len(DEFAULT_PLUGINS)  # default only
             
             # User1's custom should not be in user2's list
             user2_ids = {UUID(a["id"]) for a in user2_plugins}

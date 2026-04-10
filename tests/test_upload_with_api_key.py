@@ -42,7 +42,10 @@ class TestUploadWithAPIKey:
         with open(pdf_path, 'rb') as f:
             response = client.post(
                 '/api/job/upload',
-                data={'pdf': f},
+                data={
+                    'pdf': f,
+                    'manual_artifact_urls': 'https://github.com/example/repro-repo'
+                },
                 headers={'Authorization': f'ApiKey {api_key}'}
             )
         

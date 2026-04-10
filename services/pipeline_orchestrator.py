@@ -3,6 +3,7 @@
 import sys
 import json
 from datetime import datetime
+from urllib.parse import urlparse
 from typing import Callable, Optional
 from services.analysis_service import extract_and_analyze_pdf
 from services.docker_service import spawn_agent_container
@@ -62,6 +63,7 @@ class PipelineOrchestrator:
         pdf_path: str,
         config,
         llm_provider,
+        manual_artifacts=None,
     ) -> bool:
         """
         Run the complete 3-stage analysis pipeline.
@@ -88,7 +90,12 @@ class PipelineOrchestrator:
             update_job_status(job_id, "processing", progress=0.0)
             
             # Stage 1: Extract and analyze PDF
-            if not self._run_stage_1(job_id, pdf_path, llm_provider):
+            if not self._run_stage_1(
+                job_id,
+                pdf_path,
+                llm_provider,
+                manual_artifacts=manual_artifacts or []
+            ):
                 update_job_status(job_id, "failed", error_message="Stage 1 (paper analysis) failed",
                                   progress=0.0, current_stage="failed")
                 return False
@@ -121,7 +128,59 @@ class PipelineOrchestrator:
             self.emit_event(job_id, "error", f"Error: {str(e)}")
             return False
     
-    def _run_stage_1(self, job_id: str, pdf_path: str, llm_provider) -> bool:
+    @staticmethod
+    def _normalize_artifact(artifact):
+        """Normalize artifact payloads to the internal shape."""
+        if not artifact or not artifact.get("url"):
+            return None
+
+        url = artifact.get("url", "").strip().rstrip("/")
+        if not url:
+            return None
+
+        artifact_type = artifact.get("type") or artifact.get("artifact_type")
+        if not artifact_type:
+            parsed = urlparse(url)
+            hostname = (parsed.netloc or "").lower()
+            artifact_type = "github_repo" if "github.com" in hostname else "other"
+
+        normalized = {
+            "url": url,
+            "type": artifact_type,
+        }
+        if artifact.get("description"):
+            normalized["description"] = artifact.get("description")
+
+        return normalized
+
+    @classmethod
+    def _merge_artifacts(cls, extracted_artifacts, manual_artifacts):
+        """Merge extracted and manual artifacts, preferring richer metadata."""
+        merged = {}
+
+        for artifact in extracted_artifacts or []:
+            normalized = cls._normalize_artifact(artifact)
+            if normalized:
+                merged[normalized["url"]] = normalized
+
+        for artifact in manual_artifacts or []:
+            normalized = cls._normalize_artifact(artifact)
+            if not normalized:
+                continue
+
+            existing = merged.get(normalized["url"])
+            if existing:
+                if not existing.get("description") and normalized.get("description"):
+                    existing["description"] = normalized["description"]
+                if existing.get("type") in (None, "", "other") and normalized.get("type"):
+                    existing["type"] = normalized["type"]
+                continue
+
+            merged[normalized["url"]] = normalized
+
+        return list(merged.values())
+
+    def _run_stage_1(self, job_id: str, pdf_path: str, llm_provider, manual_artifacts=None) -> bool:
         """
         Stage 1: Extract and analyze PDF.
         
@@ -145,7 +204,10 @@ class PipelineOrchestrator:
                           progress=0.25)
             
             # Store artifacts
-            artifacts = paper_info.get("artifacts", [])
+            artifacts = self._merge_artifacts(
+                paper_info.get("artifacts", []),
+                manual_artifacts or []
+            )
             store_artifacts(job_id, artifacts)
             
             self.logger(f"[{job_id}] >>> STAGE 1 COMPLETE")

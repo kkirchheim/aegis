@@ -14,6 +14,16 @@
         .bg-primary { background-color: #0068b4 !important; }
         .btn-primary { background-color: #0068b4 !important; border-color: #0068b4 !important; color: white !important; }
         .btn-primary:hover { background-color: #004d8f !important; }
+
+        /* Override DaisyUI step colors to match brand blue */
+        .steps .step-primary + .step-primary::before,
+        .steps .step-primary::after {
+            background-color: #0068b4 !important;
+            color: white !important;
+        }
+        .steps .step-primary::before {
+            background-color: #0068b4 !important;
+        }
     </style>
 </head>
 <body class="bg-base-100">
@@ -52,32 +62,32 @@
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title">⚙️ Pipeline</h2>
-                    <div class="steps steps-vertical lg:steps-horizontal w-full mt-4">
-                        <div class="step step-primary">
-                            <div class="step-content">
+                    <ul class="steps steps-vertical lg:steps-horizontal w-full mt-4">
+                        <li class="step step-primary" data-content="1">
+                            <div class="text-left">
                                 <h3 class="font-semibold">Upload</h3>
                                 <p class="text-xs text-base-content/70">Submit a PDF publication</p>
                             </div>
-                        </div>
-                        <div class="step step-primary">
-                            <div class="step-content">
+                        </li>
+                        <li class="step step-primary" data-content="2">
+                            <div class="text-left">
                                 <h3 class="font-semibold">Extract</h3>
                                 <p class="text-xs text-base-content/70">Identify artifacts and metadata</p>
                             </div>
-                        </div>
-                        <div class="step step-primary">
-                            <div class="step-content">
+                        </li>
+                        <li class="step step-primary" data-content="3">
+                            <div class="text-left">
                                 <h3 class="font-semibold">Generate Evidence</h3>
                                 <p class="text-xs text-base-content/70">Run checks, agent, and semantic analysis</p>
                             </div>
-                        </div>
-                        <div class="step step-primary">
-                            <div class="step-content">
+                        </li>
+                        <li class="step step-primary" data-content="4">
+                            <div class="text-left">
                                 <h3 class="font-semibold">Assess</h3>
                                 <p class="text-xs text-base-content/70">Aggregate into review context</p>
                             </div>
-                        </div>
-                    </div>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </section>

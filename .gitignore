@@ -30,6 +30,7 @@ wheels/
 *~
 
 # Project specific
+data/
 uploads/
 logs/
 reproducibility.db
@@ -47,3 +48,6 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+test-papers/
+
+.codex

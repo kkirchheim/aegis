@@ -37,12 +37,18 @@ def emit_event(job_id, event_dict):
     _dispatcher.emit(event)
 
 
-def analyze_paper_background(job_id, pdf_path, config, llm_provider):
+def analyze_paper_background(job_id, pdf_path, config, llm_provider, manual_artifacts=None):
     """Background job for paper analysis.
     
     Delegates to PipelineOrchestrator to run the 3-stage pipeline.
     """
-    _orchestrator.run_analysis(job_id, pdf_path, config, llm_provider)
+    _orchestrator.run_analysis(
+        job_id,
+        pdf_path,
+        config,
+        llm_provider,
+        manual_artifacts=manual_artifacts or []
+    )
 
 
 @jobs_bp.route("/")

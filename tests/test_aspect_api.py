@@ -8,6 +8,7 @@ import pytest
 import json
 from uuid import UUID
 from models.database import User
+from services.plugin_service import DEFAULT_PLUGINS
 from models.plugin import Plugin, UserPlugin
 from services.plugin_service import PluginService
 from repositories.plugin_repository import PluginRepository, UserPluginRepository
@@ -37,8 +38,8 @@ class TestListPluginsEndpoint:
             data = json.loads(response.data)
             assert 'plugins' in data
             assert 'total' in data
-            assert data['total'] == 3
-            assert len(data['plugins']) == 3
+            assert data['total'] == len(DEFAULT_PLUGINS)
+            assert len(data['plugins']) == len(DEFAULT_PLUGINS)
             assert all('is_active' in a for a in data['plugins'])
             assert all('custom_prompt' in a for a in data['plugins'])
     
@@ -61,12 +62,12 @@ class TestListPluginsEndpoint:
             # Verify
             assert response.status_code == 200
             data = json.loads(response.data)
-            assert data['total'] == 3
-            
-            # Should have 2 active, 1 inactive
+            assert data['total'] == len(DEFAULT_PLUGINS)
+
+            # Should have one inactive, rest active
             active = [a for a in data['plugins'] if a['is_active']]
             inactive = [a for a in data['plugins'] if not a['is_active']]
-            assert len(active) == 2
+            assert len(active) == len(DEFAULT_PLUGINS) - 1
             assert len(inactive) == 1
     
     def test_list_plugins_custom_and_default(self, client, app, test_user):
@@ -90,11 +91,11 @@ class TestListPluginsEndpoint:
             
             # Verify
             data = json.loads(response.data)
-            assert data['total'] == 4
-            
+            assert data['total'] == len(DEFAULT_PLUGINS) + 1
+
             defaults = [a for a in data['plugins'] if a['is_default']]
             customs = [a for a in data['plugins'] if not a['is_default']]
-            assert len(defaults) == 3
+            assert len(defaults) == len(DEFAULT_PLUGINS)
             assert len(customs) == 1
             assert customs[0]['name'] == "My Custom Plugin"
     

@@ -1017,6 +1017,16 @@ def agent_think(job_id, repo_state=None):
         else:
             urgency = ""
 
+        # Container environment info and custom instructions
+        container_info = repo_state.get('container_info', '')
+        container_section = f"- Container: {container_info}" if container_info else ""
+
+        agent_instructions = repo_state.get('agent_instructions', '')
+        instructions_section = (
+            f"\nCUSTOM INSTRUCTIONS (from user — follow these):\n{agent_instructions}"
+            if agent_instructions else ""
+        )
+
         prompt = f"""You are an agent inside a Docker container attempting to reproduce code from a scientific paper.
 
 GOAL: Install dependencies, execute the repository's scripts, and collect evidence about reproducibility.
@@ -1024,6 +1034,7 @@ GOAL: Install dependencies, execute the repository's scripts, and collect eviden
 ENVIRONMENT:
 - The repository is ALREADY cloned at /workspace/repo. All commands run there by default.
 - Do NOT clone the repository again.
+{container_section}
 
 CURRENT STATE:
 - Repository: {repo_state.get('repo_url', 'unknown')}
@@ -1067,6 +1078,8 @@ WORKFLOW:
 4. Once you have tried all reasonable scripts, IMMEDIATELY report results:
    - "check_success" if at least one script produced meaningful output
    - "done" if nothing worked
+
+{instructions_section}
 
 RESPONSE FORMAT (JSON only, no markdown):
 {{
@@ -1363,6 +1376,7 @@ def upload_pdf():
     from utils.api_key_utils import verify_api_key, InvalidAPIKeyError
     import os
     import uuid
+    from urllib.parse import urlparse
     from flask import current_app
     
     # Manual auth check - support both session cookie and API key
@@ -1428,6 +1442,43 @@ def upload_pdf():
     create_job(job_id, str(pdf_path), file.filename, user_id, thumbnail_path, num_pages)
     
     # Get configuration
+    def _parse_manual_artifact_urls(raw_value):
+        manual_artifacts = []
+        if not raw_value:
+            return manual_artifacts
+
+        seen_urls = set()
+        for line in raw_value.splitlines():
+            url = line.strip()
+            if not url:
+                continue
+
+            parsed = urlparse(url)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise ValueError(f"Invalid artifact URL: {url}")
+
+            normalized_url = url.rstrip("/")
+            if normalized_url in seen_urls:
+                continue
+
+            seen_urls.add(normalized_url)
+            hostname = (parsed.netloc or "").lower()
+            artifact_type = "github_repo" if "github.com" in hostname else "other"
+            manual_artifacts.append({
+                "url": normalized_url,
+                "type": artifact_type,
+                "description": "Manually provided artifact URL"
+            })
+
+        return manual_artifacts
+
+    try:
+        manual_artifacts = _parse_manual_artifact_urls(
+            request.form.get("manual_artifact_urls", "")
+        )
+    except ValueError as exc:
+        return {"error": str(exc)}, 400
+
     config = {
         "container": request.form.get("container", "python"),
         "docker_image": request.form.get("docker_image", "standard"),
@@ -1436,7 +1487,8 @@ def upload_pdf():
         "memory_limit": int(request.form.get("memory_limit", 4096)),
         "runtime_limit": int(request.form.get("runtime_limit", 30)),
         "max_iterations": int(request.form.get("max_iterations", 15)),
-        "storage_limit": int(request.form.get("storage_limit", 10))
+        "storage_limit": int(request.form.get("storage_limit", 10)),
+        "agent_instructions": request.form.get("agent_instructions", ""),
     }
     
     # Start analysis thread
@@ -1444,7 +1496,7 @@ def upload_pdf():
         llm_provider = init_llm_provider()
         thread = threading.Thread(
             target=analyze_paper_background,
-            args=(job_id, str(pdf_path), config, llm_provider),
+            args=(job_id, str(pdf_path), config, llm_provider, manual_artifacts),
             daemon=True
         )
         thread.start()

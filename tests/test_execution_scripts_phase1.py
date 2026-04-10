@@ -48,7 +48,7 @@ class TestChecksMVP:
 
             # Check README check exists
             readme_check = next(
-                (s for s in checks if s.name == "check_readme"),
+                (s for s in checks if s.name == "README Exists"),
                 None
             )
             assert readme_check is not None
@@ -110,7 +110,7 @@ class TestChecksMVP:
             )
             
             check_text = "#!/bin/bash\ntest -f README.md && exit 0 || exit 1"
-            chk = get_or_create_check("check_readme", check_text)
+            chk = get_or_create_check("README Exists", check_text)
 
             # Store result
             result = CheckResult.create(
@@ -149,7 +149,7 @@ class TestChecksMVP:
             )
             
             # Create multiple checks
-            chk1 = get_or_create_check("check_readme", "#!/bin/bash\ntest -f README.md")
+            chk1 = get_or_create_check("README Exists", "#!/bin/bash\ntest -f README.md")
             chk2 = get_or_create_check("check_req", "#!/bin/bash\ntest -f requirements.txt")
 
             # Store results
@@ -188,7 +188,7 @@ class TestChecksMVP:
             # Get the README check
             seed_default_checks()
 
-            chk = Check.get(Check.name == "check_readme")
+            chk = Check.get(Check.name == "README Exists")
 
             # Verify it has correct structure
             assert chk.script_text.startswith("#!")
