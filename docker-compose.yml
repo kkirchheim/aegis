@@ -10,29 +10,6 @@ services:
     ports:
       - 127.0.0.1:5000:5000
     environment:
-      # Flask Configuration
-      - FLASK_ENV=development
-      - FLASK_DEBUG=1
-      
-      # Docker Configuration
-      - DOCKER_NETWORK=repro-network
-      - DOCKER_BACKEND_URL=http://paper-reproducibility:5000
-      
-      # LLM Provider Configuration
-      - LLM_PROVIDER=anthropic
-      - ANTHROPIC_MODEL=claude-haiku-4-5
-      
-      # Agent Configuration
-      - AGENT_CONTEXT_LIMIT=100000
-      
-      # Admin Credentials (optional — random password generated if unset)
-      - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=changeme
-      - ADMIN_EMAIL=admin@example.com
-
-      # Caching Configuration
-      - ENABLE_CACHING=false
-
       # Python path (application source is in src/)
       - PYTHONPATH=/app/src
     

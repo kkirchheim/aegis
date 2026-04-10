@@ -15,10 +15,24 @@ Prototype implementation for *"Towards Supporting Software Artefact Review via L
 git clone https://github.com/kkirchheim/paper-reproducibility.git
 cd paper-reproducibility
 
-export ANTHROPIC_API_KEY="sk-ant-..."
-docker-compose up
+cp .env.example .env
+# Edit .env and set your ANTHROPIC_API_KEY
 
+docker-compose up -d
 # Open http://localhost:5000
+```
+
+Default admin credentials are `admin` / `changeme` (configurable via `ADMIN_USERNAME` / `ADMIN_PASSWORD` in `.env`). If `ADMIN_PASSWORD` is unset, a random password is generated and printed to the logs on startup.
+
+### Local Development (without Docker)
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+cp .env.example .env
+# Edit .env and set your ANTHROPIC_API_KEY
+
+PYTHONPATH=src python src/app.py
 ```
 
 ## Usage
@@ -44,16 +58,25 @@ python scripts/repro-cli.py \
    - *Interactive* — agentic exploration of repositories in sandboxed containers
 3. **Assess** — Aggregate evidence into a structured review context
 
+## Project Structure
+
+```
+src/           # Application source (Flask app, services, models, blueprints)
+agent/         # Agent code + agent Dockerfiles
+web/           # Frontend assets (static/, templates/)
+tests/         # Test suite
+docker/        # Main app Dockerfile
+scripts/       # CLI tools
+docs/          # Documentation
+```
+
 ## Agent Containers
 
 Code execution happens inside isolated Docker containers, built automatically on first use. To build manually:
 
 ```bash
-# Standard agent
-docker build -t paper-reproducibility-agent:latest -f docker/Dockerfile.agent .
-
-# ML agent (PyTorch, scikit-learn, etc.)
-docker build -t paper-reproducibility-agent-ml:latest -f docker/Dockerfile.agent-ml .
+docker build -t paper-reproducibility-agent:latest -f agent/Dockerfile .
+docker build -t paper-reproducibility-agent-ml:latest -f agent/Dockerfile.ml .
 ```
 
 ## Security
@@ -68,4 +91,3 @@ This application requires the Docker socket (`/var/run/docker.sock`) to be mount
 - **[API Reference](./docs/API.md)** — REST endpoints
 - **[Development](./docs/DEVELOPMENT.md)** — Setup, configuration, workflow
 - **[Testing](./docs/TESTING.md)** — Running tests
-
