@@ -51,11 +51,22 @@
         }
         
         .upload-area {
-            @apply relative border-2 border-dashed border-primary rounded-lg p-8 text-center cursor-pointer transition-all hover:border-primary/80 hover:bg-primary/5;
+            border: 2px dashed #0068b4;
+            border-radius: 0.75rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
         }
-        
+
+        .upload-area:hover {
+            background-color: rgba(0, 104, 180, 0.05);
+            border-color: rgba(0, 104, 180, 0.8);
+        }
+
         .upload-area.dragover {
-            @apply border-primary/80 bg-primary/10;
+            background-color: rgba(0, 104, 180, 0.10);
+            border-color: rgba(0, 104, 180, 0.8);
         }
         
         #pdfInput {
@@ -86,10 +97,11 @@
                         <span>Upload PDF</span>
                     </h2>
                     
-                    <div class="upload-area" id="uploadArea">
+                    <div class="upload-area flex items-center justify-center h-64" id="uploadArea">
                         <input type="file" id="pdfInput" accept=".pdf" style="display: none;" />
-                        <label for="pdfInput" class="upload-label cursor-pointer flex flex-col items-center justify-center w-full h-64">
+                        <label for="pdfInput" class="upload-label cursor-pointer flex flex-col items-center justify-center w-full h-full">
                             <div class="text-7xl">📑</div>
+                            <p class="text-lg text-base-content/50 mt-4">Drag & drop a PDF here, or click to browse</p>
                         </label>
                     </div>
                     
