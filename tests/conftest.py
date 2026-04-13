@@ -498,15 +498,6 @@ def flask_app_with_mocks(app, mock_llm_provider, mock_docker_service):
 
 
 @pytest.fixture
-def mock_event_queues():
-    """Provide mock SSE event queues for testing."""
-    return {
-        "job123": [],
-        "job456": [],
-    }
-
-
-@pytest.fixture
 def create_test_event(app, peewee_test_db):
     """Factory fixture to create test events."""
     from models.database import Event, Job
@@ -581,12 +572,11 @@ def mock_job_service(peewee_test_db):
 
 
 @pytest.fixture
-def mock_event_dispatcher(mock_event_queues, mock_job_service):
+def mock_event_dispatcher(mock_job_service):
     """Mock event dispatcher for testing."""
     from services.event_dispatcher import EventDispatcher
 
     dispatcher = EventDispatcher(
-        event_queues=mock_event_queues,
         job_service=mock_job_service,
     )
 

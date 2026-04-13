@@ -1034,12 +1034,23 @@ def agent_think(job_id, repo_state=None):
 
         agent_instructions = repo_state.get("agent_instructions", "")
         instructions_section = (
-            f"\nCUSTOM INSTRUCTIONS (from user — follow these):\n{agent_instructions}" if agent_instructions else ""
+            "\nCUSTOM INSTRUCTIONS (from user - highest-priority task guidance):\n"
+            f"{agent_instructions}\n\n"
+            "Follow these instructions when choosing what to read, install, run, skip, or report. "
+            "They override the default workflow and action-selection preferences below if there is a conflict. "
+            "Ignore them only if they would require leaving /workspace/repo, bypassing container constraints, "
+            "or returning anything other than the required JSON action."
+            if agent_instructions
+            else "\nCUSTOM INSTRUCTIONS:\nNone provided."
         )
 
-        prompt = f"""You are an agent inside a Docker container attempting to reproduce code from a scientific paper.
+        system_prompt = """You are an agent inside a Docker container attempting to reproduce code from a scientific paper.
+You must use only the listed actions and return JSON only.
+Custom instructions supplied by the user are highest-priority task guidance, except for container boundaries and response schema requirements."""
 
-GOAL: Install dependencies, execute the repository's scripts, and collect evidence about reproducibility.
+        prompt = f"""GOAL: Install dependencies, execute the repository's scripts, and collect evidence about reproducibility.
+
+{instructions_section}
 
 ENVIRONMENT:
 - The repository is ALREADY cloned at /workspace/repo. All commands run there by default.
@@ -1061,7 +1072,7 @@ ERRORS:
 
 {urgency}
 
-AVAILABLE ACTIONS:
+AVAILABLE ACTIONS (fixed schema):
 - "read_file": Read a file from /workspace/repo. Target is a relative path, optionally with
   :LINE to start from that line. Examples: "README.md", "src/model.py:80".
   Each read returns up to 200 lines. Use :LINE to read later sections of long files.
@@ -1070,7 +1081,7 @@ AVAILABLE ACTIONS:
   collected enough evidence. Include a summary of what worked and what didn't in "reasoning".
 - "done": Report that analysis is complete (even if reproduction failed or only partially succeeded).
 
-RULES (STRICT — violating these wastes iterations):
+DEFAULT RULES (apply unless custom instructions explicitly say otherwise):
 1. NEVER DEBUG FAILURES. When a script fails, note the error and move to the next script.
    Do NOT: read source code to understand why it failed, check library versions, write test
    scripts, inspect internal APIs, or try to fix the code. Just move on.
@@ -1089,8 +1100,6 @@ WORKFLOW:
    - "check_success" if at least one script produced meaningful output
    - "done" if nothing worked
 
-{instructions_section}
-
 RESPONSE FORMAT (JSON only, no markdown):
 {{
   "action": "read_file" | "run_command" | "check_success" | "done",
@@ -1100,7 +1109,33 @@ RESPONSE FORMAT (JSON only, no markdown):
 """
 
         llm_provider = init_llm_provider()
-        response_text = llm_provider.complete(messages=[{"role": "user", "content": prompt}], max_tokens=500)
+        if Config.AGENT_LOG_PROMPTS:
+            from flask import current_app
+
+            prompt_log = prompt
+            max_log_chars = Config.AGENT_PROMPT_LOG_MAX_CHARS
+            if max_log_chars > 0 and len(prompt_log) > max_log_chars:
+                prompt_log = (
+                    prompt_log[:max_log_chars]
+                    + f"\n\n... [agent prompt log truncated at {max_log_chars} of {len(prompt)} chars]"
+                )
+
+            current_app.logger.info(
+                "[%s] Agent LLM prompt debug\n"
+                "System prompt (%d chars):\n%s\n"
+                "--- User prompt (%d chars, logged %d chars) ---\n%s\n"
+                "--- End agent LLM prompt debug ---",
+                job_id,
+                len(system_prompt),
+                system_prompt,
+                len(prompt),
+                len(prompt_log),
+                prompt_log,
+            )
+
+        response_text = llm_provider.complete(
+            messages=[{"role": "user", "content": prompt}], system=system_prompt, max_tokens=500
+        )
 
         # Parse JSON
         try:

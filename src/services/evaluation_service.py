@@ -1,15 +1,10 @@
 """Evaluation service - reproducibility evaluation and plugin checking."""
 
-import hashlib
 import json
 import re
-import time
 from typing import Dict, List, Optional
 
-from config import Config
-from models.database import Artifact, Job, PaperAnalysis, PluginEvaluation
-from repositories import ExecutionDetailsRepository, PaperAnalysisRepository
-from services.cache_service import get_cached_evaluation, store_evaluation_cache
+from models.database import Job, PaperAnalysis
 
 # ============================================================================
 # Logger Utility - Handle both functions and logger objects
@@ -52,6 +47,23 @@ IMPORTANT: Respond with a JSON array. Do not use any markdown formatting in reas
 PAPER CONTENT:
 {paper_content}
 
+REPOSITORY METADATA:
+═══════════════════════════════════════════════════════════
+Files in Repository:
+{discovered_files}
+
+Commands Run:
+{commands_run}
+
+Dependencies Used:
+{dependencies_used}
+
+Test Suite Information:
+{test_info}
+
+Randomness Seed Information:
+{randomness_info}
+
 CODE EXECUTION OUTPUT:
 {code_output}
 
@@ -89,6 +101,11 @@ def render_evaluation_prompt(
     paper_content: str,
     code_output: str,
     execution_log: str,
+    discovered_files: Optional[List[str]] = None,
+    commands_run: Optional[str] = None,
+    dependencies_used: Optional[str] = None,
+    test_info: Optional[str] = None,
+    randomness_info: Optional[str] = None,
 ) -> Optional[str]:
     """
     Merge all active plugins into single evaluation prompt.
@@ -98,6 +115,11 @@ def render_evaluation_prompt(
         paper_content: str - Content from paper analysis
         code_output: str - Output from code execution
         execution_log: str - Log from code execution
+        discovered_files: Optional list of files found in the repository
+        commands_run: Optional string of commands executed
+        dependencies_used: Optional string of dependencies found
+        test_info: Optional string of test suite information
+        randomness_info: Optional string of randomness/seed information
 
     Returns:
         str - Full prompt ready for LLM, or None if no plugins
@@ -111,11 +133,24 @@ def render_evaluation_prompt(
         prompt_to_use = plugin.get("prompt_to_use", plugin.get("prompt", ""))
         plugins_text += PLUGIN_TEMPLATE.format(plugin_name=plugin["name"], plugin_prompt=prompt_to_use)
 
+    # Format discovered files list
+    if discovered_files:
+        files_text = ", ".join(discovered_files[:50])
+        if len(discovered_files) > 50:
+            files_text += f" ... and {len(discovered_files) - 50} more"
+    else:
+        files_text = "No file listing available"
+
     # Render full prompt with context (truncate to reasonable sizes)
     full_prompt = PLUGIN_EVAL_TEMPLATE.format(
         paper_content=paper_content[:20000] if paper_content else "",
-        code_output=code_output[:10000] if code_output else "",
-        execution_log=execution_log[:5000] if execution_log else "",
+        code_output=code_output[:30000] if code_output else "",
+        execution_log=execution_log[:15000] if execution_log else "",
+        discovered_files=files_text,
+        commands_run=(commands_run or "No commands recorded")[:5000],
+        dependencies_used=dependencies_used or "No dependencies logged",
+        test_info=test_info or "No test info",
+        randomness_info=randomness_info or "No randomness info",
         plugins_list=plugins_text,
     )
 
@@ -182,8 +217,10 @@ def parse_evaluation_response(
             if status not in ["PASS", "FAIL", "UNCLEAR"]:
                 status = "UNCLEAR"
 
-            # Find plugin ID by name
+            # Find plugin ID by name (try exact match, then prefix before ":")
             plugin_id = plugin_lookup.get(plugin_name)
+            if not plugin_id and plugin_name and ":" in plugin_name:
+                plugin_id = plugin_lookup.get(plugin_name.split(":")[0].strip())
 
             if not plugin_id:
                 if logger:
@@ -236,6 +273,7 @@ def evaluate_paper(
     execution_log: str,
     llm_provider,
     app_logger=None,
+    execution_details=None,
 ) -> Dict[str, Dict[str, str]]:
     """
     Single LLM call to evaluate all active plugins.
@@ -247,6 +285,7 @@ def evaluate_paper(
         execution_log: str - Code execution log
         llm_provider: LLM provider instance
         app_logger: Optional logger
+        execution_details: Optional ExecutionDetails model with structured metadata
 
     Returns:
         dict: evidence {plugin_id: {status, reasoning}}
@@ -267,8 +306,34 @@ def evaluate_paper(
         # Get paper content
         paper_content = paper_analysis.extracted_text or ""
 
+        # Extract structured metadata from execution details if available
+        discovered_files = None
+        commands_run = None
+        dependencies_used = None
+        test_info = None
+        randomness_info = None
+
+        if execution_details:
+            discovered_files = (
+                execution_details.get_discovered_files() if hasattr(execution_details, "get_discovered_files") else None
+            )
+            commands_run = getattr(execution_details, "commands_run", None)
+            dependencies_used = getattr(execution_details, "dependencies_used", None)
+            test_info = getattr(execution_details, "test_info", None)
+            randomness_info = getattr(execution_details, "randomness_info", None)
+
         # Render unified prompt
-        prompt = render_evaluation_prompt(plugins, paper_content, code_output, execution_log)
+        prompt = render_evaluation_prompt(
+            plugins,
+            paper_content,
+            code_output,
+            execution_log,
+            discovered_files=discovered_files,
+            commands_run=commands_run,
+            dependencies_used=dependencies_used,
+            test_info=test_info,
+            randomness_info=randomness_info,
+        )
 
         if not prompt:
             if app_logger:
@@ -311,235 +376,3 @@ def evaluate_paper(
         if app_logger:
             app_logger.error(f"[Job {job_id}] Evaluation error: {e}", exc_info=True)
         return {}
-
-
-def evaluate_reproducibility_plugins(job_id, llm_provider, app_logger=None, emit_event=None):
-    """
-    Evaluate reproducibility plugins using all available context.
-    Runs after agent completes successfully.
-    """
-    stage3_start = time.time()
-
-    try:
-        if app_logger:
-            app_logger.info(f"[{job_id}] === STAGE 3: Plugin Evaluation Starting ===")
-
-        # Fetch all data using Peewee ORM
-        paper_analysis_model = PaperAnalysisRepository.get(job_id)
-        execution_details_model = ExecutionDetailsRepository.get(job_id)
-
-        # Fetch artifacts
-        artifacts_models = list(Artifact.select().where(Artifact.job == job_id))
-        artifacts = [
-            {"url": a.url, "artifact_type": a.artifact_type, "description": a.description} for a in artifacts_models
-        ]
-
-        if not paper_analysis_model or not execution_details_model:
-            missing = []
-            if not paper_analysis_model:
-                missing.append("paper_analysis")
-            if not execution_details_model:
-                missing.append("execution_details")
-
-            if app_logger:
-                app_logger.warning(f"[{job_id}] Missing data for evaluation: {', '.join(missing)}")
-            if emit_event:
-                emit_event(job_id, {"step": "evaluation_skipped", "message": f"Skipped: Missing {', '.join(missing)}"})
-            return False
-
-        # Convert models to dicts for prompt building
-        paper_analysis = {
-            "pdf_hash": paper_analysis_model.pdf_hash,
-            "title": paper_analysis_model.title,
-            "abstract": paper_analysis_model.abstract,
-            "extracted_text": paper_analysis_model.extracted_text,
-            "methodology": paper_analysis_model.methodology,
-            "dependencies": paper_analysis_model.dependencies,
-            "dataset_description": paper_analysis_model.dataset_description,
-            "claimed_results": paper_analysis_model.get_claimed_results()
-            if hasattr(paper_analysis_model, "get_claimed_results")
-            else json.loads(paper_analysis_model.claimed_results or "{}"),
-        }
-
-        execution_details = {
-            "stdout_combined": execution_details_model.stdout_combined,
-            "commands_run": execution_details_model.commands_run,
-            "dependencies_used": execution_details_model.dependencies_used,
-            "errors_summary": execution_details_model.errors_summary,
-            "test_info": execution_details_model.test_info,
-            "randomness_info": execution_details_model.randomness_info,
-            "discovered_files": execution_details_model.get_discovered_files()
-            if hasattr(execution_details_model, "get_discovered_files")
-            else json.loads(execution_details_model.discovered_files or "[]"),
-            "actual_results": execution_details_model.get_actual_results()
-            if hasattr(execution_details_model, "get_actual_results")
-            else json.loads(execution_details_model.actual_results or "{}"),
-        }
-
-        # Build evaluation prompt
-        prompt = _build_evaluation_prompt(paper_analysis, execution_details, artifacts)
-
-        # Check evaluation cache
-        paper_hash = (
-            paper_analysis.get("pdf_hash") or hashlib.md5(paper_analysis.get("extracted_text", "").encode()).hexdigest()
-        )
-        code_hash = hashlib.md5(execution_details.get("stdout_combined", "").encode()).hexdigest()
-
-        # Check cache only if caching is enabled
-        cached_evaluation = None
-        if Config.ENABLE_CACHING:
-            cached_evaluation = get_cached_evaluation(paper_hash, code_hash)
-
-        if cached_evaluation:
-            if app_logger:
-                app_logger.info(f"[{job_id}] Cache hit for evaluation")
-            if emit_event:
-                emit_event(
-                    job_id,
-                    {
-                        "step": "cache_hit_evaluation",
-                        "message": "Using cached evaluation results",
-                        # NOTE: Do NOT emit progress here - orchestrator controls all progress
-                    },
-                )
-            evaluation_results = cached_evaluation
-        else:
-            if app_logger:
-                app_logger.info(f"[{job_id}] Calling {llm_provider.get_name()} for plugin evaluation...")
-
-            response_text = llm_provider.complete(messages=[{"role": "user", "content": prompt}], max_tokens=3000)
-
-            # Parse response
-            try:
-                evaluation_results = json.loads(response_text)
-            except json.JSONDecodeError:
-                if "```json" in response_text:
-                    json_str = response_text.split("```json")[1].split("```")[0].strip()
-                    evaluation_results = json.loads(json_str)
-                elif "```" in response_text:
-                    json_str = response_text.split("```")[1].split("```")[0].strip()
-                    evaluation_results = json.loads(json_str)
-                else:
-                    raise ValueError("Could not parse evaluation response")
-
-            # Cache the results only if caching is enabled
-            if Config.ENABLE_CACHING:
-                store_evaluation_cache(paper_hash, code_hash, evaluation_results)
-
-        # Store evaluation results using Peewee ORM
-        for eval_item in evaluation_results.get("evaluations", []):
-            PluginEvaluation.create(
-                job_id=job_id,
-                plugin_id=eval_item.get("plugin_id"),
-                name=eval_item.get("name"),
-                status=eval_item.get("status"),
-                evidence=eval_item.get("evidence"),
-                paper_supports=eval_item.get("paper_supports"),
-                code_supports=eval_item.get("code_supports"),
-                conclusion=eval_item.get("conclusion"),
-            )
-
-        # Update job report
-        try:
-            job = Job.get_by_id(job_id)
-            if job:
-                report = job.get_report()
-                report["plugin_evaluations"] = evaluation_results.get("evaluations", [])
-                job.set_report(report)
-                job.save()
-        except Exception:
-            pass
-
-        # Emit completion (without progress - orchestrator controls progress)
-        stage3_duration = int((time.time() - stage3_start) * 1000)
-        if emit_event:
-            emit_event(
-                job_id,
-                {
-                    "step": "evaluation_complete",
-                    "message": f"Evaluated {len(evaluation_results.get('evaluations', []))} plugins",
-                    "stage_duration_ms": stage3_duration,
-                },
-            )
-
-        if app_logger:
-            app_logger.info(f"[{job_id}] === PLUGIN EVALUATION COMPLETE in {stage3_duration}ms ===")
-
-        return True
-
-    except Exception as e:
-        if app_logger:
-            app_logger.error(f"[{job_id}] Error in plugin evaluation: {e}", exc_info=True)
-        if emit_event:
-            emit_event(job_id, {"step": "error", "message": f"Plugin evaluation failed: {str(e)}"})
-        return False
-
-
-def _build_evaluation_prompt(paper_analysis, execution_details, artifacts):
-    """Build the evaluation prompt for Claude."""
-    return f"""You are evaluating the reproducibility of a scientific paper and its code implementation.
-
-PAPER CONTENT:
-═══════════════════════════════════════════════════════════
-Extracted Text (first 2000 chars):
-{paper_analysis.get("extracted_text", "")[:2000]}
-
-Methodology:
-{paper_analysis.get("methodology", "No methodology found")}
-
-Claimed Results:
-{json.dumps(paper_analysis.get("claimed_results", {}), indent=2)}
-
-Dependencies:
-{paper_analysis.get("dependencies", "No dependencies mentioned")}
-
-Dataset:
-{paper_analysis.get("dataset_description", "No dataset description")}
-
-CODE EXECUTION:
-═══════════════════════════════════════════════════════════
-Artifacts Found:
-{json.dumps(artifacts, indent=2)}
-
-Files in Repository:
-{json.dumps(execution_details.get("discovered_files", [])[:20], default=str)}
-
-Test Suite Information:
-{execution_details.get("test_info", "No test info")}
-
-Randomness Seed Information:
-{execution_details.get("randomness_info", "No randomness info")}
-
-Commands Run:
-{execution_details.get("commands_run", "No commands recorded")[:1000]}
-
-Execution Output (last 1500 chars):
-{execution_details.get("stdout_combined", "No output recorded")[-1500:]}
-
-Actual Results:
-{json.dumps(execution_details.get("actual_results", {}), indent=2)}
-
-Dependencies Used:
-{execution_details.get("dependencies_used", "No dependencies logged")}
-
-Errors Summary:
-{execution_details.get("errors_summary", "No errors")}
-
-EVALUATION TASKS:
-═══════════════════════════════════════════════════════════
-
-Evaluate 15 reproducibility aspects. For each, determine:
-- status: "pass", "partial", or "fail"
-- evidence: Quote or describe findings
-- conclusion: Brief explanation
-
-ASPECTS (Return JSON with evaluations array):
-
-{{
-  "evaluations": [
-    {{"aspect_id": "dependencies_pinned", "name": "Dependencies Pinned", "status": "pass", "paper_supports": true, "code_supports": true, "evidence": "...", "conclusion": "..."}},
-    ...15 total...
-  ]
-}}
-
-Return ONLY valid JSON, no explanation."""

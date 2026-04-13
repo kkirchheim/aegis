@@ -211,7 +211,9 @@ Reasoning: Code is available
             # Track what logger is passed to evaluate_paper
             passed_logger = None
 
-            def mock_evaluate_paper(job_id, paper_analysis, code_output, execution_log, llm_provider, app_logger):
+            def mock_evaluate_paper(
+                job_id, paper_analysis, code_output, execution_log, llm_provider, app_logger, execution_details=None
+            ):
                 nonlocal passed_logger
                 passed_logger = app_logger
 

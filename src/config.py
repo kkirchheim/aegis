@@ -76,6 +76,10 @@ class Config:
 
     # Agent configuration
     AGENT_CONTEXT_LIMIT = int(os.getenv("AGENT_CONTEXT_LIMIT", "100000"))
+    AGENT_LOG_PROMPTS = (
+        os.getenv("AGENT_LOG_PROMPTS", "true" if FLASK_ENV != "production" else "false").lower() == "true"
+    )
+    AGENT_PROMPT_LOG_MAX_CHARS = int(os.getenv("AGENT_PROMPT_LOG_MAX_CHARS", "200000"))
 
     # Caching
     ENABLE_CACHING = os.getenv("ENABLE_CACHING", "false").lower() == "true"

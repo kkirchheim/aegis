@@ -33,6 +33,39 @@ AGENT_IMAGES = {
             "numpy, pandas, matplotlib. Use pip to install additional Python packages."
         ),
     },
+    "python27": {
+        "tag": "paper-reproducibility-agent-py27:latest",
+        "dockerfile": "agent/Dockerfile.py27",
+        "environment_info": (
+            "Legacy Python 2.7 Conda container. Repository commands use Python 2.7 by default "
+            "via PATH, with pip available. Conda is configured with legacy package channels. "
+            "Prefer conda install over pip when a dependency is available through Conda, especially "
+            "for packages with native extensions or compiled libraries. The control agent runs "
+            "separately on Python 3."
+        ),
+    },
+    "python34": {
+        "tag": "paper-reproducibility-agent-py34:latest",
+        "dockerfile": "agent/Dockerfile.py34",
+        "environment_info": (
+            "Legacy Python 3.4 Conda container. Repository commands use Python 3.4 by default "
+            "via PATH, with pip available. Conda is configured with legacy package channels. "
+            "Prefer conda install over pip when a dependency is available through Conda, especially "
+            "for packages with native extensions or compiled libraries. The control agent runs "
+            "separately on modern Python 3."
+        ),
+    },
+    "python36": {
+        "tag": "paper-reproducibility-agent-py36:latest",
+        "dockerfile": "agent/Dockerfile.py36",
+        "environment_info": (
+            "Legacy Python 3.6 Conda container. Repository commands use Python 3.6 by default "
+            "via PATH, with pip available. Conda is configured with legacy package channels. "
+            "Prefer conda install over pip when a dependency is available through Conda, especially "
+            "for packages with native extensions or compiled libraries. The control agent runs "
+            "separately on modern Python 3."
+        ),
+    },
     "matlab": {
         "tag": "paper-reproducibility-agent-matlab:latest",
         "dockerfile": "agent/Dockerfile.matlab",
@@ -42,6 +75,19 @@ AGENT_IMAGES = {
             "octave-io, octave-optim, octave-control. Also: numpy, scipy, matplotlib, oct2py. "
             "Run .m scripts with: octave --no-gui --eval \"run('script.m')\" "
             "Do NOT attempt to install MATLAB or Octave — Octave is already installed."
+        ),
+    },
+    "matlab_official": {
+        "tag": "paper-reproducibility-agent-matlab-official:latest",
+        "dockerfile": "agent/Dockerfile.matlab-official",
+        "environment_info": (
+            "Official MATLAB container based on a locally licensed MathWorks image. "
+            "MATLAB is available through the matlab command and is configured for online licensing. "
+            "MathWorks Package Manager is available as mpm. "
+            'Run a quick smoke test before long scripts: matlab -batch "disp(version); exit". '
+            "Run .m scripts non-interactively with hidden figures, for example: "
+            "matlab -batch \"set(0,'DefaultFigureVisible','off'); run('script.m'); exit\". "
+            "Do not use octave unless explicitly requested."
         ),
     },
 }
@@ -103,7 +149,7 @@ def build_agent_image(image_type="standard", app_logger=None):
     """Build Docker image for agent sandbox.
 
     Args:
-        image_type: "standard" or "ml"
+        image_type: key from AGENT_IMAGES
         app_logger: Flask app logger
     """
     if not DOCKER_AVAILABLE:
@@ -323,6 +369,9 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
             "stdout": True,
             "stderr": True,
         }
+
+        if image_type == "matlab_official":
+            container_kwargs["shm_size"] = "512m"
 
         # Only validate and use custom network if specified
         if Config.DOCKER_NETWORK:

@@ -1,8 +1,7 @@
 """Event dispatcher - central hub for job events and stage transitions."""
 
 import sys
-from threading import Lock
-from typing import Callable, Dict
+from typing import Callable
 
 from models.database import Event, Job
 from models.events import STAGE_TRANSITIONS, JobEvent
@@ -13,8 +12,6 @@ class EventDispatcher:
 
     def __init__(
         self,
-        event_queues: Dict = None,
-        event_queues_lock: Lock = None,
         job_service=None,
         logger: Callable = None,
     ):
@@ -22,13 +19,9 @@ class EventDispatcher:
         Initialize dispatcher with optional dependencies.
 
         Args:
-            event_queues: Dict[job_id] -> List[events] for SSE streaming
-            event_queues_lock: Thread lock for queue access
             job_service: Service for updating job status
             logger: Logging function (defaults to stderr)
         """
-        self.event_queues = event_queues or {}
-        self.event_queues_lock = event_queues_lock or Lock()
         self.job_service = job_service
         self.logger = logger or self._default_logger
 
@@ -45,7 +38,6 @@ class EventDispatcher:
         1. Persist to database (unless chat event)
         2. Update job status for stage transitions
         3. Log ANY progress values (for debugging)
-        4. Emit to SSE queues for real-time updates
 
         Args:
             event: JobEvent to emit
@@ -63,9 +55,6 @@ class EventDispatcher:
             self.logger(
                 f"[{event.job_id}] *** EVENT INCLUDES PROGRESS: step={event.step}, progress={event.progress} ***"
             )
-
-        # Emit to SSE queues for real-time updates
-        self._emit_to_queues(event)
 
     def _persist_event(self, event: JobEvent) -> None:
         """Store event in database (non-chat events only)."""
@@ -126,45 +115,23 @@ class EventDispatcher:
         self.logger(f"[{event.job_id}] Calling update_job_status with: {updates}")
         update_job_status(event.job_id, **updates)
 
-    def _emit_to_queues(self, event: JobEvent) -> None:
-        """Emit event to SSE queues for real-time updates."""
-        with self.event_queues_lock:
-            if event.job_id in self.event_queues:
-                self.event_queues[event.job_id].append(event.to_dict())
-                self.logger(
-                    f"[{event.job_id}] Event queued: {event.step} (queue size: {len(self.event_queues[event.job_id])})"
-                )
-            else:
-                self.logger(
-                    f"[{event.job_id}] Queue not found for event: {event.step} (available: {list(self.event_queues.keys())})"
-                )
-
 
 class EventDispatcherFactory:
     """Factory for creating dispatcher instances with proper dependencies."""
 
     @staticmethod
-    def create(event_queues: Dict = None, event_queues_lock: Lock = None):
+    def create():
         """Create a dispatcher with all dependencies."""
-        return EventDispatcher(
-            event_queues=event_queues,
-            event_queues_lock=event_queues_lock,
-        )
+        return EventDispatcher()
 
     @staticmethod
     def create_test_dispatcher(
-        event_queues: Dict = None,
-        event_queues_lock: Lock = None,
         mock_logger: Callable = None,
     ):
         """Create a test dispatcher with mocked dependencies."""
-        queues = event_queues or {}
-        lock = event_queues_lock or Lock()
         logger = mock_logger or (lambda msg: None)  # Silent by default
 
         return EventDispatcher(
-            event_queues=queues,
-            event_queues_lock=lock,
             job_service=None,  # Mocked out for testing
             logger=logger,
         )

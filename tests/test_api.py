@@ -19,9 +19,7 @@ class TestEventLoggingEndpoint:
 
     def test_emit_event_via_dispatcher(self, app):
         """Test emitting event through dispatcher."""
-        queues = {"job123": []}
-
-        dispatcher = EventDispatcher(event_queues=queues, job_service=None)
+        dispatcher = EventDispatcherFactory.create_test_dispatcher()
 
         event = JobEvent(
             job_id="job123",
@@ -30,14 +28,9 @@ class TestEventLoggingEndpoint:
         )
         dispatcher.emit(event)
 
-        # Event should be in queue
-        assert len(queues["job123"]) == 1
-        assert queues["job123"][0]["step"] == "stage_1_starting"
-
     def test_log_event_with_stage_duration(self, app):
         """Test logging event with stage_duration_ms."""
-        queues = {"job123": []}
-        dispatcher = EventDispatcher(event_queues=queues, job_service=None)
+        dispatcher = EventDispatcherFactory.create_test_dispatcher()
 
         event = JobEvent(
             job_id="job123",
@@ -47,18 +40,13 @@ class TestEventLoggingEndpoint:
         )
         dispatcher.emit(event)
 
-        # Event in queue should have stage_duration_ms
-        assert queues["job123"][0]["stage_duration_ms"] == 5432
-
     def test_log_chat_event_not_persisted(self, app):
         """Test that chat events are not persisted to database."""
-        queues = {"job123": []}
-
         with (
             patch("services.event_dispatcher.Job") as mock_job_class,
             patch("services.event_dispatcher.Event") as mock_event_class,
         ):
-            dispatcher = EventDispatcher(event_queues=queues, job_service=None)
+            dispatcher = EventDispatcherFactory.create_test_dispatcher()
 
             # Emit chat event
             event = JobEvent(
@@ -72,13 +60,8 @@ class TestEventLoggingEndpoint:
             mock_job_class.get_by_id.assert_not_called()
             mock_event_class.create.assert_not_called()
 
-            # But should be in SSE queue
-            assert len(queues["job123"]) == 1
-
     def test_log_non_chat_event_persisted(self):
         """Test that non-chat events are persisted."""
-        queues = {"job123": []}
-
         with (
             patch("services.event_dispatcher.Job") as mock_job_class,
             patch("services.event_dispatcher.Event") as mock_event_class,
@@ -86,7 +69,7 @@ class TestEventLoggingEndpoint:
             mock_job = MagicMock()
             mock_job_class.get_by_id.return_value = mock_job
 
-            dispatcher = EventDispatcher(event_queues=queues, job_service=None)
+            dispatcher = EventDispatcherFactory.create_test_dispatcher()
 
             event = JobEvent(
                 job_id="job123",
@@ -140,7 +123,7 @@ class TestErrorHandling:
             # Simulate job not found
             mock_job_class.get_by_id.side_effect = Exception("Job not found")
 
-            dispatcher = EventDispatcher(event_queues={}, job_service=None)
+            dispatcher = EventDispatcher()
 
             event = JobEvent(job_id="nonexistent", step="stage_1_starting")
 
@@ -152,7 +135,6 @@ class TestErrorHandling:
 
     def test_database_error_logged(self):
         """Test that database errors are logged."""
-        queues = {"job123": []}
         logged = []
 
         with (
@@ -163,8 +145,6 @@ class TestErrorHandling:
             mock_job_class.get_by_id.side_effect = Exception("Database connection failed")
 
             dispatcher = EventDispatcher(
-                event_queues=queues,
-                job_service=None,
                 logger=lambda msg: logged.append(msg),
             )
 
@@ -261,13 +241,10 @@ class TestStageTransitionEvents:
 
     def test_stage_transition_event_logged(self):
         """Test that stage transition events are logged."""
-        queues = {"job123": []}
         logged = []
 
         with patch("services.event_dispatcher.Job"), patch("services.event_dispatcher.Event"):
             dispatcher = EventDispatcher(
-                event_queues=queues,
-                job_service=None,
                 logger=lambda msg: logged.append(msg),
             )
 
@@ -297,44 +274,40 @@ class TestStageTransitionEvents:
 class TestConcurrentEventEmission:
     """Tests for concurrent event emission."""
 
-    def test_multiple_events_to_same_job(self, app):
-        """Test multiple events emitted to same job queue."""
-        queues = {"job123": []}
-        dispatcher = EventDispatcher(event_queues=queues, job_service=None)
+    def test_multiple_events_emitted(self, app):
+        """Test multiple events emitted for same job."""
+        logged = []
 
-        events = [
-            JobEvent(job_id="job123", step="stage_1_starting"),
-            JobEvent(job_id="job123", step="extracting_text"),
-            JobEvent(job_id="job123", step="analyzing"),
-            JobEvent(job_id="job123", step="stage_1_complete"),
-        ]
+        with patch("services.event_dispatcher.Job"), patch("services.event_dispatcher.Event"):
+            dispatcher = EventDispatcher(logger=lambda msg: logged.append(msg))
 
-        for event in events:
-            dispatcher.emit(event)
+            events = [
+                JobEvent(job_id="job123", step="stage_1_starting"),
+                JobEvent(job_id="job123", step="extracting_text"),
+                JobEvent(job_id="job123", step="analyzing"),
+                JobEvent(job_id="job123", step="stage_1_complete"),
+            ]
 
-        assert len(queues["job123"]) == 4
+            for event in events:
+                dispatcher.emit(event)
 
-    def test_events_to_different_jobs(self, app):
-        """Test events to different job queues."""
-        queues = {"job1": [], "job2": [], "job3": []}
-        dispatcher = EventDispatcher(event_queues=queues, job_service=None)
+            # Should have logged persist messages for all 4
+            persisted = [msg for msg in logged if "Event persisted" in msg]
+            assert len(persisted) == 4
 
-        for job_id in ["job1", "job2", "job3"]:
-            event = JobEvent(job_id=job_id, step="stage_1_starting")
-            dispatcher.emit(event)
+    def test_events_for_different_jobs(self, app):
+        """Test events for different jobs."""
+        logged = []
 
-        assert len(queues["job1"]) == 1
-        assert len(queues["job2"]) == 1
-        assert len(queues["job3"]) == 1
+        with patch("services.event_dispatcher.Job"), patch("services.event_dispatcher.Event"):
+            dispatcher = EventDispatcher(logger=lambda msg: logged.append(msg))
 
-    def test_event_to_nonexistent_queue(self):
-        """Test emitting to job with no queue (no error)."""
-        dispatcher = EventDispatcher(event_queues={}, job_service=None)
+            for job_id in ["job1", "job2", "job3"]:
+                event = JobEvent(job_id=job_id, step="stage_1_starting")
+                dispatcher.emit(event)
 
-        event = JobEvent(job_id="job123", step="stage_1_starting")
-
-        # Should not raise error
-        dispatcher.emit(event)
+            persisted = [msg for msg in logged if "Event persisted" in msg]
+            assert len(persisted) == 3
 
 
 class TestEventFactory:
@@ -343,17 +316,7 @@ class TestEventFactory:
     def test_create_test_dispatcher(self):
         """Test creating a test dispatcher."""
         dispatcher = EventDispatcherFactory.create_test_dispatcher()
-
         assert dispatcher is not None
-        assert dispatcher.event_queues == {}
-        assert dispatcher.event_queues_lock is not None
-
-    def test_create_dispatcher_with_queues(self):
-        """Test creating dispatcher with custom queues."""
-        custom_queues = {"job1": [], "job2": []}
-        dispatcher = EventDispatcherFactory.create_test_dispatcher(event_queues=custom_queues)
-
-        assert dispatcher.event_queues == custom_queues
 
     def test_test_dispatcher_with_mock_logger(self):
         """Test test dispatcher with custom logger."""

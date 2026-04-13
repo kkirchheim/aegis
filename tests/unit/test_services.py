@@ -365,7 +365,6 @@ class TestEventDispatcher:
         dispatcher = EventDispatcherFactory.create_test_dispatcher()
 
         assert isinstance(dispatcher, EventDispatcher)
-        assert dispatcher.event_queues == {}
 
 
 # ============================================================================

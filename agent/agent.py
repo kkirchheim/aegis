@@ -7,9 +7,12 @@ All execution happens in container (sandbox).
 
 import json
 import os
+import queue
 import shlex
+import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -21,7 +24,8 @@ REPO_URL = os.getenv("REPO_URL", "")
 JOB_ID = os.getenv("JOB_ID", "")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://host.docker.internal:5000")
 MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "15"))
-COMMAND_TIMEOUT = 300  # 5 minutes per command
+COMMAND_TIMEOUT = int(os.getenv("COMMAND_TIMEOUT", "0"))  # seconds per command; 0 disables
+COMMAND_IDLE_TIMEOUT = int(os.getenv("COMMAND_IDLE_TIMEOUT", "0"))  # seconds with no output; 0 disables
 REPO_PATH = "/workspace/repo"
 CONTAINER_INFO = os.getenv("CONTAINER_INFO", "")
 AGENT_INSTRUCTIONS = os.getenv("AGENT_INSTRUCTIONS", "")
@@ -67,39 +71,123 @@ def execute_command(command: str, cwd: Optional[str] = None, shell: bool = True)
 
     log_message(f"$ {command}")
 
+    def _reader(stream, stream_name: str, output_queue: queue.Queue):
+        try:
+            for line in iter(stream.readline, ""):
+                output_queue.put((stream_name, line))
+        finally:
+            stream.close()
+
     try:
         # Use pipefail so piped commands report the real exit code
         wrapped = f"set -o pipefail; {command}"
-        result = subprocess.run(
+        process = subprocess.Popen(
             wrapped,
             cwd=cwd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=COMMAND_TIMEOUT,
             shell=True,
             executable="/bin/bash",
+            start_new_session=True,
         )
 
-        success = result.returncode == 0
+        output_queue = queue.Queue()
+        stdout_thread = threading.Thread(target=_reader, args=(process.stdout, "stdout", output_queue), daemon=True)
+        stderr_thread = threading.Thread(target=_reader, args=(process.stderr, "stderr", output_queue), daemon=True)
+        stdout_thread.start()
+        stderr_thread.start()
 
-        # Log output once (log_message prints to stdout AND posts to backend)
-        if result.stdout:
-            log_message(result.stdout[:2000].rstrip(), severity="info")
+        stdout_parts = []
+        stderr_parts = []
+        started_at = time.monotonic()
+        last_output_at = started_at
+        last_heartbeat = started_at
 
-        if result.stderr:
-            log_message(result.stderr[:2000].rstrip(), severity="warning" if success else "error")
+        while True:
+            try:
+                stream_name, line = output_queue.get(timeout=0.2)
+                last_output_at = time.monotonic()
+                if stream_name == "stdout":
+                    stdout_parts.append(line)
+                    severity = "info"
+                else:
+                    stderr_parts.append(line)
+                    severity = "warning"
+                if line.strip():
+                    log_message(line.rstrip()[:2000], severity=severity)
+            except queue.Empty:
+                pass
+
+            now = time.monotonic()
+            if process.poll() is not None:
+                break
+
+            if COMMAND_TIMEOUT and now - started_at > COMMAND_TIMEOUT:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                    process.wait(timeout=5)
+                except Exception:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except Exception:
+                        pass
+                raise subprocess.TimeoutExpired(command, COMMAND_TIMEOUT)
+
+            if COMMAND_IDLE_TIMEOUT and now - last_output_at > COMMAND_IDLE_TIMEOUT:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                    process.wait(timeout=5)
+                except Exception:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except Exception:
+                        pass
+                idle_seconds = int(now - last_output_at)
+                log_message(
+                    f"✗ Command produced no output for {idle_seconds}s; treating it as stuck",
+                    severity="error",
+                )
+                return {
+                    "success": False,
+                    "returncode": -1,
+                    "stdout": "".join(stdout_parts)[:5000],
+                    "stderr": f"Command produced no output for {idle_seconds}s",
+                }
+
+            if now - last_heartbeat >= 30:
+                elapsed = int(now - started_at)
+                log_message(f"Command still running after {elapsed}s: {command[:120]}", severity="info")
+                last_heartbeat = now
+
+        stdout_thread.join(timeout=1)
+        stderr_thread.join(timeout=1)
+        while not output_queue.empty():
+            stream_name, line = output_queue.get()
+            if stream_name == "stdout":
+                stdout_parts.append(line)
+                severity = "info"
+            else:
+                stderr_parts.append(line)
+                severity = "warning"
+            if line.strip():
+                log_message(line.rstrip()[:2000], severity=severity)
+
+        stdout = "".join(stdout_parts)
+        stderr = "".join(stderr_parts)
+        success = process.returncode == 0
 
         output = {
             "success": success,
-            "returncode": result.returncode,
-            "stdout": result.stdout[:5000],
-            "stderr": result.stderr[:5000],
+            "returncode": process.returncode,
+            "stdout": stdout[:5000],
+            "stderr": stderr[:5000],
         }
 
         if success:
             log_message("✓ Exit code 0", severity="info")
         else:
-            log_message(f"✗ Exit code {result.returncode}", severity="error")
+            log_message(f"✗ Exit code {process.returncode}", severity="error")
 
         return output
 
@@ -155,21 +243,56 @@ def read_file(path: str, start_line: int = 1, max_lines: int = 200) -> Optional[
 
 
 def list_files(path: str = ".") -> list:
-    """List files in repo directory (sandbox)."""
+    """List files in repo directory recursively with per-level budgets.
+
+    Each directory level has its own item limit so that top-level files
+    (LICENSE, README, etc.) are never crowded out by deeper entries.
+    Skips .git/ contents entirely.
+    """
     target = Path(REPO_PATH) / path if path != "." else Path(REPO_PATH)
+    # Per-level budget: how many items to list per directory at each depth
+    budget_per_depth = {0: 50, 1: 10, 2: 5}
+    max_depth = max(budget_per_depth.keys())
+    total_cap = 200
+    skip_dirs = {".git"}
+
+    items = []
+
+    def _walk(directory: Path, depth: int):
+        if depth > max_depth or len(items) >= total_cap:
+            return
+        budget = budget_per_depth.get(depth, 5)
+        try:
+            children = sorted(directory.iterdir())
+        except OSError:
+            return
+        count = 0
+        subdirs = []
+        for child in children:
+            if len(items) >= total_cap:
+                return
+            rel = str(child.relative_to(REPO_PATH))
+            if child.is_dir():
+                if child.name in skip_dirs:
+                    continue
+                if count < budget:
+                    items.append(f"{rel}/")
+                    count += 1
+                    subdirs.append(child)
+            else:
+                if count < budget:
+                    items.append(rel)
+                    count += 1
+        # Recurse into subdirectories after listing current level
+        for sub in subdirs:
+            _walk(sub, depth + 1)
 
     try:
-        items = []
-        for item in sorted(target.iterdir())[:30]:  # Limit to 30 items
-            rel_path = str(item.relative_to(REPO_PATH))
-            if item.is_dir():
-                items.append(f"{rel_path}/")
-            else:
-                items.append(rel_path)
-        return items
+        _walk(target, 0)
     except Exception as e:
         log_message(f"✗ Error listing files: {e}", severity="error")
-        return []
+
+    return items
 
 
 def ask_claude(state: Dict[str, Any]) -> Optional[Dict[str, str]]:
@@ -639,7 +762,7 @@ def main():
 
     # Step 3: List files in repo
     state["discovered_files"] = list_files(".")
-    log_message(f"📁 Found {len(state['discovered_files'])} files in repo root")
+    log_message(f"📁 Found {len(state['discovered_files'])} files in repository")
     print(f"   Files: {', '.join(state['discovered_files'][:5])}...")
     print()
 

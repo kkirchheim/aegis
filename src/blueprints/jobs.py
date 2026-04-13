@@ -10,7 +10,6 @@ from utils.decorators import require_auth
 
 jobs_bp = Blueprint("jobs", __name__)
 
-# Event dispatcher (no longer uses event_queues - all data via /api/job/<id>/full)
 _dispatcher = EventDispatcher()
 
 # Pipeline orchestrator

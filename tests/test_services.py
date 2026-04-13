@@ -83,42 +83,41 @@ class TestAnalysisService:
 class TestEvaluationService:
     """Tests for reproducibility evaluation service functions."""
 
-    def test_evaluate_reproducibility_plugins(self):
-        """Test evaluating reproducibility aspects."""
-        with patch("services.evaluation_service.evaluate_reproducibility_plugins") as mock_eval:
-            # Mock evaluation result
+    def test_evaluate_paper(self):
+        """Test evaluating reproducibility aspects via evaluate_paper."""
+        with patch("services.evaluation_service.evaluate_paper") as mock_eval:
+            # Mock evaluation result (plugin_id -> result dict)
             evaluation_result = {
-                "aspects": [
-                    {"name": "Code Availability", "status": "yes"},
-                    {"name": "Reproducible Results", "status": "partial"},
-                ],
-                "score": 0.75,
+                "plugin-1": {"status": "PASS", "reasoning": "Code is available"},
+                "plugin-2": {"status": "FAIL", "reasoning": "Results not reproducible"},
             }
             mock_eval.return_value = evaluation_result
 
-            from services.evaluation_service import evaluate_reproducibility_plugins
+            from services.evaluation_service import evaluate_paper
 
-            result = evaluate_reproducibility_plugins(
+            result = evaluate_paper(
                 job_id="job123",
+                paper_analysis=MagicMock(),
+                code_output="output",
+                execution_log="log",
                 llm_provider=MagicMock(),
             )
 
-            assert result["score"] == 0.75
-            assert len(result["aspects"]) == 2
+            assert len(result) == 2
+            assert result["plugin-1"]["status"] == "PASS"
 
     def test_aspect_evaluation_with_evidence(self):
         """Test that aspect evaluations include evidence."""
-        with patch("services.evaluation_service.PluginEvaluation"):
-            # Mock evaluation with evidence
-            mock_aspect = MagicMock(
-                name="Code Availability",
-                status="yes",
-                evidence="GitHub repository linked in paper",
-            )
+        # Mock evaluation with evidence
+        mock_aspect = MagicMock(
+            name="Code Availability",
+            status="yes",
+            evidence="GitHub repository linked in paper",
+        )
 
-            # Verify evidence is captured
-            assert mock_aspect.evidence is not None
-            assert "GitHub" in mock_aspect.evidence
+        # Verify evidence is captured
+        assert mock_aspect.evidence is not None
+        assert "GitHub" in mock_aspect.evidence
 
     def test_evaluation_caching(self):
         """Test that evaluation results are cached."""
@@ -140,15 +139,18 @@ class TestEvaluationService:
 
     def test_evaluation_missing_data(self):
         """Test error handling when required data is missing."""
-        with patch("services.evaluation_service.evaluate_reproducibility_plugins") as mock_eval:
+        with patch("services.evaluation_service.evaluate_paper") as mock_eval:
             # Simulate missing data error
             mock_eval.side_effect = ValueError("Missing paper analysis data")
 
-            from services.evaluation_service import evaluate_reproducibility_plugins
+            from services.evaluation_service import evaluate_paper
 
             with pytest.raises(ValueError):
-                evaluate_reproducibility_plugins(
+                evaluate_paper(
                     job_id="job_without_analysis",
+                    paper_analysis=MagicMock(),
+                    code_output="",
+                    execution_log="",
                     llm_provider=MagicMock(),
                 )
 
@@ -410,14 +412,17 @@ class TestErrorHandlingAcrossServices:
 
     def test_evaluation_handles_missing_analysis(self):
         """Test evaluation handles missing paper analysis."""
-        with patch("services.evaluation_service.evaluate_reproducibility_plugins") as mock_eval:
+        with patch("services.evaluation_service.evaluate_paper") as mock_eval:
             mock_eval.side_effect = ValueError("Paper analysis not found")
 
-            from services.evaluation_service import evaluate_reproducibility_plugins
+            from services.evaluation_service import evaluate_paper
 
             with pytest.raises(ValueError):
-                evaluate_reproducibility_plugins(
+                evaluate_paper(
                     job_id="job_no_analysis",
+                    paper_analysis=MagicMock(),
+                    code_output="",
+                    execution_log="",
                     llm_provider=MagicMock(),
                 )
 

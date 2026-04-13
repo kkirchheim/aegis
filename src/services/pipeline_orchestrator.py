@@ -365,6 +365,7 @@ class PipelineOrchestrator:
                 execution_log=execution.errors_summary or "",
                 llm_provider=llm_provider,
                 app_logger=wrapped_logger,  # Pass wrapped logger, not raw function
+                execution_details=execution,
             )
 
             int((time.time() - start_time) * 1000)
@@ -554,6 +555,7 @@ def stage_3_evaluation(job_id, app_logger=None):
             execution_log=execution.errors_summary or "",
             llm_provider=None,  # Will use default from config
             app_logger=logger,  # Pass wrapped logger that handles both function and object
+            execution_details=execution,
         )
 
         elapsed_ms = int((time.time() - start_time) * 1000)

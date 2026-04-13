@@ -54,10 +54,32 @@ mypy src/app.py --ignore-missing-imports
 
 ### Build agent containers
 ```bash
+scripts/build_agent_images.sh
+```
+
+To rebuild without Docker layer cache:
+
+```bash
+scripts/build_agent_images.sh --no-cache
+```
+
+Equivalent individual commands:
+
+```bash
 docker build -t paper-reproducibility-agent:latest -f agent/Dockerfile .
 docker build -t paper-reproducibility-agent-ml:latest -f agent/Dockerfile.ml .
+docker build -t paper-reproducibility-agent-py27:latest -f agent/Dockerfile.py27 .
+docker build -t paper-reproducibility-agent-py34:latest -f agent/Dockerfile.py34 .
+docker build -t paper-reproducibility-agent-py36:latest -f agent/Dockerfile.py36 .
 docker build -t paper-reproducibility-agent-matlab:latest -f agent/Dockerfile.matlab .
+docker build -t paper-reproducibility-agent-matlab-official:latest -f agent/Dockerfile.matlab-official .
 ```
+
+The official MATLAB image builds from a locally licensed MathWorks image named
+`matlab-licensed-test:r2025b` by default. Override it with
+`--build-arg MATLAB_BASE_IMAGE=<tag>` when using a different committed base.
+Install additional MathWorks products with
+`--build-arg MATLAB_PRODUCTS="Computer_Vision_Toolbox Statistics_and_Machine_Learning_Toolbox"`.
 
 ## Architecture
 

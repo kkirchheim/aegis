@@ -1,0 +1,57 @@
+FROM continuumio/miniconda3:4.12.0
+
+WORKDIR /app
+
+# Install system dependencies for legacy Python repositories.
+# - git/git-lfs: Clone repositories and large file artifacts
+# - build-essential/gfortran: Compile old scientific packages when binaries are unavailable
+# - BLAS/LAPACK headers: Support numpy/scipy builds from source
+# - curl/ca-certificates: Fetch remote resources
+RUN apt-get update && apt-get install -y \
+    git \
+    git-lfs \
+    curl \
+    build-essential \
+    gfortran \
+    libblas-dev \
+    liblapack-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Make legacy packages available to future conda install commands.
+RUN conda config --system --add channels https://repo.anaconda.com/pkgs/free && \
+    conda config --system --add channels defaults
+
+# Create a Python 3.6 environment for reproduced repositories. NumPy and other
+# project dependencies are intentionally not pre-installed; the agent installs
+# the versions required by each repository.
+RUN conda create -y -n py36 \
+    python=3.6 \
+    pip \
+    && conda clean -afy
+
+# Keep the Python 3 base environment for the control agent.
+RUN /opt/conda/bin/python -m pip install --no-cache-dir --upgrade pip setuptools wheel requests
+
+# Create non-root user for security.
+RUN groupadd -r agent && useradd -r -g agent -m agent
+
+# Create app, workspace, and writable Conda directories with correct ownership.
+# The agent runs as a non-root user, but it must be able to install packages
+# into the active Python 3.6 environment during repository reproduction.
+RUN mkdir -p /app /workspace/repo /opt/conda/pkgs && \
+    chown -R agent:agent /app /workspace /opt/conda/envs/py36 /opt/conda/pkgs
+
+# Copy agent script.
+COPY --chown=agent:agent agent/agent.py .
+
+# Repository commands should default to the Python 3.6 environment, while the
+# agent entrypoint below uses the modern Python 3 interpreter explicitly.
+ENV PATH="/opt/conda/envs/py36/bin:/opt/conda/bin:${PATH}"
+
+USER agent
+WORKDIR /workspace
+
+# PYTHONUNBUFFERED ensures print() output is immediately visible in container logs.
+ENV PYTHONUNBUFFERED=1
+ENTRYPOINT ["/opt/conda/bin/python", "/app/agent.py"]

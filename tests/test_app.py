@@ -10,6 +10,7 @@ Tests cover:
 """
 
 import json
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -291,6 +292,87 @@ class TestErrorHandling:
             content_type="application/json",
         )
         assert response.status_code in (400, 422)
+
+
+class TestAgentPrompt:
+    """Test agent prompt construction."""
+
+    def test_agent_think_prioritizes_custom_instructions(self, client, app):
+        """Custom instructions should be passed to the LLM as high-priority task guidance."""
+        from models.database import Job
+
+        job_id = "test-custom-instructions"
+        custom_instructions = "Only run the Table 2 experiment and skip all training commands."
+
+        with app.app_context():
+            Job.create(id=job_id, status="processing", pdf_path="/tmp/test.pdf")
+
+        mock_provider = Mock()
+        mock_provider.complete.return_value = json.dumps(
+            {"action": "done", "target": "", "reasoning": "custom instructions acknowledged"}
+        )
+
+        with patch("services.llm_service.init_llm_provider", return_value=mock_provider):
+            response = client.post(
+                "/api/agent/think",
+                json={
+                    "job_id": job_id,
+                    "repo_state": {
+                        "repo_url": "https://github.com/example/repo",
+                        "discovered_files": ["README.md"],
+                        "agent_instructions": custom_instructions,
+                    },
+                },
+            )
+
+        assert response.status_code == 200
+        call_kwargs = mock_provider.complete.call_args.kwargs
+        prompt = call_kwargs["messages"][0]["content"]
+
+        assert custom_instructions in prompt
+        assert "highest-priority task guidance" in prompt
+        assert prompt.index("CUSTOM INSTRUCTIONS") < prompt.index("DEFAULT RULES")
+        assert "Custom instructions supplied by the user are highest-priority" in call_kwargs["system"]
+
+    def test_agent_think_logs_prompt_when_enabled(self, client, app):
+        """Agent prompt logging should include the system and user prompt."""
+        from config import Config
+        from models.database import Job
+
+        job_id = "test-prompt-logging"
+
+        with app.app_context():
+            Job.create(id=job_id, status="processing", pdf_path="/tmp/test.pdf")
+
+        original_log_prompts = Config.AGENT_LOG_PROMPTS
+        Config.AGENT_LOG_PROMPTS = True
+
+        mock_provider = Mock()
+        mock_provider.complete.return_value = json.dumps({"action": "done", "target": "", "reasoning": "done"})
+
+        try:
+            with (
+                patch("services.llm_service.init_llm_provider", return_value=mock_provider),
+                patch.object(app.logger, "info") as mock_log_info,
+            ):
+                response = client.post(
+                    "/api/agent/think",
+                    json={
+                        "job_id": job_id,
+                        "repo_state": {
+                            "repo_url": "https://github.com/example/repo",
+                            "discovered_files": ["README.md"],
+                            "agent_instructions": "Run only the ablation script.",
+                        },
+                    },
+                )
+        finally:
+            Config.AGENT_LOG_PROMPTS = original_log_prompts
+
+        assert response.status_code == 200
+        logged_message = mock_log_info.call_args.args[0] % mock_log_info.call_args.args[1:]
+        assert "Agent LLM prompt debug" in logged_message
+        assert "Run only the ablation script." in logged_message
 
 
 class TestDataIntegrity:
