@@ -17,7 +17,7 @@ _orchestrator = PipelineOrchestrator(dispatcher=_dispatcher)
 
 
 def emit_event(job_id, event_dict):
-    """Emit event to SSE clients and update job progress for milestone events.
+    """Emit event and update job progress for milestone events.
 
     Args:
         job_id: Job ID
@@ -113,21 +113,3 @@ def delete_job_endpoint(job_id):
 def criteria_page():
     """Unified review criteria page - evaluation plugins and execution checks."""
     return render_template("criteria.html")
-
-
-@jobs_bp.route("/plugins")
-@require_auth
-def plugins_page():
-    """Redirect to unified criteria page."""
-    from flask import redirect
-
-    return redirect("/criteria")
-
-
-@jobs_bp.route("/checks")
-@require_auth
-def checks_page():
-    """Redirect to unified criteria page."""
-    from flask import redirect
-
-    return redirect("/criteria")

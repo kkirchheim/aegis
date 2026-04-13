@@ -115,7 +115,7 @@ class Artifact(BaseModel):
 
 
 class Event(BaseModel):
-    """Job event for SSE streaming."""
+    """Job event for progress tracking."""
 
     job = ForeignKeyField(Job, backref="events")
     step = CharField()

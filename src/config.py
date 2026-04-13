@@ -71,9 +71,6 @@ class Config:
 
     MAX_PDF_SIZE = 100 * 1024 * 1024  # 100MB
 
-    # Backend URL
-    BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000")
-
     # Agent configuration
     AGENT_CONTEXT_LIMIT = int(os.getenv("AGENT_CONTEXT_LIMIT", "100000"))
     AGENT_LOG_PROMPTS = (

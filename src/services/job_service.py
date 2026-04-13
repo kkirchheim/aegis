@@ -195,8 +195,3 @@ def get_job_events(job_id):
         ]
     except Exception:
         return []
-
-
-def store_event(job_id, timestamp, step, message, severity="info"):
-    """Store an event for a job."""
-    return EventRepository.create(job_id, step, message, severity)
