@@ -99,6 +99,7 @@ class JobDetailSchema(Schema):
     )
     report = fields.Dict(allow_none=True, description="Final reproducibility report and recommendations")
     evidence = fields.Dict(allow_none=True, description="Plugin evaluation evidence: {plugin_id: {status, reasoning}}")
+    config = fields.Dict(allow_none=True, description="Job configuration at creation time")
     check_results = fields.List(
         fields.Dict(), allow_none=True, description="Execution check results with name, exit code, output, duration"
     )

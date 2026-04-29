@@ -71,7 +71,7 @@ docker build -t paper-reproducibility-agent-ml:latest -f agent/Dockerfile.ml .
 docker build -t paper-reproducibility-agent-py27:latest -f agent/Dockerfile.py27 .
 docker build -t paper-reproducibility-agent-py34:latest -f agent/Dockerfile.py34 .
 docker build -t paper-reproducibility-agent-py36:latest -f agent/Dockerfile.py36 .
-docker build -t paper-reproducibility-agent-matlab:latest -f agent/Dockerfile.matlab .
+docker build -t paper-reproducibility-agent-octave:latest -f agent/Dockerfile.octave .
 docker build -t paper-reproducibility-agent-matlab-official:latest -f agent/Dockerfile.matlab-official .
 ```
 

@@ -65,6 +65,7 @@ class Job(BaseModel):
     error_message = TextField(null=True)
     thumbnail_path = CharField(null=True)
     num_pages = IntegerField(null=True)
+    config = TextField(null=True)  # JSON: job configuration at creation time
     evidence = TextField(null=True)  # JSON: {plugin_id: {status, reasoning, ...}}
     created_at = DateTimeField(default=datetime.now)
     completed_at = DateTimeField(null=True)
@@ -100,6 +101,19 @@ class Job(BaseModel):
     def set_evidence(self, data: dict):
         """Set evidence as JSON."""
         self.evidence = json.dumps(data)
+
+    def get_config(self) -> dict:
+        """Parse config JSON."""
+        if not self.config:
+            return {}
+        try:
+            return json.loads(self.config)
+        except Exception:
+            return {}
+
+    def set_config(self, data: dict):
+        """Set config as JSON."""
+        self.config = json.dumps(data)
 
 
 class Artifact(BaseModel):
@@ -373,6 +387,14 @@ def _apply_schema_updates(db):
 
         if columns and "description" not in columns:
             cursor.execute("ALTER TABLE checks ADD COLUMN description TEXT")
+            conn.commit()
+
+        # Check if config column exists in jobs
+        cursor.execute("PRAGMA table_info(jobs)")
+        job_columns = [col[1] for col in cursor.fetchall()]
+
+        if job_columns and "config" not in job_columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN config TEXT")
             conn.commit()
 
         conn.close()

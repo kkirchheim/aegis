@@ -66,9 +66,9 @@ AGENT_IMAGES = {
             "separately on modern Python 3."
         ),
     },
-    "matlab": {
-        "tag": "paper-reproducibility-agent-matlab:latest",
-        "dockerfile": "agent/Dockerfile.matlab",
+    "octave": {
+        "tag": "paper-reproducibility-agent-octave:latest",
+        "dockerfile": "agent/Dockerfile.octave",
         "environment_info": (
             "Python 3.11 + GNU Octave container (MATLAB-compatible). "
             "Pre-installed: octave, octave-signal, octave-statistics, octave-image, "
@@ -199,7 +199,7 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
 
     # Use defaults if config not provided
     if config is None:
-        config = {"storage_limit": 10, "memory_limit": 4096, "cpu_limit": 2, "max_iterations": 15}
+        config = {"storage_limit": 10, "memory_limit": 4096, "cpu_limit": 2, "max_iterations": 30}
 
     # Check cache: if we've analyzed this repo before, reuse results
     # ONLY if caching is enabled
@@ -339,7 +339,7 @@ def spawn_agent_container(job_id, repo_url, config=None, app_logger=None, emit_e
             memory_limit_mb = 2048
         memory_limit_str = f"{memory_limit_mb}m"
 
-        max_iterations = config.get("max_iterations", 15)
+        max_iterations = config.get("max_iterations", 30)
         cpu_limit = config.get("cpu_limit", 2)
 
         # Container environment info for the agent prompt

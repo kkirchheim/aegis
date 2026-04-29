@@ -24,6 +24,8 @@ const citationsSection = document.getElementById("citationsSection");
 const checkResultsSection = document.getElementById("checkResultsSection");
 const artifactsSection = document.getElementById("artifactsSection");
 const pluginsSection = document.getElementById("pluginsSection");
+const configSection = document.getElementById("configSection");
+const timelineSection = document.getElementById("timelineSection");
 const logSection = document.getElementById("logSection");
 const chatSection = document.getElementById("chatSection");
 
@@ -240,6 +242,18 @@ function showRelevantSections(job) {
         console.log(`[sections] progressSection: shown (status=${job.status})`);
     }
     
+    // Always show config section
+    if (configSection) {
+        configSection.style.display = "block";
+        updateConfigSection(job.config);
+    }
+
+    // Always show timeline section
+    if (timelineSection) {
+        timelineSection.style.display = "block";
+        updateTimeline(job);
+    }
+
     // Show analysis sections if we have data
     if (metadataSection) {
         const show = !!job.paper_analysis;
@@ -372,19 +386,19 @@ function updateStages(job) {
         
         if (icon) {
             if (i < currentIndex) {
-                icon.textContent = "✓";
+                icon.innerHTML = '<i class="fa-solid fa-circle-check" aria-hidden="true"></i>';
                 icon.style.color = "#22c55e";
                 icon.className = "text-2xl mb-1";
             } else if (i === currentIndex && currentIndex !== 999) {
-                icon.textContent = "▶";
+                icon.innerHTML = '<i class="fa-solid fa-play" aria-hidden="true"></i>';
                 icon.style.color = "#ffa500";
                 icon.className = "text-2xl mb-1 animate-pulse";
             } else if (currentIndex === 999) {
-                icon.textContent = "✓";
+                icon.innerHTML = '<i class="fa-solid fa-circle-check" aria-hidden="true"></i>';
                 icon.style.color = "#22c55e";
                 icon.className = "text-2xl mb-1";
             } else {
-                icon.textContent = "○";
+                icon.innerHTML = '<i class="fa-regular fa-circle" aria-hidden="true"></i>';
                 icon.style.color = "rgba(0,0,0,0.3)";
                 icon.className = "text-2xl mb-1";
             }
@@ -429,6 +443,134 @@ function updateStatus(job) {
     statusBadge.textContent = statusText;
     
     console.log(`[update] status: Updated statusBadge to "${statusText}" with class ${statusClass}`);
+}
+
+function updateConfigSection(config) {
+    const el = document.getElementById("configContent");
+    if (!el || !config) return;
+
+    // Human-readable labels for config keys
+    const labels = {
+        docker_image: "Container",
+        model: "Model",
+        cpu_limit: "CPU Limit (cores)",
+        memory_limit: "Memory Limit (MB)",
+        runtime_limit: "Runtime Limit (min)",
+        max_iterations: "Max Iterations",
+        storage_limit: "Storage Limit (GB)",
+        temperature: "Temperature",
+        agent_instructions: "Agent Instructions",
+    };
+
+    // Skip internal/empty keys
+    const skip = ["container"];
+
+    let rows = "";
+    for (const [key, value] of Object.entries(config)) {
+        if (skip.includes(key)) continue;
+        if (value === "" || value === null || value === undefined) continue;
+        const label = labels[key] || key;
+        const displayValue = typeof value === "string" && value.length > 100
+            ? `<span class="text-xs">${escapeHtml(value)}</span>`
+            : escapeHtml(String(value));
+        rows += `<tr><td class="font-semibold pr-4 whitespace-nowrap">${escapeHtml(label)}</td><td>${displayValue}</td></tr>`;
+    }
+
+    if (!config || Object.keys(config).length === 0) {
+        el.innerHTML = `<p class="text-sm text-base-content/60">No configuration data available. Jobs created before this feature was added do not have stored configuration.</p>`;
+        return;
+    }
+
+    el.innerHTML = `<table class="table table-sm"><tbody>${rows}</tbody></table>`;
+}
+
+function updateTimeline(job) {
+    const el = document.getElementById("timelineContent");
+    if (!el) return;
+
+    const events = job.events || [];
+
+    // Key state-transition steps to display
+    const milestones = [
+        { step: "pipeline_started", label: "Pipeline Started" },
+        { step: "paper_analysis", label: "Paper Analysis Started" },
+        { step: "paper_analysis_complete", label: "Paper Analysis Complete" },
+        { step: "code_execution", label: "Code Execution Started" },
+        { step: "spawning_agent", label: "Agent Spawned" },
+        { step: "agent_completed", label: "Agent Completed" },
+        { step: "evaluation", label: "Evaluation Started" },
+        { step: "evaluation_complete", label: "Evaluation Complete" },
+        { step: "completed", label: "Job Completed" },
+        { step: "error", label: "Error" },
+        { step: "failed", label: "Failed" },
+    ];
+
+    const milestoneSteps = new Set(milestones.map(m => m.step));
+    const labelMap = Object.fromEntries(milestones.map(m => [m.step, m.label]));
+
+    // Build timeline rows from events matching milestones
+    let rows = [];
+
+    // Add submission time
+    if (job.created_at) {
+        const d = new Date(job.created_at);
+        rows.push({ time: d, label: "Job Submitted", severity: "info" });
+    }
+
+    for (const event of events) {
+        if (!milestoneSteps.has(event.step)) continue;
+        const d = new Date(event.timestamp);
+        const label = labelMap[event.step] || event.step;
+        rows.push({ time: d, label, severity: event.severity || "info", duration_ms: event.stage_duration_ms });
+    }
+
+    // Add completion time if present and no "completed" event
+    if (job.completed_at && !events.some(e => e.step === "completed")) {
+        const d = new Date(job.completed_at);
+        rows.push({ time: d, label: "Job Completed", severity: "info" });
+    }
+
+    if (rows.length === 0) {
+        el.innerHTML = `<p class="text-sm text-base-content/60">No timeline data available.</p>`;
+        return;
+    }
+
+    // Sort by time
+    rows.sort((a, b) => a.time - b.time);
+
+    const firstTime = rows[0].time;
+    let html = `<table class="table table-sm"><thead><tr>
+        <th>Event</th><th>Time</th><th>Elapsed</th><th>Duration</th>
+    </tr></thead><tbody>`;
+
+    for (const row of rows) {
+        const timeStr = row.time.toLocaleTimeString();
+        const elapsedMs = row.time - firstTime;
+        const elapsedStr = formatDuration(elapsedMs);
+        const durationStr = row.duration_ms ? formatDuration(row.duration_ms) : "";
+        const severityClass = row.severity === "error" ? " text-error" : "";
+        html += `<tr class="${severityClass}">
+            <td class="font-semibold whitespace-nowrap">${escapeHtml(row.label)}</td>
+            <td class="whitespace-nowrap">${timeStr}</td>
+            <td class="whitespace-nowrap text-base-content/60">${elapsedStr}</td>
+            <td class="whitespace-nowrap text-base-content/60">${durationStr}</td>
+        </tr>`;
+    }
+
+    html += `</tbody></table>`;
+    el.innerHTML = html;
+}
+
+function formatDuration(ms) {
+    if (ms < 1000) return `${ms}ms`;
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainSec = seconds % 60;
+    if (minutes < 60) return `${minutes}m ${remainSec}s`;
+    const hours = Math.floor(minutes / 60);
+    const remainMin = minutes % 60;
+    return `${hours}h ${remainMin}m`;
 }
 
 function updateEventLog(job) {
@@ -521,6 +663,12 @@ function updateMetadata(job) {
     // Update page header with paper title if available
     const title = paper.title || job.pdf_filename;
     docTitle.textContent = title;
+
+    // Update submission time in header
+    if (docMeta && job.created_at) {
+        const d = new Date(job.created_at);
+        docMeta.textContent = `Submitted ${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+    }
     console.log(`[update] metadata: Set page title to "${title}"`);
 }
 
@@ -551,7 +699,7 @@ function updateCitations(job) {
             const authors = c.authors ? `<strong>${escapeHtml(c.authors)}</strong>` : "(Unknown authors)";
             const year = c.year ? ` (${escapeHtml(String(c.year))})` : "";
             const title = c.title ? escapeHtml(c.title) : "";
-            const url = c.url ? ` <a href="${encodeURI(c.url)}" target="_blank" rel="noopener noreferrer" class="link link-primary text-xs">🔗</a>` : "";
+            const url = c.url ? ` <a href="${encodeURI(c.url)}" target="_blank" rel="noopener noreferrer" class="link link-primary text-xs"><i class="fa-solid fa-link" aria-hidden="true"></i></a>` : "";
             return `<div class="text-sm mb-2">${authors}${year}: ${title}${url}</div>`;
         })
         .join("");
@@ -598,13 +746,13 @@ function updateScriptResults(job) {
             let statusColor, statusText;
             if (r.exit_code === 0) {
                 statusColor = "badge-success";
-                statusText = "✓ PASS";
+                statusText = '<i class="fa-solid fa-circle-check" aria-hidden="true"></i> PASS';
             } else if (r.exit_code === 1) {
                 statusColor = "badge-warning";
-                statusText = "? UNDETERMINED";
+                statusText = '<i class="fa-solid fa-circle-question" aria-hidden="true"></i> UNDETERMINED';
             } else {
                 statusColor = "badge-error";
-                statusText = "✗ FAIL";
+                statusText = '<i class="fa-solid fa-circle-xmark" aria-hidden="true"></i> FAIL';
             }
             
             // Duration formatting
@@ -663,14 +811,18 @@ function updatePlugins(job) {
 
     pluginsContent.innerHTML = plugins
         .map((a, index) => {
-            const statusIcon = a.status === "pass" ? "✓" : a.status === "fail" ? "✗" : "?";
+            const statusIcon = a.status === "pass"
+                ? '<i class="fa-solid fa-circle-check" aria-hidden="true"></i>'
+                : a.status === "fail"
+                    ? '<i class="fa-solid fa-circle-xmark" aria-hidden="true"></i>'
+                    : '<i class="fa-solid fa-circle-question" aria-hidden="true"></i>';
             const statusColor = a.status === "pass" ? "text-success" : a.status === "fail" ? "text-error" : "text-warning";
             const statusLabel = a.status === "pass" ? "Pass" : a.status === "fail" ? "Fail" : "Unknown";
 
             const conclusion = a.conclusion ? `<p class="mt-2"><strong>Conclusion:</strong> ${escapeHtml(a.conclusion)}</p>` : "";
             const evidence = a.evidence ? `<p class="mt-2"><strong>Evidence:</strong> ${escapeHtml(a.evidence)}</p>` : "";
-            const codeSupports = a.code_supports !== undefined ? `<p class="mt-2"><strong>Code Supports:</strong> ${a.code_supports ? "Yes ✓" : "No ✗"}</p>` : "";
-            const paperSupports = a.paper_supports !== undefined ? `<p class="mt-2"><strong>Paper Supports:</strong> ${a.paper_supports ? "Yes ✓" : "No ✗"}</p>` : "";
+            const codeSupports = a.code_supports !== undefined ? `<p class="mt-2"><strong>Code Supports:</strong> ${a.code_supports ? "Yes" : "No"}</p>` : "";
+            const paperSupports = a.paper_supports !== undefined ? `<p class="mt-2"><strong>Paper Supports:</strong> ${a.paper_supports ? "Yes" : "No"}</p>` : "";
 
             const hasDetails = conclusion || evidence || codeSupports || paperSupports;
 
@@ -733,7 +885,7 @@ function addChatMessage(role, content) {
     }
     
     // Clear initial placeholder if this is first message
-    if (chatHistory.innerHTML.trim().includes("Ask questions about the artifact review")) {
+    if (chatHistory.innerHTML.trim().includes("Ask questions about the AEGIS review")) {
         chatHistory.innerHTML = '';
     }
     
@@ -863,7 +1015,7 @@ async function clearChat() {
         
         if (response.ok) {
             if (chatHistory) {
-                chatHistory.innerHTML = '<div class="text-center text-base-content/60 text-sm">Ask questions about the artifact review...</div>';
+                chatHistory.innerHTML = '<div class="text-center text-base-content/60 text-sm">Ask questions about the AEGIS review...</div>';
             }
             console.log('Chat history cleared');
         } else {
@@ -909,10 +1061,10 @@ function renderPluginsList(evaluationResults) {
     const plugins = Object.entries(evaluationResults).map(([pluginId, result]) => {
         const status = result.status || 'UNKNOWN';
         const statusIcon = {
-            'PASS': '✅',
-            'FAIL': '❌',
-            'UNCLEAR': '⚠️'
-        }[status] || '❓';
+            'PASS': '<i class="fa-solid fa-circle-check" aria-hidden="true"></i>',
+            'FAIL': '<i class="fa-solid fa-circle-xmark" aria-hidden="true"></i>',
+            'UNCLEAR': '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>'
+        }[status] || '<i class="fa-solid fa-circle-question" aria-hidden="true"></i>';
         
         const statusBadgeClass = {
             'PASS': 'badge-success',

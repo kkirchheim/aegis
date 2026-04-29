@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Review Report</title>
+    <title>AEGIS Report</title>
     
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='aegis.svg') }}">
     
     <!-- Tailwind CSS + DaisyUI -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" />
     
     <style>
         /* Override primary color to blue */
@@ -101,7 +101,7 @@
     <!-- Header -->
     <div class="navbar bg-base-200 shadow-md sticky top-0 z-50">
         <div class="flex-1 px-4">
-            <a href="/" class="btn btn-ghost gap-2">
+            <a id="backBtn" href="/" class="btn btn-ghost gap-2">
                 <span>←</span>
                 <span>Back</span>
             </a>
@@ -114,10 +114,10 @@
         </div>
         <div class="flex-none px-4 gap-2">
             <button class="btn btn-sm btn-ghost" onclick="toggleTheme()">
-                <span id="themeIcon">🌙</span>
+                <i id="themeIcon" class="fa-solid fa-moon" aria-hidden="true"></i>
             </button>
             <button id="deleteBtn" class="btn btn-sm btn-error gap-2">
-                <span>🗑️</span>
+                <i class="fa-solid fa-trash" aria-hidden="true"></i>
                 <span>Delete</span>
             </button>
 
@@ -125,7 +125,7 @@
             {% if session.get('username') %}
             <div class="dropdown dropdown-end">
                 <button tabindex="0" class="btn btn-ghost btn-sm gap-2">
-                    <span>👤</span>
+                    <i class="fa-solid fa-user fa-fw" aria-hidden="true"></i>
                     <span class="hidden sm:inline text-sm">{{ session.get('username') }}</span>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
                         <polyline points="6 9 12 15 18 9"></polyline>
@@ -135,14 +135,14 @@
                     <li class="menu-title">
                         <span class="text-xs">{{ session.get('username') }}</span>
                     </li>
-                    <li><a href="/" class="gap-2"><span>📤</span> Upload Paper</a></li>
-                    <li><a href="/history" class="gap-2"><span>📚</span> History</a></li>
-                    <li><a href="/about" class="gap-2"><span>ℹ️</span> About</a></li>
+                    <li><a href="/" class="gap-2"><i class="fa-solid fa-upload fa-fw" aria-hidden="true"></i> Upload Paper</a></li>
+                    <li><a href="/history" class="gap-2"><i class="fa-solid fa-book-open fa-fw" aria-hidden="true"></i> History</a></li>
+                    <li><a href="/about" class="gap-2"><i class="fa-solid fa-circle-info fa-fw" aria-hidden="true"></i> About</a></li>
                     <li><hr class="my-1"></li>
                     <li>
                         <form action="/logout" method="POST" style="padding: 0; margin: 0;">
                             <button type="submit" class="gap-2 text-error">
-                                <span>🚪</span>
+                                <i class="fa-solid fa-right-from-bracket fa-fw" aria-hidden="true"></i>
                                 <span>Logout</span>
                             </button>
                         </form>
@@ -161,7 +161,7 @@
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2">
-                        <span>⚙️</span>
+                        <i class="fa-solid fa-gears" aria-hidden="true"></i>
                         <span>Analysis Progress</span>
                         <span id="statusBadge" class="badge badge-primary ml-auto"></span>
                     </h2>
@@ -176,17 +176,17 @@
                         <div class="grid grid-cols-3 gap-4">
                             <div id="stage1" class="flex flex-col items-center">
                                 <div class="text-2xl mb-1" id="stage1Icon">○</div>
-                                <div class="text-xs font-semibold text-center">📄 Paper</div>
+                                <div class="text-xs font-semibold text-center"><i class="fa-solid fa-file-lines" aria-hidden="true"></i> Paper</div>
                                 <div class="text-xs text-base-content/60" id="stage1Time"></div>
                             </div>
                             <div id="stage2" class="flex flex-col items-center">
                                 <div class="text-2xl mb-1" id="stage2Icon">○</div>
-                                <div class="text-xs font-semibold text-center">⚙️ Execution</div>
+                                <div class="text-xs font-semibold text-center"><i class="fa-solid fa-gears" aria-hidden="true"></i> Execution</div>
                                 <div class="text-xs text-base-content/60" id="stage2Time"></div>
                             </div>
                             <div id="stage3" class="flex flex-col items-center">
                                 <div class="text-2xl mb-1" id="stage3Icon">○</div>
-                                <div class="text-xs font-semibold text-center">📊 Evaluation</div>
+                                <div class="text-xs font-semibold text-center"><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Evaluation</div>
                                 <div class="text-xs text-base-content/60" id="stage3Time"></div>
                             </div>
                         </div>
@@ -196,13 +196,50 @@
             </div>
         </section>
 
+        <!-- Job Configuration (collapsible) -->
+        <section id="configSection" class="mb-8" style="display: none;">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <div class="collapse bg-base-200">
+                        <input type="checkbox" />
+                        <div class="collapse-title font-semibold flex items-center gap-2">
+                            <span>&#9881;</span>
+                            <span>Job Configuration</span>
+                        </div>
+                        <div class="collapse-content">
+                            <div id="configContent" class="overflow-x-auto"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Job Timeline (collapsible) -->
+        <section id="timelineSection" class="mb-8" style="display: none;">
+            <div class="card bg-base-100 shadow-lg">
+                <div class="card-body">
+                    <div class="collapse bg-base-200">
+                        <input type="checkbox" />
+                        <div class="collapse-title font-semibold flex items-center gap-2">
+                            <i class="fa-solid fa-timeline" aria-hidden="true"></i>
+                            <span>Job Timeline</span>
+                        </div>
+                        <div class="collapse-content">
+                            <div id="timelineContent" class="overflow-x-auto"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Execution Log - SECOND (directly below progress) -->
         <section id="logSection" class="mb-8" style="display: none;">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2">
-                        <span>📋</span>
+                        <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
                         <span>Execution Log</span>
+                        <button onclick="copyExecutionLog()" class="btn btn-primary btn-xs ml-auto" title="Copy log to clipboard">Copy</button>
                     </h2>
                     <div id="logContent" class="bg-base-200 rounded-lg p-4 font-mono text-xs max-h-96 overflow-y-auto">
                         <div id="eventLog" class="space-y-1"></div>
@@ -216,7 +253,7 @@
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2">
-                        <span>📄</span>
+                        <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
                         <span>Abstract</span>
                     </h2>
                     <div id="metadataContent"></div>
@@ -229,7 +266,7 @@
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2">
-                        <span>🎯</span>
+                        <i class="fa-solid fa-bullseye" aria-hidden="true"></i>
                         <span>Artifacts Found</span>
                     </h2>
                     <div id="artifactsContent"></div>
@@ -242,7 +279,7 @@
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2 mb-4">
-                        <span>📚</span>
+                        <i class="fa-solid fa-book-open" aria-hidden="true"></i>
                         <span>Citations</span>
                         <span class="badge badge-primary" id="citationCount">0</span>
                     </h2>
@@ -262,7 +299,7 @@
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2">
-                        <span>🔧</span>
+                        <i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i>
                         <span>Check Execution Results</span>
                         <span class="badge badge-primary" id="checkResultCount">0</span>
                     </h2>
@@ -276,7 +313,7 @@
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
             <h2 class="card-title flex items-center gap-2">
-                <span>✅</span>
+                <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
                 <span>Artifact Assessment</span>
             </h2>
             
@@ -295,14 +332,14 @@
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2">
-                        <span>💬</span>
+                        <i class="fa-solid fa-comments" aria-hidden="true"></i>
                         <span>Chat with Analysis</span>
                     </h2>
                     
                     <!-- Chat History -->
                     <div id="chatHistory" class="bg-base-200 rounded-lg p-4 max-h-96 overflow-y-auto mb-4 min-h-32">
                         <div class="text-center text-base-content/60 text-sm">
-                            Ask questions about the artifact review...
+                            Ask questions about the AEGIS review...
                         </div>
                     </div>
                     
@@ -316,11 +353,11 @@
                         />
                         <button id="chatSendBtn" class="btn btn-primary gap-2">
                             <span>Send</span>
-                            <span id="chatSendIcon">✉️</span>
+                            <i id="chatSendIcon" class="fa-solid fa-paper-plane" aria-hidden="true"></i>
                         </button>
                         <button id="chatClearBtn" class="btn btn-secondary gap-2">
                             <span>Clear</span>
-                            <span>🗑️</span>
+                            <i class="fa-solid fa-trash" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
@@ -348,21 +385,51 @@
 
     <!-- Theme Toggle Script -->
     <script>
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('themeIcon');
+            if (icon) {
+                icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+            }
+        }
+
         function toggleTheme() {
             const html = document.documentElement;
             const isDark = html.getAttribute('data-theme') === 'dark';
-            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
-            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            const theme = isDark ? 'light' : 'dark';
+            html.setAttribute('data-theme', theme);
+            updateThemeIcon(theme);
+            localStorage.setItem('theme', theme);
         }
         
         // Load saved theme
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
-        document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        updateThemeIcon(savedTheme);
     </script>
 
     <script>
+        // Back button: go to referrer if it's the history page, otherwise home
+        (function() {
+            const backBtn = document.getElementById('backBtn');
+            const referrer = document.referrer;
+            if (referrer && new URL(referrer).pathname === '/history') {
+                backBtn.href = '/history';
+            }
+        })();
+
+        // Copy execution log text to clipboard
+        function copyExecutionLog() {
+            const logEl = document.getElementById('eventLog');
+            if (!logEl) return;
+            const text = logEl.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('#logSection .btn-primary');
+                const orig = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = orig; }, 1500);
+            });
+        }
+
         // Pass job_id to detail.js - MUST be var or global, not const (block-scoped)
         // Using window.JOB_ID ensures global accessibility across script blocks
         window.JOB_ID = "{{ job_id }}";

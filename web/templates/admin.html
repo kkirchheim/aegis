@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel - Artifact Review</title>
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
+    <title>Admin Panel - AEGIS</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='aegis.svg') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.0.0/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" />
 </head>
 <body class="bg-base-100">
     {% include "navbar.html" %}
 
     <div class="container mx-auto p-4 mt-6">
         <div class="flex items-center gap-2 mb-6">
-            <span class="text-3xl">👥</span>
+            <i class="fa-solid fa-users text-3xl" aria-hidden="true"></i>
             <h1 class="text-3xl font-bold">Admin Panel</h1>
         </div>
 
@@ -125,7 +125,7 @@
                     <td>${escapeHtml(user.email)}</td>
                     <td>
                         <span class="badge ${user.is_active ? 'badge-success' : 'badge-error'}">
-                            ${user.is_active ? '✓ Active' : '✗ Inactive'}
+                            ${user.is_active ? 'Active' : 'Inactive'}
                         </span>
                     </td>
                     <td>

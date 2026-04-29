@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profile - Artifact Review</title>
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
+    <title>Profile - AEGIS</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='aegis.svg') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.0.0/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" />
 </head>
 <body class="bg-base-100">
     {% include "navbar.html" %}
@@ -19,7 +19,7 @@
                 <div class="card-body">
                     <div class="flex items-start gap-4 mb-4">
                         <div class="flex-1">
-                            <h1 class="text-3xl font-bold">👤 User Profile</h1>
+                            <h1 class="text-3xl font-bold"><i class="fa-solid fa-user" aria-hidden="true"></i> User Profile</h1>
                             <p class="text-base-content/60 text-sm">Manage your account settings</p>
                         </div>
                     </div>
@@ -81,7 +81,7 @@
             <div class="card bg-base-200 shadow-lg mb-6">
                 <div class="card-body">
                     <div class="flex items-start gap-2 mb-4">
-                        <span class="text-2xl">🔑</span>
+                        <i class="fa-solid fa-key text-2xl" aria-hidden="true"></i>
                         <div>
                             <h2 class="text-2xl font-bold">API Keys</h2>
                             <p class="text-base-content/60 text-sm">Manage API keys for external applications</p>
@@ -134,7 +134,7 @@
             <div class="card bg-base-200 shadow-lg">
                 <div class="card-body">
                     <div class="flex items-start gap-2 mb-4">
-                        <span class="text-2xl">🔐</span>
+                        <i class="fa-solid fa-lock text-2xl" aria-hidden="true"></i>
                         <div>
                             <h2 class="text-2xl font-bold">Change Password</h2>
                             <p class="text-base-content/60 text-sm">Update your account password</p>
@@ -206,7 +206,7 @@
                         <!-- Submit Button -->
                         <div class="form-control mt-6">
                             <button type="submit" class="btn btn-primary gap-2">
-                                <span>🔑</span>
+                                <i class="fa-solid fa-key" aria-hidden="true"></i>
                                 <span>Change Password</span>
                             </button>
                         </div>
@@ -224,10 +224,10 @@
     <!-- Modal: Generated API Key -->
     <dialog id="keyModal" class="modal">
         <div class="modal-box w-full max-w-md">
-            <h3 class="font-bold text-lg mb-4">🔑 Your New API Key</h3>
+            <h3 class="font-bold text-lg mb-4"><i class="fa-solid fa-key" aria-hidden="true"></i> Your New API Key</h3>
             
             <div class="alert alert-warning mb-4">
-                <span>⚠️ Save this key securely. It will only be shown once!</span>
+                <span><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Save this key securely. It will only be shown once!</span>
             </div>
 
             <div class="space-y-3">
@@ -259,7 +259,7 @@
                             class="btn btn-primary btn-sm"
                             onclick="copyKeyToClipboard()"
                         >
-                            📋 Copy
+                            <i class="fa-solid fa-copy" aria-hidden="true"></i> Copy
                         </button>
                     </div>
                 </div>
@@ -307,16 +307,23 @@
         document.querySelector('html').setAttribute('data-theme', savedTheme);
 
         // Theme toggle (from navbar)
+        function updateThemeIcon(theme) {
+            const themeIcon = document.getElementById('themeIcon');
+            if (themeIcon) {
+                themeIcon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+            }
+        }
+
         function toggleTheme() {
             const html = document.querySelector('html');
             const isDark = html.getAttribute('data-theme') === 'dark';
-            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            localStorage.setItem('theme', isDark ? 'light' : 'dark');
-            const themeIcon = document.getElementById('themeIcon');
-            if (themeIcon) {
-                themeIcon.textContent = isDark ? '☀️' : '🌙';
-            }
+            const theme = isDark ? 'light' : 'dark';
+            html.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+            updateThemeIcon(theme);
         }
+
+        updateThemeIcon(savedTheme);
 
         // Handle form submission
         document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
@@ -436,7 +443,7 @@
                                     onclick="deleteAPIKey('${key.id}', '${escapeHtml(key.name)}')"
                                     title="Delete this API key"
                                 >
-                                    🗑️
+                                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
                                 </button>
                             </div>
                             ${key.is_active ? '' : '<div class="badge badge-warning mt-2">Inactive</div>'}
@@ -507,7 +514,7 @@
             // Try modern Clipboard API first
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(keyValue).then(() => {
-                    btn.innerHTML = '✓ Copied!';
+                    btn.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i> Copied!';
                     btn.disabled = true;
                     setTimeout(() => {
                         btn.innerHTML = originalText;
@@ -531,7 +538,7 @@
                 document.execCommand('copy');
                 input.disabled = true;
                 
-                btn.innerHTML = '✓ Copied!';
+                btn.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i> Copied!';
                 btn.disabled = true;
                 setTimeout(() => {
                     btn.innerHTML = originalText;

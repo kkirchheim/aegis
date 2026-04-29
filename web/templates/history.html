@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analysis History - Artifact Review</title>
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
+    <title>Analysis History - AEGIS</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='aegis.svg') }}">
     
     <!-- Tailwind CSS + DaisyUI -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" />
     
     <style>
         /* Override primary color to blue */
@@ -88,7 +88,7 @@
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2">
-                        <span>🔍</span>
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
                         <span>Search & Filter</span>
                     </h2>
                     
@@ -108,9 +108,9 @@
                             </label>
                             <select id="statusFilter" class="select select-bordered w-full">
                                 <option value="">All</option>
-                                <option value="completed">✓ Completed</option>
-                                <option value="failed">✗ Failed</option>
-                                <option value="processing">⏳ Processing</option>
+                                <option value="completed">Completed</option>
+                                <option value="failed">Failed</option>
+                                <option value="processing">Processing</option>
                             </select>
                         </div>
                     </div>
@@ -118,7 +118,7 @@
                     <!-- Sort Options -->
                     <div class="mt-4 flex gap-2 flex-wrap">
                         <span class="text-sm text-base-content/60">Sort by:</span>
-                        <button id="sortDate" class="btn btn-sm btn-outline gap-1">📅 Date</button>
+                        <button id="sortDate" class="btn btn-sm btn-outline gap-1"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Date</button>
                         <button id="sortName" class="btn btn-sm btn-outline gap-1">A-Z Name</button>
                     </div>
                 </div>
@@ -130,7 +130,7 @@
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2">
-                        <span>📚</span>
+                        <i class="fa-solid fa-book-open" aria-hidden="true"></i>
                         <span id="resultCount">Loading...</span>
                     </h2>
                     
@@ -143,7 +143,7 @@
                     
                     <!-- Empty State -->
                     <div id="emptyState" style="display: none;" class="text-center py-12">
-                        <div class="text-5xl mb-4">📭</div>
+                        <div class="text-5xl mb-4"><i class="fa-regular fa-folder-open" aria-hidden="true"></i></div>
                         <p class="text-lg text-base-content/60">No analyses found</p>
                         <p class="text-sm text-base-content/50 mb-4">Try adjusting your filters or <a href="/" class="link link-primary">upload a new paper</a></p>
                     </div>
@@ -155,18 +155,26 @@
 
     <!-- Theme Toggle Script -->
     <script>
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('themeIcon');
+            if (icon) {
+                icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+            }
+        }
+
         function toggleTheme() {
             const html = document.documentElement;
             const isDark = html.getAttribute('data-theme') === 'dark';
-            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
-            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            const theme = isDark ? 'light' : 'dark';
+            html.setAttribute('data-theme', theme);
+            updateThemeIcon(theme);
+            localStorage.setItem('theme', theme);
         }
         
         // Load saved theme
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
-        document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        updateThemeIcon(savedTheme);
     </script>
 
     <script src="{{ url_for('static', filename='history.js') }}"></script>

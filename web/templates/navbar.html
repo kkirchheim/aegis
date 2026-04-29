@@ -6,38 +6,37 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" /></svg>
             </button>
             <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
-                <li><a href="/">📤 Upload</a></li>
-                <li><a href="/history">📚 History</a></li>
-                <li><a href="/criteria">🎯 Review Criteria</a></li>
-                <li><a href="/about">ℹ️ About</a></li>
+                <li><a href="/"><i class="fa-solid fa-upload fa-fw" aria-hidden="true"></i> Upload</a></li>
+                <li><a href="/history"><i class="fa-solid fa-book-open fa-fw" aria-hidden="true"></i> History</a></li>
+                <li><a href="/criteria"><i class="fa-solid fa-list-check fa-fw" aria-hidden="true"></i> Review Criteria</a></li>
+                <li><a href="/about"><i class="fa-solid fa-circle-info fa-fw" aria-hidden="true"></i> About</a></li>
             </ul>
         </div>
         <a href="/" class="btn btn-ghost text-xl gap-2">
-            <span>📄</span>
-            <span class="font-bold text-primary">Artifact</span>
-            <span class="hidden sm:inline">Review</span>
+            <img src="{{ url_for('static', filename='aegis.svg') }}" alt="AEGIS logo" class="h-7 w-auto" />
+            <span class="font-bold text-primary">AEGIS</span>
         </a>
     </div>
 
     <div class="navbar-center hidden lg:flex">
         <ul class="menu menu-horizontal px-1">
-            <li><a href="/" class="gap-2"><span>📤</span> Upload</a></li>
-            <li><a href="/history" class="gap-2"><span>📚</span> History</a></li>
-            <li><a href="/criteria" class="gap-2"><span>🎯</span> Review Criteria</a></li>
-            <li><a href="/about" class="gap-2"><span>ℹ️</span> About</a></li>
+            <li><a href="/" class="gap-2"><i class="fa-solid fa-upload fa-fw" aria-hidden="true"></i> Upload</a></li>
+            <li><a href="/history" class="gap-2"><i class="fa-solid fa-book-open fa-fw" aria-hidden="true"></i> History</a></li>
+            <li><a href="/criteria" class="gap-2"><i class="fa-solid fa-list-check fa-fw" aria-hidden="true"></i> Review Criteria</a></li>
+            <li><a href="/about" class="gap-2"><i class="fa-solid fa-circle-info fa-fw" aria-hidden="true"></i> About</a></li>
         </ul>
     </div>
 
     <div class="navbar-end px-4 gap-2">
         <button class="btn btn-sm btn-ghost" onclick="toggleTheme()">
-            <span id="themeIcon">🌙</span>
+            <i id="themeIcon" class="fa-solid fa-moon" aria-hidden="true"></i>
         </button>
 
         <!-- User Menu Dropdown -->
         {% if session.get('username') %}
         <div class="dropdown dropdown-end">
             <button tabindex="0" class="btn btn-ghost btn-sm gap-2">
-                <span>👤</span>
+                <i class="fa-solid fa-user fa-fw" aria-hidden="true"></i>
                 <span class="hidden sm:inline text-sm">{{ session.get('username') }}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
                     <polyline points="6 9 12 15 18 9"></polyline>
@@ -47,15 +46,15 @@
                 <li class="menu-title">
                     <span class="text-xs">{{ session.get('username') }}</span>
                 </li>
-                <li><a href="/" class="gap-2"><span>📤</span> Upload Paper</a></li>
-                <li><a href="/history" class="gap-2"><span>📚</span> History</a></li>
-                <li><a href="/criteria" class="gap-2"><span>🎯</span> Review Criteria</a></li>
-                <li><a href="/about" class="gap-2"><span>ℹ️</span> About</a></li>
+                <li><a href="/" class="gap-2"><i class="fa-solid fa-upload fa-fw" aria-hidden="true"></i> Upload Paper</a></li>
+                <li><a href="/history" class="gap-2"><i class="fa-solid fa-book-open fa-fw" aria-hidden="true"></i> History</a></li>
+                <li><a href="/criteria" class="gap-2"><i class="fa-solid fa-list-check fa-fw" aria-hidden="true"></i> Review Criteria</a></li>
+                <li><a href="/about" class="gap-2"><i class="fa-solid fa-circle-info fa-fw" aria-hidden="true"></i> About</a></li>
                 {% if session.get('username') == 'admin' %}
-                <li><a href="/admin" class="gap-2"><span>👥</span> Admin Panel</a></li>
+                <li><a href="/admin" class="gap-2"><i class="fa-solid fa-users fa-fw" aria-hidden="true"></i> Admin Panel</a></li>
                 {% endif %}
-                <li><a href="/profile" class="gap-2"><span>👤</span> Profile</a></li>
-                <li><a href="/logout" class="gap-2 text-error"><span>🚪</span> Logout</a></li>
+                <li><a href="/profile" class="gap-2"><i class="fa-solid fa-user fa-fw" aria-hidden="true"></i> Profile</a></li>
+                <li><a href="/logout" class="gap-2 text-error"><i class="fa-solid fa-right-from-bracket fa-fw" aria-hidden="true"></i> Logout</a></li>
             </ul>
         </div>
         {% endif %}

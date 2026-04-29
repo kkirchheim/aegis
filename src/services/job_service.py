@@ -6,9 +6,11 @@ from models.database import Job
 from repositories import ArtifactRepository, EventRepository, JobRepository
 
 
-def create_job(job_id, pdf_path, pdf_filename, user_id, thumbnail_path=None, num_pages=None):
+def create_job(job_id, pdf_path, pdf_filename, user_id, thumbnail_path=None, num_pages=None, config=None):
     """Create a new job in the database."""
     try:
+        import json
+
         Job.create(
             id=job_id,
             user_id=user_id,
@@ -19,6 +21,7 @@ def create_job(job_id, pdf_path, pdf_filename, user_id, thumbnail_path=None, num
             progress=0.0,  # Initialize progress to 0%
             thumbnail_path=thumbnail_path,
             num_pages=num_pages,
+            config=json.dumps(config) if config else None,
         )
         import sys
 

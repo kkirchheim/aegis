@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Artifact Review</title>
+    <title>AEGIS</title>
     
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='aegis.svg') }}">
     
     <!-- Tailwind CSS + DaisyUI -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" />
     
     <!-- Custom styles -->
     <style>
@@ -82,9 +82,9 @@
         
         <!-- Hero Section -->
         <section class="mb-12 text-center">
-            <h1 class="text-4xl font-bold mb-4">Review Software Artifacts</h1>
+            <h1 class="text-4xl font-bold mb-4">Artifact Review</h1>
             <p class="text-xl text-base-content/70 mb-8">
-                Upload a scientific paper and get a structured artifact assessment based on collected evidence.
+                Upload a scientific paper and get a structured software artifact assessment based on collected evidence.
             </p>
         </section>
 
@@ -93,14 +93,14 @@
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
                     <h2 class="card-title flex items-center gap-2">
-                        <span>📤</span>
+                        <i class="fa-solid fa-upload" aria-hidden="true"></i>
                         <span>Upload PDF</span>
                     </h2>
                     
                     <div class="upload-area flex items-center justify-center h-64" id="uploadArea">
                         <input type="file" id="pdfInput" accept=".pdf" style="display: none;" />
                         <label for="pdfInput" class="upload-label cursor-pointer flex flex-col items-center justify-center w-full h-full">
-                            <div class="text-7xl">📑</div>
+                            <div class="text-7xl"><i class="fa-solid fa-file-pdf" aria-hidden="true"></i></div>
                             <p class="text-lg text-base-content/50 mt-4">Drag & drop a PDF here, or click to browse</p>
                         </label>
                     </div>
@@ -108,36 +108,6 @@
                     <!-- Configuration Options -->
                     <div class="divider my-4"></div>
                     <h3 class="font-semibold mb-3">Analysis Configuration</h3>
-
-                    <div class="mb-4">
-                        <label class="label" for="manualArtifactUrls">
-                            <span class="label-text">Artifact URL Override</span>
-                        </label>
-                        <textarea
-                            id="manualArtifactUrls"
-                            class="textarea textarea-bordered w-full"
-                            rows="3"
-                            placeholder="Optional: provide one or more artifact URLs, one per line"
-                        ></textarea>
-                        <label class="label">
-                            <span class="label-text-alt">These URLs will be added to any artifacts extracted from the paper.</span>
-                        </label>
-                    </div>
-
-                    <div class="mb-4">
-                        <label class="label" for="agentInstructions">
-                            <span class="label-text">Agent Instructions</span>
-                        </label>
-                        <textarea
-                            id="agentInstructions"
-                            class="textarea textarea-bordered w-full"
-                            rows="3"
-                            placeholder="Optional: custom instructions for the agent (e.g. 'Run only the experiments in Table 2', 'Skip the training step')"
-                        ></textarea>
-                        <label class="label">
-                            <span class="label-text-alt">These instructions will be passed to the agent alongside its default workflow.</span>
-                        </label>
-                    </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <!-- Container Selection -->
@@ -151,7 +121,7 @@
                                 <option value="python27">Python 2.7 Legacy (Conda)</option>
                                 <option value="python34">Python 3.4 Legacy (Conda)</option>
                                 <option value="python36">Python 3.6 Legacy (Conda)</option>
-                                <option value="matlab">MATLAB/Octave (GNU Octave, signal, statistics)</option>
+                                <option value="octave">Octave (GNU Octave, signal, statistics)</option>
                                 <option value="matlab_official">MATLAB Official</option>
                             </select>
                         </div>
@@ -196,7 +166,7 @@
                             <label class="label">
                                 <span class="label-text">Max Iterations</span>
                             </label>
-                            <input type="number" id="maxIterations" class="input input-bordered w-full" value="15" min="1" max="50" step="1" />
+                            <input type="number" id="maxIterations" class="input input-bordered w-full" value="30" min="1" max="50" step="1" />
                         </div>
                         
                         <!-- Storage Limit -->
@@ -206,11 +176,58 @@
                             </label>
                             <input type="number" id="storageLimit" class="input input-bordered w-full" value="10" min="1" max="100" step="1" />
                         </div>
+
+                        <!-- Temperature -->
+                        <div>
+                            <label class="label">
+                                <span class="label-text">Temperature</span>
+                            </label>
+                            <input type="number" id="temperature" class="input input-bordered w-full" value="0" min="0" max="1" step="0.1" />
+                        </div>
                     </div>
-                    
+
+                    <!-- Advanced Options -->
+                    <div class="collapse bg-base-200 rounded-lg mt-4">
+                        <input type="checkbox" />
+                        <div class="collapse-title font-semibold text-sm">
+                            Advanced
+                        </div>
+                        <div class="collapse-content">
+                            <div class="mb-4">
+                                <label class="label" for="manualArtifactUrls">
+                                    <span class="label-text">Artifact URL Override</span>
+                                </label>
+                                <textarea
+                                    id="manualArtifactUrls"
+                                    class="textarea textarea-bordered w-full"
+                                    rows="3"
+                                    placeholder="Optional: provide one or more artifact URLs, one per line"
+                                ></textarea>
+                                <label class="label">
+                                    <span class="label-text-alt">These URLs will be added to any artifacts extracted from the paper.</span>
+                                </label>
+                            </div>
+
+                            <div>
+                                <label class="label" for="agentInstructions">
+                                    <span class="label-text">Agent Instructions</span>
+                                </label>
+                                <textarea
+                                    id="agentInstructions"
+                                    class="textarea textarea-bordered w-full"
+                                    rows="3"
+                                    placeholder="Optional: custom instructions for the agent (e.g. 'Run only the experiments in Table 2', 'Skip the training step')"
+                                ></textarea>
+                                <label class="label">
+                                    <span class="label-text-alt">These instructions will be passed to the agent alongside its default workflow.</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="card-actions justify-end mt-6">
                         <button id="analyzeBtn" class="btn btn-primary gap-2" disabled>
-                            <span>🔍</span>
+                            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
                             <span>Analyze Paper</span>
                         </button>
                     </div>
@@ -222,18 +239,26 @@
 
     <!-- Theme Toggle Script -->
     <script>
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('themeIcon');
+            if (icon) {
+                icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+            }
+        }
+
         function toggleTheme() {
             const html = document.documentElement;
             const isDark = html.getAttribute('data-theme') === 'dark';
-            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
-            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            const theme = isDark ? 'light' : 'dark';
+            html.setAttribute('data-theme', theme);
+            updateThemeIcon(theme);
+            localStorage.setItem('theme', theme);
         }
         
         // Load saved theme
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
-        document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        updateThemeIcon(savedTheme);
     </script>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>

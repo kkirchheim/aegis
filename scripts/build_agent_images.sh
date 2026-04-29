@@ -10,7 +10,7 @@ IMAGES=(
   "paper-reproducibility-agent-py27:latest|agent/Dockerfile.py27"
   "paper-reproducibility-agent-py34:latest|agent/Dockerfile.py34"
   "paper-reproducibility-agent-py36:latest|agent/Dockerfile.py36"
-  "paper-reproducibility-agent-matlab:latest|agent/Dockerfile.matlab"
+  "paper-reproducibility-agent-octave:latest|agent/Dockerfile.octave"
   "paper-reproducibility-agent-matlab-official:latest|agent/Dockerfile.matlab-official"
 )
 

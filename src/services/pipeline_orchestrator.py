@@ -90,8 +90,13 @@ class PipelineOrchestrator:
             # Mark job as processing
             update_job_status(job_id, "processing", progress=0.0)
 
+            # Extract temperature from config for LLM calls
+            temperature = config.get("temperature", 0.0) if isinstance(config, dict) else 0.0
+
             # Stage 1: Extract and analyze PDF
-            if not self._run_stage_1(job_id, pdf_path, llm_provider, manual_artifacts=manual_artifacts or []):
+            if not self._run_stage_1(
+                job_id, pdf_path, llm_provider, manual_artifacts=manual_artifacts or [], temperature=temperature
+            ):
                 update_job_status(
                     job_id,
                     "failed",
@@ -113,7 +118,7 @@ class PipelineOrchestrator:
                 return False
 
             # Stage 3: Evaluate reproducibility
-            if not self._run_stage_3(job_id, llm_provider):
+            if not self._run_stage_3(job_id, llm_provider, temperature=temperature):
                 update_job_status(
                     job_id, "failed", error_message="Stage 3 (evaluation) failed", progress=0.66, current_stage="failed"
                 )
@@ -186,7 +191,7 @@ class PipelineOrchestrator:
 
         return list(merged.values())
 
-    def _run_stage_1(self, job_id: str, pdf_path: str, llm_provider, manual_artifacts=None) -> bool:
+    def _run_stage_1(self, job_id: str, pdf_path: str, llm_provider, manual_artifacts=None, temperature=0.0) -> bool:
         """
         Stage 1: Extract and analyze PDF.
 
@@ -201,7 +206,7 @@ class PipelineOrchestrator:
             self.emit_event(job_id, "extracting_pdf", "Extracting text from PDF...")
 
             # Extract PDF
-            pdf_text, paper_info = extract_and_analyze_pdf(pdf_path, job_id, llm_provider)
+            pdf_text, paper_info = extract_and_analyze_pdf(pdf_path, job_id, llm_provider, temperature=temperature)
 
             self.emit_event(job_id, "pdf_extracted", f"Extracted {len(pdf_text)} characters from PDF", progress=0.25)
 
@@ -271,7 +276,7 @@ class PipelineOrchestrator:
             self.emit_event(job_id, "stage_2_error", f"Stage 2 failed: {str(e)}")
             return False
 
-    def _run_stage_3(self, job_id: str, llm_provider) -> bool:
+    def _run_stage_3(self, job_id: str, llm_provider, temperature=0.0) -> bool:
         """
         Stage 3: Evaluate reproducibility across all active plugins.
 
@@ -366,6 +371,7 @@ class PipelineOrchestrator:
                 llm_provider=llm_provider,
                 app_logger=wrapped_logger,  # Pass wrapped logger, not raw function
                 execution_details=execution,
+                temperature=temperature,
             )
 
             int((time.time() - start_time) * 1000)

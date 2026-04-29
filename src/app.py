@@ -1,5 +1,5 @@
 """
-Artifact Review - Flask Backend
+AEGIS - Flask Backend
 
 Analyzes scientific papers by extracting software artifacts,
 generating evidence, and producing structured review assessments.
@@ -94,12 +94,12 @@ def create_app():
     # Initialize API documentation (FlaskApiSpec)
     app.config.update(
         {
-            "APISPEC_TITLE": "Artifact Review API",
+            "APISPEC_TITLE": "AEGIS API",
             "APISPEC_VERSION": "1.0.0",
             "OPENAPI_VERSION": "3.0.2",
             "APISPEC_SWAGGER_URL": "/swagger/",  # Raw OpenAPI JSON spec
             "APISPEC_SWAGGER_UI_URL": "/docs/",  # Interactive Swagger UI
-            "API_TITLE": "Artifact Review",
+            "API_TITLE": "AEGIS",
             "API_VERSION": "v1",
         }
     )
@@ -214,7 +214,7 @@ def create_app():
             "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "img-src 'self' data:; "
-            "font-src 'self'; "
+            "font-src 'self' https://cdn.jsdelivr.net; "
             "connect-src 'self'; "
             "frame-ancestors 'none'"
         )

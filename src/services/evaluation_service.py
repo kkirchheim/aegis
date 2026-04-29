@@ -274,6 +274,7 @@ def evaluate_paper(
     llm_provider,
     app_logger=None,
     execution_details=None,
+    temperature=0.0,
 ) -> Dict[str, Dict[str, str]]:
     """
     Single LLM call to evaluate all active plugins.
@@ -344,7 +345,9 @@ def evaluate_paper(
         if app_logger:
             app_logger.info(f"[Job {job_id}] Calling LLM for evaluation ({len(plugins)} plugins)")
 
-        response = llm_provider.complete(messages=[{"role": "user", "content": prompt}], max_tokens=3000)
+        response = llm_provider.complete(
+            messages=[{"role": "user", "content": prompt}], max_tokens=3000, temperature=temperature
+        )
 
         # Parse response with detailed logging
         evidence = parse_evaluation_response(response, plugins, logger=app_logger)

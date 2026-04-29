@@ -170,7 +170,11 @@ function renderJobs() {
     
     for (const job of filteredJobs) {
         const status = job.status;
-        const statusIcon = status === 'completed' ? '✓' : status === 'failed' ? '✗' : '⏳';
+        const statusIcon = status === 'completed'
+            ? '<i class="fa-solid fa-circle-check text-success" aria-hidden="true"></i>'
+            : status === 'failed'
+                ? '<i class="fa-solid fa-circle-xmark text-error" aria-hidden="true"></i>'
+                : '<i class="fa-solid fa-hourglass-half text-warning" aria-hidden="true"></i>';
         const statusBadge = status === 'completed' ? 'badge-success' : status === 'failed' ? 'badge-error' : 'badge-warning';
         
         // Display paper title from paper_analysis
@@ -179,7 +183,7 @@ function renderJobs() {
         const abstract = job.paper_abstract ? `<p class="text-sm text-base-content/70 line-clamp-3 mt-2 mb-2">${escapeHtml(job.paper_abstract)}</p>` : '';
         const createdDate = new Date(job.created_at).toLocaleDateString();
         const createdTime = new Date(job.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        const pageCount = job.num_pages ? `📄 ${job.num_pages} page${job.num_pages !== 1 ? 's' : ''}` : '';
+        const pageCount = job.num_pages ? `<i class="fa-solid fa-file-lines" aria-hidden="true"></i> ${job.num_pages} page${job.num_pages !== 1 ? 's' : ''}` : '';
         
         // Build thumbnail HTML
         let thumbnailHtml = '';
@@ -195,7 +199,7 @@ function renderJobs() {
         if (!job.thumbnail_path) {
             thumbnailHtml = `
                 <div class="flex-shrink-0 hidden sm:flex items-center justify-center w-24 h-32 bg-base-300 rounded shadow-md text-2xl">
-                    📄
+                    <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
                 </div>
             `;
         }
@@ -253,7 +257,11 @@ function escapeHtml(text) {
 function toggleTheme() {
     const html = document.documentElement;
     const isDark = html.getAttribute('data-theme') === 'dark';
-    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-    document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
-    localStorage.setItem('theme', isDark ? 'light' : 'dark');
+    const theme = isDark ? 'light' : 'dark';
+    html.setAttribute('data-theme', theme);
+    const icon = document.getElementById('themeIcon');
+    if (icon) {
+        icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+    }
+    localStorage.setItem('theme', theme);
 }

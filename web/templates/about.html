@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About - Artifact Review</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
+    <title>About - AEGIS</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='aegis.svg') }}">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" />
 
     <style>
         .text-primary { color: #0068b4 !important; }
@@ -33,9 +34,10 @@
 
         <!-- Hero -->
         <section class="mb-10 text-center">
-            <h1 class="text-4xl font-bold mb-3">Artifact Review</h1>
+            <img src="{{ url_for('static', filename='aegis.svg') }}" alt="AEGIS logo" class="h-24 md:h-28 w-auto mx-auto mb-5" />
+            <h1 class="text-4xl font-bold mb-3">AEGIS</h1>
             <p class="text-lg text-base-content/70">
-                LLM-assisted software artifact review for scientific publications. Collect and interpret evidence about the availability, executability, and usability of research artifacts.
+                AEGIS is an LLM-assisted software artifact review system for scientific publications. It collects and interprets evidence about the availability, executability, and usability of research artifacts.
             </p>
         </section>
 
@@ -43,9 +45,9 @@
         <section class="mb-10">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title">🎯 Approach</h2>
+                    <h2 class="card-title"><i class="fa-solid fa-bullseye" aria-hidden="true"></i> Approach</h2>
                     <p class="text-base-content/70 mt-3 mb-4">
-                        Artifact review is modeled as a process of <strong>evidence generation and interpretation</strong>.
+                        AEGIS models artifact review as a process of <strong>evidence generation and interpretation</strong>.
                         Starting from a scientific publication, the system extracts referenced artifacts, collects heterogeneous evidence using complementary analysis components, and aggregates the results into a structured, multi-dimensional assessment.
                     </p>
                     <ul class="list-disc list-inside space-y-2 text-base-content/70">
@@ -61,7 +63,7 @@
         <section class="mb-12">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title">⚙️ Pipeline</h2>
+                    <h2 class="card-title"><i class="fa-solid fa-gears" aria-hidden="true"></i> Pipeline</h2>
                     <ul class="steps steps-vertical lg:steps-horizontal w-full mt-4">
                         <li class="step step-primary" data-content="1">
                             <div class="text-left">
@@ -96,7 +98,7 @@
         <section class="mb-10">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title">🔬 Evidence Generators</h2>
+                    <h2 class="card-title"><i class="fa-solid fa-microscope" aria-hidden="true"></i> Evidence Generators</h2>
                     <p class="text-sm text-base-content/70 mt-3 mb-4">Three complementary mechanisms for collecting review evidence:</p>
                     <div class="grid md:grid-cols-3 gap-3">
                         <div class="p-4 bg-info/10 rounded border border-info/30">
@@ -120,10 +122,10 @@
         <section class="mb-10">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title">✨ Features</h2>
+                    <h2 class="card-title"><i class="fa-solid fa-sparkles" aria-hidden="true"></i> Features</h2>
                     <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
                         <div class="flex gap-3">
-                            <span class="text-xl">🎯</span>
+                            <i class="fa-solid fa-bullseye text-xl" aria-hidden="true"></i>
                             <div>
                                 <p class="font-semibold">Extensible Review Criteria</p>
                                 <p class="text-base-content/70">Plugin-based evaluation and execution checks</p>
@@ -131,7 +133,7 @@
                         </div>
 
                         <div class="flex gap-3">
-                            <span class="text-xl">🐳</span>
+                            <i class="fa-brands fa-docker text-xl" aria-hidden="true"></i>
                             <div>
                                 <p class="font-semibold">Sandboxed Execution</p>
                                 <p class="text-base-content/70">Agent runs code in isolated Docker containers</p>
@@ -139,7 +141,7 @@
                         </div>
 
                         <div class="flex gap-3">
-                            <span class="text-xl">💬</span>
+                            <i class="fa-solid fa-comments text-xl" aria-hidden="true"></i>
                             <div>
                                 <p class="font-semibold">Interactive Chat</p>
                                 <p class="text-base-content/70">Query the review context with follow-up questions</p>
@@ -147,7 +149,7 @@
                         </div>
 
                         <div class="flex gap-3">
-                            <span class="text-xl">🔐</span>
+                            <i class="fa-solid fa-key text-xl" aria-hidden="true"></i>
                             <div>
                                 <p class="font-semibold">API & CLI</p>
                                 <p class="text-base-content/70">Automation via API keys for batch processing</p>
@@ -162,7 +164,7 @@
         <section class="mb-10">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title">🛠️ Tech Stack</h2>
+                    <h2 class="card-title"><i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i> Tech Stack</h2>
                     <div class="grid md:grid-cols-2 gap-6 mt-4 text-sm">
                         <div>
                             <p class="font-semibold mb-2">Backend</p>
@@ -189,13 +191,13 @@
         <section class="mb-12">
             <div class="card bg-base-100 shadow-lg">
                 <div class="card-body">
-                    <h2 class="card-title mb-4">🚀 Get Started</h2>
+                    <h2 class="card-title mb-4"><i class="fa-solid fa-rocket" aria-hidden="true"></i> Get Started</h2>
                     <a href="/" class="btn btn-primary gap-2 w-full justify-start mb-3">
-                        <span>📤</span>
-                        <span>Review a Paper's Artifacts</span>
+                        <i class="fa-solid fa-upload" aria-hidden="true"></i>
+                        <span>Launch AEGIS Review</span>
                     </a>
                     <a href="/history" class="btn btn-outline gap-2 w-full justify-start">
-                        <span>📚</span>
+                        <i class="fa-solid fa-book-open" aria-hidden="true"></i>
                         <span>View History</span>
                     </a>
                 </div>
@@ -203,7 +205,7 @@
         </section>
 
         <footer class="text-center py-8 text-sm text-base-content/50">
-            <p>Artifact Review • Open Source • MIT License</p>
+            <p>AEGIS • Open Source • MIT License</p>
         </footer>
 
     </div>

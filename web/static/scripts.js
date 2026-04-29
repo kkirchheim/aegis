@@ -178,10 +178,10 @@ function renderScriptActions(script) {
         return `
             <div class="flex gap-1">
                 <button class="btn btn-xs btn-ghost flex-1" onclick="openEditModal('${script.script_hash}')" title="Edit">
-                    ✎ Edit
+                    <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Edit
                 </button>
                 <button class="btn btn-xs btn-ghost text-error" onclick="deleteScript('${script.script_hash}')" title="Delete">
-                    🗑
+                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
                 </button>
             </div>
         `;

@@ -1,6 +1,6 @@
-# Artifact Review
+# AEGIS
 
-Prototype implementation for *"Towards Supporting Software Artefact Review via LLMs"*. Generates structured evidence about software artifacts referenced in scientific papers through a three-stage pipeline: extract artifacts, generate evidence, and assess results.
+AEGIS is a prototype implementation for *"Towards Supporting Software Artefact Review via LLMs"*. It generates structured evidence about software artifacts referenced in scientific papers through a three-stage pipeline: extract artifacts, generate evidence, and assess results.
 
 > **Warning:** This is a research prototype intended for local use only. Do not deploy publicly. The application mounts the Docker socket into the container, which grants the container effective root access to the host. See [Security](#security) below.
 
@@ -12,8 +12,8 @@ Prototype implementation for *"Towards Supporting Software Artefact Review via L
 
 ### Setup
 ```bash
-git clone https://github.com/kkirchheim/artifact-review.git
-cd artifact-review
+git clone https://github.com/kkirchheim/aegis.git
+cd aegis
 
 cp .env.example .env
 # Edit .env and set your ANTHROPIC_API_KEY

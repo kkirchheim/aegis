@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>500 Server Error - Artifact Review</title>
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
+    <title>500 Server Error - AEGIS</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='aegis.svg') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.0.0/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" />
 </head>
 <body class="bg-base-100">
     {% include "navbar.html" %}
@@ -16,7 +16,7 @@
         <div class="card w-96 bg-base-200 shadow-lg text-center">
             <div class="card-body">
                 <div class="flex justify-center mb-4">
-                    <span class="text-6xl">💥</span>
+                    <i class="fa-solid fa-burst text-6xl" aria-hidden="true"></i>
                 </div>
                 
                 <h1 class="text-4xl font-bold text-error mb-2">500</h1>
@@ -28,11 +28,11 @@
                 
                 <div class="flex gap-2 justify-center">
                     <a href="/" class="btn btn-primary">
-                        <span>🏠</span>
+                        <i class="fa-solid fa-house" aria-hidden="true"></i>
                         <span>Go Home</span>
                     </a>
                     <a href="/history" class="btn btn-secondary">
-                        <span>📊</span>
+                        <i class="fa-solid fa-chart-column" aria-hidden="true"></i>
                         <span>View History</span>
                     </a>
                 </div>

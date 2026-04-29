@@ -1017,7 +1017,7 @@ def agent_think(job_id, repo_state=None):
             error_section = "Recent errors:\n" + "\n".join(error_lines)
 
         iteration = repo_state.get("iteration", 0)
-        max_iter = repo_state.get("max_iterations", 15)
+        max_iter = repo_state.get("max_iterations", 30)
 
         # Budget hints
         remaining = max_iter - iteration
@@ -1133,8 +1133,19 @@ RESPONSE FORMAT (JSON only, no markdown):
                 prompt_log,
             )
 
+        # Get temperature from job config
+        agent_temperature = 0.0
+        try:
+            job_config = job.get_config()
+            agent_temperature = float(job_config.get("temperature", 0.0))
+        except Exception:
+            pass
+
         response_text = llm_provider.complete(
-            messages=[{"role": "user", "content": prompt}], system=system_prompt, max_tokens=500
+            messages=[{"role": "user", "content": prompt}],
+            system=system_prompt,
+            max_tokens=500,
+            temperature=agent_temperature,
         )
 
         # Parse JSON
@@ -1494,9 +1505,6 @@ def upload_pdf():
     num_pages = extract_page_count(str(pdf_path))
     thumbnail_path = generate_pdf_thumbnail(str(pdf_path), job_id, Config.THUMBNAILS_FOLDER)
 
-    # Create job in database
-    create_job(job_id, str(pdf_path), file.filename, user_id, thumbnail_path, num_pages)
-
     # Get configuration
     def _parse_manual_artifact_urls(raw_value):
         manual_artifacts = []
@@ -1531,6 +1539,13 @@ def upload_pdf():
     except ValueError as exc:
         return {"error": str(exc)}, 400
 
+    # Parse temperature (float, clamped to 0-1)
+    try:
+        temperature = float(request.form.get("temperature", 0))
+        temperature = max(0.0, min(1.0, temperature))
+    except (ValueError, TypeError):
+        temperature = 0.0
+
     config = {
         "container": request.form.get("container", "python"),
         "docker_image": request.form.get("docker_image", "standard"),
@@ -1538,10 +1553,14 @@ def upload_pdf():
         "cpu_limit": int(request.form.get("cpu_limit", 4)),
         "memory_limit": int(request.form.get("memory_limit", 4096)),
         "runtime_limit": int(request.form.get("runtime_limit", 30)),
-        "max_iterations": int(request.form.get("max_iterations", 15)),
+        "max_iterations": int(request.form.get("max_iterations", 30)),
         "storage_limit": int(request.form.get("storage_limit", 10)),
+        "temperature": temperature,
         "agent_instructions": request.form.get("agent_instructions", ""),
     }
+
+    # Create job in database (with config stored)
+    create_job(job_id, str(pdf_path), file.filename, user_id, thumbnail_path, num_pages, config=config)
 
     # Start analysis thread
     try:
@@ -1823,6 +1842,7 @@ def get_job_full(job_id):
             "events": events_list,
             "artifacts": artifacts,
             "paper_analysis": paper_analysis,
+            "config": job.get_config(),  # Job configuration at creation time
             "evidence": evidence,  # Enriched with plugin metadata
             "check_results": check_results_data,  # Check results with names
         }

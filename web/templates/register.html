@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register - Artifact Review</title>
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
+    <title>Register - AEGIS</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='aegis.svg') }}">
     
     <!-- Tailwind CSS + DaisyUI -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" />
     
     <style>
         /* Override primary color to blue */
@@ -59,14 +59,14 @@
 <body class="bg-base-100">
     <!-- Theme Toggle Button (Top Right) -->
     <button class="theme-toggle-btn fixed top-4 right-4 z-50" onclick="toggleTheme()" title="Toggle dark/light mode">
-        <span id="themeIcon">🌙</span>
+        <i id="themeIcon" class="fa-solid fa-moon" aria-hidden="true"></i>
     </button>
 
     <div class="min-h-screen flex items-center justify-center px-4 pt-20">
         <div class="card bg-base-100 shadow-lg max-w-md w-full">
             <div class="card-body">
                 <h1 class="card-title text-2xl gap-2">
-                    <span>📄</span>
+                    <img src="{{ url_for('static', filename='aegis.svg') }}" alt="AEGIS logo" class="h-8 w-auto" />
                     <span>Create Account</span>
                 </h1>
                 
@@ -105,7 +105,7 @@
                     </div>
                     
                     <button type="submit" class="btn btn-primary w-full gap-2">
-                        <span>✓</span>
+                        <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
                         <span>Create Account</span>
                     </button>
                 </form>
@@ -121,20 +121,28 @@
     </div>
     
     <script>
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('themeIcon');
+            if (icon) {
+                icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+            }
+        }
+
         // Theme Toggle Function
         function toggleTheme() {
             const html = document.documentElement;
             const isDark = html.getAttribute('data-theme') === 'dark';
-            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
-            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            const theme = isDark ? 'light' : 'dark';
+            html.setAttribute('data-theme', theme);
+            updateThemeIcon(theme);
+            localStorage.setItem('theme', theme);
         }
         
         // Load saved theme on page load
         document.addEventListener('DOMContentLoaded', function() {
             const savedTheme = localStorage.getItem('theme') || 'light';
             document.documentElement.setAttribute('data-theme', savedTheme);
-            document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+            updateThemeIcon(savedTheme);
         });
 
         document.getElementById('registerForm').addEventListener('submit', async (e) => {

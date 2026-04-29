@@ -95,7 +95,7 @@ def _repair_truncated_json(text):
         return None
 
 
-def extract_and_analyze_pdf(pdf_path, job_id, llm_provider, app_logger=None):
+def extract_and_analyze_pdf(pdf_path, job_id, llm_provider, app_logger=None, temperature=0.0):
     """
     Extract PDF and analyze with Claude.
 
@@ -124,7 +124,7 @@ def extract_and_analyze_pdf(pdf_path, job_id, llm_provider, app_logger=None):
             if app_logger:
                 app_logger.info(f"[{job_id}] Parsing paper with {llm_provider.get_name()}")
 
-            paper_info = parse_paper_with_claude(pdf_text, llm_provider, app_logger)
+            paper_info = parse_paper_with_claude(pdf_text, llm_provider, app_logger, temperature=temperature)
 
             # Cache the results only if caching is enabled
             if Config.ENABLE_CACHING:
@@ -141,7 +141,7 @@ def extract_and_analyze_pdf(pdf_path, job_id, llm_provider, app_logger=None):
         raise
 
 
-def parse_paper_with_claude(pdf_text, llm_provider, app_logger=None):
+def parse_paper_with_claude(pdf_text, llm_provider, app_logger=None, temperature=0.0):
     """
     Use Claude to extract code artifacts and reproducibility aspects from paper.
 
@@ -197,7 +197,9 @@ Paper text:
         if app_logger:
             app_logger.info(f"Calling {llm_provider.get_name()} API with max_tokens=2000")
 
-        response_text = llm_provider.complete(messages=[{"role": "user", "content": prompt}], max_tokens=8000)
+        response_text = llm_provider.complete(
+            messages=[{"role": "user", "content": prompt}], max_tokens=8000, temperature=temperature
+        )
 
         if app_logger:
             app_logger.info(f"Claude response received: {len(response_text)} chars")

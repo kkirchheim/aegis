@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Review Criteria - Artifact Review</title>
+    <title>Review Criteria - AEGIS</title>
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-family='system-ui'>📄</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='aegis.svg') }}">
 
     <!-- Tailwind CSS + DaisyUI -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.3/dist/full.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" />
 
     <!-- Custom styles -->
     <style>
@@ -60,9 +60,9 @@
 
         <!-- Page Header -->
         <section class="mb-6">
-            <h1 class="text-4xl font-bold mb-4">🎯 Review Criteria</h1>
+            <h1 class="text-4xl font-bold mb-4"><i class="fa-solid fa-list-check" aria-hidden="true"></i> Review Criteria</h1>
             <p class="text-lg text-base-content/70 mb-2">
-                Configure the criteria used during artifact review. Evaluation plugins provide semantic LLM-based assessment. Execution checks run deterministic scripts against repositories.
+                Configure the criteria AEGIS uses during artifact review. Evaluation plugins provide semantic LLM-based assessment. Execution checks run deterministic scripts against repositories.
             </p>
         </section>
 
@@ -104,7 +104,7 @@
                         <div class="flex justify-between items-center mb-6">
                             <div>
                                 <h2 class="card-title flex items-center gap-2">
-                                    <span>✨</span>
+                                    <i class="fa-solid fa-sparkles" aria-hidden="true"></i>
                                     <span>Custom Plugins</span>
                                 </h2>
                                 <p class="text-sm text-base-content/60 mt-2">Create custom evaluation criteria tailored to your review needs</p>
@@ -132,7 +132,7 @@
                     <div class="card-body">
                         <div class="mb-6">
                             <h2 class="card-title flex items-center gap-2">
-                                <span>📋</span>
+                                <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
                                 <span>Default Plugins</span>
                             </h2>
                             <p class="text-sm text-base-content/60 mt-2">System-provided evaluation criteria</p>
@@ -160,7 +160,7 @@
                         <div class="flex justify-between items-center mb-6">
                             <div>
                                 <h2 class="card-title flex items-center gap-2">
-                                    <span>✨</span>
+                                    <i class="fa-solid fa-sparkles" aria-hidden="true"></i>
                                     <span>Custom Checks</span>
                                 </h2>
                                 <p class="text-sm text-base-content/60 mt-2">Checks you've created to validate repositories</p>
@@ -188,7 +188,7 @@
                     <div class="card-body">
                         <div class="mb-6">
                             <h2 class="card-title flex items-center gap-2">
-                                <span>📋</span>
+                                <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
                                 <span>Default Checks</span>
                             </h2>
                             <p class="text-sm text-base-content/60 mt-2">System-provided execution checks</p>
@@ -334,7 +334,11 @@
     }
     function updateThemeIcon() {
         const el = document.getElementById('themeIcon');
-        if (el) el.textContent = document.documentElement.getAttribute('data-theme') === 'light' ? '🌙' : '☀️';
+        if (el) {
+            el.className = document.documentElement.getAttribute('data-theme') === 'light'
+                ? 'fa-solid fa-moon'
+                : 'fa-solid fa-sun';
+        }
     }
 
     // ====================================================================
@@ -400,8 +404,8 @@
                         </label>
                         ${!plugin.is_default ? `
                             <div class="flex gap-1">
-                                <button class="btn btn-xs btn-ghost flex-1" onclick="editPlugin('${plugin.id}')">✎ Edit</button>
-                                <button class="btn btn-xs btn-ghost text-error" onclick="deletePlugin('${plugin.id}')">🗑</button>
+                                <button class="btn btn-xs btn-ghost flex-1" onclick="editPlugin('${plugin.id}')"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Edit</button>
+                                <button class="btn btn-xs btn-ghost text-error" onclick="deletePlugin('${plugin.id}')"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
                             </div>
                         ` : ''}
                     </div>
@@ -558,8 +562,8 @@
         const customBadge = !check.is_default ? '<span class="badge badge-sm badge-primary whitespace-nowrap flex-shrink-0">CUSTOM</span>' : '';
         const actions = check.is_default ? '' : `
             <div class="flex gap-1">
-                <button class="btn btn-xs btn-ghost flex-1" onclick="openCheckEditModal('${check.script_hash}')">✎ Edit</button>
-                <button class="btn btn-xs btn-ghost text-error" onclick="deleteCheck('${check.script_hash}')">🗑</button>
+                <button class="btn btn-xs btn-ghost flex-1" onclick="openCheckEditModal('${check.script_hash}')"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Edit</button>
+                <button class="btn btn-xs btn-ghost text-error" onclick="deleteCheck('${check.script_hash}')"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
             </div>`;
 
         return `

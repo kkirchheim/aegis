@@ -1,5 +1,5 @@
 /**
- * Artifact Review - Frontend
+ * AEGIS - Frontend
  * 
  * Handles:
  * - PDF upload
@@ -39,7 +39,7 @@ function updateUploadUI() {
         analyzeBtn.disabled = false;
         const textEl = uploadArea?.querySelector(".text-lg");
         if (textEl) {
-            textEl.textContent = `✓ Selected: ${file.name}`;
+            textEl.textContent = `Selected: ${file.name}`;
         }
     }
 }
@@ -88,6 +88,7 @@ async function handleAnalyzeClick() {
     formData.append("runtime_limit", document.getElementById("runtimeLimit").value);
     formData.append("max_iterations", document.getElementById("maxIterations").value);
     formData.append("storage_limit", document.getElementById("storageLimit").value);
+    formData.append("temperature", document.getElementById("temperature").value);
     if (manualArtifactUrls && manualArtifactUrls.value.trim()) {
         formData.append("manual_artifact_urls", manualArtifactUrls.value.trim());
     }
@@ -154,7 +155,7 @@ async function loadJobsHistory() {
                         <div class="flex justify-between items-start gap-4">
                             <div class="flex-1">
                                 <h3 class="card-title text-base gap-2 mb-2">
-                                    <span>📄</span>
+                                    <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
                                     ${escapeHtml(paperTitle)}
                                 </h3>
                                 ${abstract}
@@ -167,7 +168,7 @@ async function loadJobsHistory() {
                                     ${job.status.toUpperCase()}
                                 </div>
                                 <button class="btn btn-ghost btn-sm" onclick="deleteJobFromList('${job.id}', event)" title="Delete">
-                                    🗑️
+                                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
                                 </button>
                             </div>
                         </div>
