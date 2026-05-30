@@ -1,6 +1,6 @@
 # AEGIS
 
-AEGIS is a prototype implementation for *"Towards Supporting Software Artefact Review via LLMs"*. It generates structured evidence about software artifacts referenced in scientific papers through a three-stage pipeline: extract artifacts, generate evidence, and assess results.
+AEGIS is a prototype implementation for *"Aegis: Towards Agentic Support for Software Artifact Reviews"*. It generates structured evidence about software artifacts referenced in scientific papers through a three-stage pipeline: extract artifacts, generate evidence, and assess results.
 
 > **Warning:** This is a research prototype intended for local use only. Do not deploy publicly. The application mounts the Docker socket into the container, which grants the container effective root access to the host. See [Security](#security) below.
 
@@ -141,9 +141,9 @@ new job so Docker does not reuse an older local image.
 
 ## Security
 
-This application requires the Docker socket (`/var/run/docker.sock`) to be mounted so it can spawn agent containers. This effectively gives the application root-level access to the host system. Additionally, the agent containers clone and execute arbitrary code from repositories referenced in uploaded papers.
+This application requires the Docker socket (`/var/run/docker.sock`) to be mounted so it can spawn agent containers. This effectively gives the application root-level access to the host system. Additionally, the agent containers clone and execute arbitrary code from repositories referenced in uploaded papers. There is a risk of prompt injection attacks. Use at your own risk.
 
-**Do not expose this application to the public internet.** It is designed for local or trusted-network use only.
+**Do not expose this application to the public internet.** It is designed for local or trusted-network use only. 
 
 ## Documentation
 
